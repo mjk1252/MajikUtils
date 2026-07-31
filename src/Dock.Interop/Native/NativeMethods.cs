@@ -82,6 +82,17 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern bool GetCursorPos(out POINT point);
 
+    [DllImport("user32.dll")]
+    internal static extern bool SetCursorPos(int x, int y);
+
+    internal const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    internal const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    internal const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+    internal const uint MOUSEEVENTF_RIGHTUP = 0x0010;
+
+    [DllImport("user32.dll")]
+    internal static extern void mouse_event(uint flags, int dx, int dy, int data, IntPtr extraInfo);
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     internal static extern IntPtr GetModuleHandle(string? moduleName);
 
@@ -206,4 +217,61 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
+
+    internal const uint TB_BUTTONCOUNT = 0x0418;
+    internal const uint TB_GETBUTTON = 0x0417;
+    internal const uint MEM_COMMIT = 0x1000;
+    internal const uint MEM_RELEASE = 0x8000;
+    internal const uint PAGE_READWRITE = 0x04;
+    internal const uint PROCESS_VM_OPERATION = 0x0008;
+    internal const uint PROCESS_VM_READ = 0x0010;
+    internal const uint PROCESS_VM_WRITE = 0x0020;
+    internal const uint PROCESS_QUERY_INFORMATION = 0x0400;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct TBBUTTON
+    {
+        public int iBitmap;
+        public int idCommand;
+        public byte fsState;
+        public byte fsStyle;
+        public IntPtr dwData;
+        public IntPtr iString;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern IntPtr FindWindow(string? className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string? className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder buffer, int maxCount);
+
+    [DllImport("user32.dll")]
+    internal static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    internal static extern bool AllowSetForegroundWindow(uint processId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, uint processId);
+
+    [DllImport("kernel32.dll")]
+    internal static extern bool CloseHandle(IntPtr handle);
+
+    [DllImport("kernel32.dll")]
+    internal static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr address, nuint size, uint allocationType, uint protect);
+
+    [DllImport("kernel32.dll")]
+    internal static extern bool VirtualFreeEx(IntPtr hProcess, IntPtr address, nuint size, uint freeType);
+
+    [DllImport("kernel32.dll")]
+    internal static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr baseAddress, byte[] buffer, nuint size, out nuint bytesRead);
 }

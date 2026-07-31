@@ -149,6 +149,18 @@ public partial class DockWindow : Window
         menu.IsOpen = true;
     }
 
+    private void OnTrayIconClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: Core.ViewModels.TrayIconViewModel icon })
+            icon.ClickCommand.Execute(null);
+    }
+
+    private void OnTrayIconRightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: Core.ViewModels.TrayIconViewModel icon })
+            icon.RightClickCommand.Execute(null);
+    }
+
     private static void AnimateBounce(FrameworkElement element)
     {
         if (element.RenderTransform is not ScaleTransform)

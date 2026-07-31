@@ -12,6 +12,7 @@ public partial class App : System.Windows.Application
 {
     private TrayIconService? _trayIcon;
     private RunningWindowSource? _runningAppSource;
+    private ExplorerTrayReader? _explorerTrayReader;
     private readonly List<DockWindow> _dockWindows = [];
 
     protected override void OnStartup(StartupEventArgs e)
@@ -35,6 +36,11 @@ public partial class App : System.Windows.Application
         _runningAppSource = new RunningWindowSource();
         _runningAppSource.Updated += (_, groups) => Dispatcher.Invoke(() => viewModel.UpdateRunningApps(groups));
         _runningAppSource.Start();
+
+        _explorerTrayReader = new ExplorerTrayReader();
+        viewModel.AttachTraySource(_explorerTrayReader);
+        _explorerTrayReader.Updated += (_, icons) => Dispatcher.Invoke(() => viewModel.UpdateTrayIcons(icons));
+        _explorerTrayReader.Start();
 
         CreateTrayIcon();
     }
@@ -70,6 +76,7 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         _runningAppSource?.Dispose();
+        _explorerTrayReader?.Dispose();
         _trayIcon?.Dispose();
         base.OnExit(e);
     }

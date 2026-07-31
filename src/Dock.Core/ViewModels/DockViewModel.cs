@@ -15,8 +15,10 @@ public partial class DockViewModel : ObservableObject
     private readonly Dictionary<string, DockItemViewModel> _transientRunningItems = new(StringComparer.OrdinalIgnoreCase);
 
     private IWindowActivator? _windowActivator;
+    private ITraySource? _traySource;
 
     public ObservableCollection<DockItemViewModel> Items { get; } = [];
+    public ObservableCollection<TrayIconViewModel> TrayIcons { get; } = [];
 
     public DockViewModel(ConfigStore configStore, IIconProvider iconProvider, IAppLauncher launcher)
     {
@@ -88,6 +90,37 @@ public partial class DockViewModel : ObservableObject
             item.SetRunningState(group.Windows, activator);
         }
     }
+
+    public void AttachTraySource(ITraySource traySource)
+    {
+        _traySource = traySource;
+    }
+
+    public void UpdateTrayIcons(IReadOnlyList<TrayIcon> icons)
+    {
+        var traySource = _traySource;
+        if (traySource is null)
+            return;
+
+        var currentKeys = new HashSet<string>(TrayIcons.Select(t => TrayIconKey(t.Info)));
+        var newKeys = new HashSet<string>(icons.Select(TrayIconKey));
+
+        if (currentKeys.SetEquals(newKeys))
+            return;
+
+        TrayIcons.Clear();
+        foreach (var icon in icons)
+        {
+            TrayIcons.Add(new TrayIconViewModel(icon, traySource)
+            {
+                IconPng = icon.IconPng
+            });
+        }
+    }
+
+    private static string TrayIconKey(TrayIcon icon) => icon.OwnerHandle is { } handle
+        ? $"h:{handle}:{icon.IconId}"
+        : $"a:{icon.Name}:{(icon.ClickX ?? 0) / 8}:{(icon.ClickY ?? 0) / 8}";
 
     public void AddPinned(string executablePath)
     {

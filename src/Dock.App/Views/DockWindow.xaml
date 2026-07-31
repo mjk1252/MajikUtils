@@ -20,6 +20,7 @@
         <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
         <conv:NameToInitialConverter x:Key="NameToInitial"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <conv:CountToVisibilityConverter x:Key="CountToVisibility"/>
 
         <Style x:Key="DockItemStyle" TargetType="Border">
             <Setter Property="Width" Value="52"/>
@@ -106,6 +107,29 @@
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"/>
             </Border>
+
+            <Border Width="1" Margin="6,10" Background="#40FFFFFF"
+                    Visibility="{Binding TrayIcons.Count, Converter={StaticResource CountToVisibility}}"/>
+
+            <ItemsControl ItemsSource="{Binding TrayIcons}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Width="34" Height="34" Margin="3,0"
+                                Cursor="Hand"
+                                MouseLeftButtonUp="OnTrayIconClick"
+                                MouseRightButtonUp="OnTrayIconRightClick">
+                            <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
+                                   Width="20" Height="20"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </StackPanel>
     </Border>
 </Window>
