@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Dock.Core.Models;
+using Dock.Core.Services;
 using Dock.Core.ViewModels;
 using Dock.Interop.Windowing;
 
@@ -20,19 +21,23 @@ public partial class DockWindow : Window
     private readonly MonitorSnapshot _monitor;
     private readonly DockPosition _position;
     private readonly bool _enableGlobalHooks;
+    private readonly IWingetService? _wingetService;
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer _wingetDebounceTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private uint _taskbarCreatedMessage;
     private bool _appBarRegistered;
 
     public event Action? PanicHotkeyPressed;
     public event Action? ExplorerRestarted;
 
-    public DockWindow(DockViewModel viewModel, MonitorSnapshot monitor, DockPosition position = DockPosition.Bottom, bool enableGlobalHooks = false)
+    public DockWindow(DockViewModel viewModel, MonitorSnapshot monitor, DockPosition position = DockPosition.Bottom,
+        bool enableGlobalHooks = false, IWingetService? wingetService = null)
     {
         _viewModel = viewModel;
         _monitor = monitor;
         _position = position;
         _enableGlobalHooks = enableGlobalHooks;
+        _wingetService = wingetService;
         DataContext = viewModel;
 
         // Land within this monitor's own bounds (converted using ITS OWN DPI, not the primary
@@ -50,7 +55,13 @@ public partial class DockWindow : Window
         _clockTimer.Start();
         UpdateClock();
 
-        Closed += (_, _) => _clockTimer.Stop();
+        _wingetDebounceTimer.Tick += OnWingetDebounceElapsed;
+
+        Closed += (_, _) =>
+        {
+            _clockTimer.Stop();
+            _wingetDebounceTimer.Stop();
+        };
     }
 
     private void ApplyOrientation()
@@ -171,6 +182,64 @@ public partial class DockWindow : Window
         // sibling outside it -- assign the placement target directly instead.
         ClockFlyout.PlacementTarget = ClockWidget;
         OverflowFlyout.PlacementTarget = OverflowChevron;
+        LauncherFlyout.PlacementTarget = LauncherButton;
+    }
+
+    private void OnLauncherButtonClick(object sender, MouseButtonEventArgs e)
+    {
+        LauncherFlyout.IsOpen = !LauncherFlyout.IsOpen;
+        if (!LauncherFlyout.IsOpen)
+            return;
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            LauncherSearchBox.Focus();
+            Keyboard.Focus(LauncherSearchBox);
+        }), DispatcherPriority.Input);
+    }
+
+    private void OnLauncherSearchChanged(object sender, TextChangedEventArgs e)
+    {
+        var query = LauncherSearchBox.Text;
+        _viewModel.FilterLauncherApps(query);
+
+        _wingetDebounceTimer.Stop();
+
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2)
+        {
+            _viewModel.ClearWingetResults();
+            return;
+        }
+
+        _wingetDebounceTimer.Start();
+    }
+
+    private void OnWingetDebounceElapsed(object? sender, EventArgs e)
+    {
+        _wingetDebounceTimer.Stop();
+
+        var wingetService = _wingetService;
+        var query = LauncherSearchBox.Text;
+        if (wingetService is null || string.IsNullOrWhiteSpace(query))
+            return;
+
+        _viewModel.BeginWingetSearch();
+
+        System.Threading.Tasks.Task.Run(() => wingetService.Search(query))
+            .ContinueWith(t =>
+            {
+                var results = t.IsCompletedSuccessfully ? t.Result : [];
+                Dispatcher.Invoke(() => _viewModel.SetWingetResults(results));
+            });
+    }
+
+    private void OnLauncherItemClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: AppLauncherItemViewModel item })
+            return;
+
+        item.LaunchCommand.Execute(null);
+        LauncherFlyout.IsOpen = false;
     }
 
     private void ApplyPillRegionAndPosition()

@@ -16,9 +16,14 @@ public partial class DockViewModel : ObservableObject
 
     private IWindowActivator? _windowActivator;
     private ITraySource? _traySource;
+    private IWingetService? _wingetService;
+    private List<AppLauncherItemViewModel> _allLauncherItems = [];
+    private string _launcherQuery = "";
 
     public ObservableCollection<DockItemViewModel> Items { get; } = [];
     public ObservableCollection<TrayIconViewModel> OverflowTrayIcons { get; } = [];
+    public ObservableCollection<AppLauncherItemViewModel> LauncherResults { get; } = [];
+    public ObservableCollection<WingetResultViewModel> WingetResults { get; } = [];
 
     [ObservableProperty]
     private bool hasTrayIcons;
@@ -28,6 +33,9 @@ public partial class DockViewModel : ObservableObject
 
     [ObservableProperty]
     private TrayIconViewModel? clockTrayIcon;
+
+    [ObservableProperty]
+    private bool isWingetSearching;
 
     public DockViewModel(ConfigStore configStore, IIconProvider iconProvider, IAppLauncher launcher)
     {
@@ -166,5 +174,50 @@ public partial class DockViewModel : ObservableObject
         _config.PinnedApps.RemoveAll(a => a.Id == item.App.Id);
         Items.Remove(item);
         _configStore.Save(_config);
+    }
+
+    public void AttachWingetService(IWingetService wingetService)
+    {
+        _wingetService = wingetService;
+    }
+
+    public void SetLauncherItems(List<AppLauncherItemViewModel> items)
+    {
+        _allLauncherItems = items;
+        FilterLauncherApps(_launcherQuery);
+    }
+
+    public void FilterLauncherApps(string query)
+    {
+        _launcherQuery = query;
+        LauncherResults.Clear();
+
+        var matches = string.IsNullOrWhiteSpace(query)
+            ? _allLauncherItems.Take(60)
+            : _allLauncherItems.Where(a => a.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).Take(60);
+
+        foreach (var item in matches)
+            LauncherResults.Add(item);
+    }
+
+    public void SetWingetResults(IReadOnlyList<WingetResult> results)
+    {
+        var wingetService = _wingetService;
+        if (wingetService is null)
+            return;
+
+        WingetResults.Clear();
+        foreach (var result in results)
+            WingetResults.Add(new WingetResultViewModel(result, wingetService));
+
+        IsWingetSearching = false;
+    }
+
+    public void BeginWingetSearch() => IsWingetSearching = true;
+
+    public void ClearWingetResults()
+    {
+        WingetResults.Clear();
+        IsWingetSearching = false;
     }
 }

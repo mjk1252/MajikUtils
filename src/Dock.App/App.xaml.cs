@@ -22,6 +22,9 @@ public partial class App : System.Windows.Application
     private SettingsStore? _settingsStore;
     private SettingsWindow? _settingsWindow;
     private DockViewModel? _viewModel;
+    private IWingetService? _wingetService;
+    private IIconProvider? _iconProvider;
+    private IAppLauncher? _launcher;
     private readonly List<DockWindow> _dockWindows = [];
 
     protected override void OnStartup(StartupEventArgs e)
@@ -44,11 +47,15 @@ public partial class App : System.Windows.Application
         var settings = _settingsStore.Load();
 
         var configStore = new ConfigStore();
-        IIconProvider iconProvider = new ShellIconProvider();
-        IAppLauncher launcher = new ProcessAppLauncher();
-        _viewModel = new DockViewModel(configStore, iconProvider, launcher);
+        _iconProvider = new ShellIconProvider();
+        _launcher = new ProcessAppLauncher();
+        _viewModel = new DockViewModel(configStore, _iconProvider, _launcher);
 
         _viewModel.AttachRunningApps(new WindowActivator());
+
+        _wingetService = new WingetService();
+        _viewModel.AttachWingetService(_wingetService);
+        LoadInstalledAppsAsync();
 
         CreateDockWindows(settings.Position);
 
@@ -72,12 +79,36 @@ public partial class App : System.Windows.Application
         _gameModeTimer = new System.Threading.Timer(_ => CheckGameMode(), null, 2000, 2000);
     }
 
+    private void LoadInstalledAppsAsync()
+    {
+        var iconProvider = _iconProvider!;
+        var launcher = _launcher!;
+
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            var provider = new InstalledAppsProvider();
+            var apps = provider.GetInstalledApps();
+
+            return apps
+                .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(a => new Core.ViewModels.AppLauncherItemViewModel(a, launcher)
+                {
+                    IconPng = iconProvider.GetIconPng(a.ExecutablePath, 32)
+                })
+                .ToList();
+        }).ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully)
+                Dispatcher.Invoke(() => _viewModel!.SetLauncherItems(t.Result));
+        });
+    }
+
     private void CreateDockWindows(Core.Models.DockPosition position)
     {
         var isFirstWindow = true;
         foreach (var monitor in MonitorService.GetMonitors())
         {
-            var window = new DockWindow(_viewModel!, monitor, position, enableGlobalHooks: isFirstWindow);
+            var window = new DockWindow(_viewModel!, monitor, position, enableGlobalHooks: isFirstWindow, wingetService: _wingetService);
             if (isFirstWindow)
             {
                 window.PanicHotkeyPressed += RestoreTaskbarAndClearFlag;
