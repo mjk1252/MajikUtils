@@ -1,47 +1,64 @@
 # Manual Test Checklist
 
-Things to try yourself when you're at the machine. Grouped by phase. Items marked
-**⚠ please verify** are things I couldn't confirm via automated screenshots and
-should get an extra look.
+Things to try yourself when you're at the machine. Grouped by phase.
 
 Run it with `dotnet build` then launch
 `src/Dock.App/bin/x64/Debug/net9.0-windows/win-x64/Dock.exe`.
 
 ## Phase 1 — Pinned apps
-- [ ] Dock appears as a glass pill at the bottom of your primary monitor.
-- [ ] Click Explorer / Notepad / Calculator / Settings icons — each should launch.
-- [ ] Hover over an icon — it should magnify slightly.
-- [ ] Click an icon — small bounce animation.
+- [x] Dock appears as a glass pill at the bottom of your primary monitor.
+- [x] Click icons to launch apps.
+- [x] Hover magnify / click bounce animation.
 - [ ] Right-click a pinned icon — "Unpin" appears and works.
 - [ ] Drag a shortcut/.exe from Explorer onto the dock — it gets pinned.
 - [ ] Click "+" — file picker opens, picking an app pins it.
 - [ ] Restart the app — pins persist.
-- [ ] Right-click the dock's own tray icon (bottom-right notification area) → "Exit Dock" closes it cleanly.
 
 ## Phase 2 — Running apps + dual monitor
-- [ ] Dock appears identically on **both** monitors (mirrored).
-- [ ] Open an app — it shows up on the dock (both monitors) with a running-dot indicator.
+- [x] Dock appears identically on both monitors (mirrored).
+- [x] Running apps show up with a running-dot indicator.
 - [ ] Click a running app's icon — brings it to front; click again while focused — minimizes it.
-- [ ] Open multiple windows of one app (e.g. 3 Explorer windows) — click its icon shows a list to pick from.
-- [ ] Close an app — its running-only icon disappears from the dock.
+- [ ] Multiple windows of one app — click shows a picker list.
 
-## Phase 3 — System tray icons
-- [ ] Real tray icons (volume, network, language, mic, etc.) appear inline in the dock.
-- [ ] **⚠ please verify**: click a tray icon proxy in the dock — does the real flyout (volume slider, network panel, hidden-icons list) open? I tried three relay techniques (legacy click, modern SendInput, UI Automation Invoke) and couldn't get a visible result via automated testing, but that may just be a limitation of synthetic input — a real click from you is the actual test.
-- [ ] Right-click a tray icon proxy — does it bring up that icon's context menu?
+## Phase 3 — System tray
+- [x] Tray icons readable and rendering.
+- [x] Grouped behind a single chevron (not shown inline anymore).
+- [x] Clicking the chevron opens the real Windows hidden-icons flyout, in the right place.
+- [x] Clicking the clock opens the real Notification Center.
+- [ ] Right-click a tray icon proxy (if you ever need this — currently the chevron/clock are
+      the main entry points).
 
-## Phase 4 — Taskbar hide/restore (important safety check)
-- [ ] Launch the dock — the real Windows taskbar disappears (both monitors).
-- [ ] Exit via tray menu → "Exit Dock" — taskbar comes back immediately.
-- [ ] **Crash-safety test**: launch the dock, then kill it from Task Manager (or `taskkill /F /IM Dock.exe`) instead of exiting normally — the taskbar should still come back within a second or two (a watchdog process does this). I verified this works via automated testing, but worth you confirming once yourself.
-- [ ] Press `Ctrl+Alt+Shift+T` while the dock is running — taskbar should force back immediately (panic hotkey).
-- [ ] Launch a fullscreen-exclusive game — the dock should hide itself while the game is fullscreen and reappear after (Game Mode). Borderless-windowed games won't trigger this (Windows doesn't report those as exclusive fullscreen) — that's expected, not a bug.
+## Phase 4 — Taskbar hide/restore (confirmed working)
+- [x] Launching hides the real taskbar on **both** monitors (fixed: previous "move
+      off-screen" approach silently failed; now uses layered-window alpha, verified live).
+- [x] Exiting cleanly restores it.
+- [x] Crash-recovery (force-kill Dock.exe) restores it via the Dock.Guard watchdog.
+- [x] Maximized windows now stop at the dock's edge instead of running underneath
+      (confirmed via work-area check: ~94px reserved on both monitors).
+- [ ] `Ctrl+Alt+Shift+T` panic hotkey forces the taskbar back.
+- [ ] Fullscreen-exclusive game hides the dock itself (Game Mode) and restores after.
 
 ## Phase 5 — Clock + glass look
-- [ ] Clock widget shows current time + date on the right side of the dock.
-- [ ] **⚠ please verify**: click the clock — does a larger flyout (big clock, full date, calendar) pop up above it? Same as the tray-icon click issue above, I couldn't confirm this one fires via synthetic input — worth a real click.
-- [ ] Move your mouse left-to-right across the dock — the bright spot on the pill's border should subtly follow your cursor.
-- [ ] Overall look: less "flat gradient," more genuinely translucent (you should see a hint of your desktop through it), rounded-rectangle ("squircle") ends rather than fully circular pill ends. Let me know if it still doesn't read as "glass" enough.
+- [x] Clock shows live time/date.
+- [x] Squircle shape, genuinely transparent (desktop visible through it).
+- [x] Mouse-tracking highlight along the border.
+- [ ] Own custom clock flyout (calendar) as a fallback if the real clock relay isn't found —
+      not really testable now that the real relay works, but worth knowing it exists.
+
+## Phase 6 — Settings + installer
+- [ ] Settings window (tray menu → "Settings...") — toggle hide-taskbar, start-with-Windows,
+      dock position (Bottom/Left/Right) — confirmed Left renders correctly as a vertical bar.
+- [ ] Installer at `dist/Dock-Setup-1.0.0.exe` — double-click it yourself (it needs a click
+      through a real dialog I can't drive automatically) and confirm it installs to
+      `%LOCALAPPDATA%\Programs\Dock`, adds a Start Menu shortcut, and uninstalls cleanly.
 
 ## General
-- [ ] Leave the dock running for a while during normal use (including a game) and see if it ever gets in the way, flickers, or uses noticeably more CPU/RAM than expected (Task Manager → Details → Dock.exe).
+- [ ] Leave the dock running during normal use (including a game) — check it doesn't flicker,
+      get in the way, or use noticeably more CPU/RAM than expected (Task Manager → Details).
+
+## Known limitations (not bugs, just how it is)
+- Icons truly buried in Windows' lazy-loaded overflow flyout (not just "hidden," but never
+  yet opened this session) can't be read until that flyout is actually opened once — there's
+  no way to peek at it without invasively flashing it open ourselves, which isn't done.
+- Tray-icon/chevron/clock detection relies on English element names ("Show Hidden Icons",
+  "Clock ...") — may not match on non-English Windows installs.
