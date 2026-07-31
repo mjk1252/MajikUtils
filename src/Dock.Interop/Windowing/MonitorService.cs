@@ -17,7 +17,13 @@ public static class MonitorService
                 var bounds = ToRectangle(info.rcMonitor);
                 var workArea = ToRectangle(info.rcWork);
                 var isPrimary = (info.dwFlags & NativeMethods.MONITORINFOF_PRIMARY) != 0;
-                results.Add(new MonitorSnapshot(bounds, workArea, isPrimary));
+
+                const int MDT_EFFECTIVE_DPI = 0;
+                var dpiScale = 1.0;
+                if (NativeMethods.GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, out var dpiX, out _) == 0)
+                    dpiScale = dpiX / 96.0;
+
+                results.Add(new MonitorSnapshot(bounds, workArea, isPrimary, hMonitor, dpiScale));
             }
 
             return true;

@@ -17,26 +17,31 @@ public partial class DockWindow : Window
     private const int PanicHotkeyId = 1;
 
     private readonly DockViewModel _viewModel;
-    private readonly Rectangle _workArea;
+    private readonly MonitorSnapshot _monitor;
     private readonly DockPosition _position;
     private readonly bool _enableGlobalHooks;
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private uint _taskbarCreatedMessage;
+    private bool _appBarRegistered;
 
     public event Action? PanicHotkeyPressed;
     public event Action? ExplorerRestarted;
 
-    public DockWindow(DockViewModel viewModel, Rectangle workArea, DockPosition position = DockPosition.Bottom, bool enableGlobalHooks = false)
+    public DockWindow(DockViewModel viewModel, MonitorSnapshot monitor, DockPosition position = DockPosition.Bottom, bool enableGlobalHooks = false)
     {
         _viewModel = viewModel;
-        _workArea = workArea;
+        _monitor = monitor;
         _position = position;
         _enableGlobalHooks = enableGlobalHooks;
         DataContext = viewModel;
 
-        // Off-screen until we can precisely position the HWND in physical pixels (avoids a visible jump).
-        Left = -10000;
-        Top = -10000;
+        // Land within this monitor's own bounds (converted using ITS OWN DPI, not the primary
+        // monitor's) rather than some arbitrary off-screen point. WPF picks a window's initial
+        // per-monitor DPI context from where it's created; landing outside every monitor risks
+        // it defaulting to the primary monitor's scale, which is what made the dock render at
+        // the wrong size on a secondary monitor with different DPI/resolution.
+        Left = _monitor.Bounds.Left / _monitor.DpiScale;
+        Top = _monitor.Bounds.Top / _monitor.DpiScale;
 
         InitializeComponent();
         ApplyOrientation();
@@ -110,6 +115,9 @@ public partial class DockWindow : Window
         {
             if (_enableGlobalHooks)
                 WindowStyler.UnregisterHotkey(hwnd, PanicHotkeyId);
+
+            if (_appBarRegistered)
+                AppBarService.Unregister(hwnd);
         };
     }
 
@@ -165,26 +173,43 @@ public partial class DockWindow : Window
         var cornerRadiusPx = (int)(22 * dpiScale);
         WindowStyler.ApplyRoundedRegion(hwnd, widthPx, heightPx, cornerRadiusPx);
 
+        var bounds = _monitor.Bounds;
         var marginPx = (int)(12 * dpiScale);
         int x, y;
+        AppBarEdge edge;
+        int thicknessPx;
 
         switch (_position)
         {
             case DockPosition.Left:
-                x = _workArea.Left + marginPx;
-                y = _workArea.Top + (_workArea.Height - heightPx) / 2;
+                x = bounds.Left + marginPx;
+                y = bounds.Top + (bounds.Height - heightPx) / 2;
+                edge = AppBarEdge.Left;
+                thicknessPx = widthPx + marginPx * 2;
                 break;
             case DockPosition.Right:
-                x = _workArea.Right - widthPx - marginPx;
-                y = _workArea.Top + (_workArea.Height - heightPx) / 2;
+                x = bounds.Right - widthPx - marginPx;
+                y = bounds.Top + (bounds.Height - heightPx) / 2;
+                edge = AppBarEdge.Right;
+                thicknessPx = widthPx + marginPx * 2;
                 break;
             default:
-                x = _workArea.Left + (_workArea.Width - widthPx) / 2;
-                y = _workArea.Bottom - heightPx - marginPx;
+                x = bounds.Left + (bounds.Width - widthPx) / 2;
+                y = bounds.Bottom - heightPx - marginPx;
+                edge = AppBarEdge.Bottom;
+                thicknessPx = heightPx + marginPx * 2;
                 break;
         }
 
         WindowStyler.SetWindowPosition(hwnd, x, y);
+
+        if (!_appBarRegistered)
+        {
+            AppBarService.Register(hwnd);
+            _appBarRegistered = true;
+        }
+
+        AppBarService.Reposition(hwnd, bounds, edge, thicknessPx);
     }
 
     private void OnDrop(object sender, System.Windows.DragEventArgs e)
@@ -272,18 +297,23 @@ public partial class DockWindow : Window
 
     private static void AnimateBounce(FrameworkElement element)
     {
-        if (element.RenderTransform is not ScaleTransform)
+        if (element.RenderTransform is not TransformGroup { Children.Count: >= 2 })
             return;
 
-        var animation = new DoubleAnimation(0.8, 1.0, TimeSpan.FromMilliseconds(180))
+        var keyFrames = new DoubleAnimationUsingKeyFrames();
+        keyFrames.KeyFrames.Add(new EasingDoubleKeyFrame(-16, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)))
         {
-            EasingFunction = new BackEase { Amplitude = 0.6, EasingMode = EasingMode.EaseOut }
-        };
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        });
+        keyFrames.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500)))
+        {
+            EasingFunction = new BounceEase { Bounces = 2, Bounciness = 2, EasingMode = EasingMode.EaseOut }
+        });
 
         var storyboard = new Storyboard();
-        Storyboard.SetTarget(animation, element);
-        Storyboard.SetTargetProperty(animation, new PropertyPath("RenderTransform.ScaleY"));
-        storyboard.Children.Add(animation);
+        Storyboard.SetTarget(keyFrames, element);
+        Storyboard.SetTargetProperty(keyFrames, new PropertyPath("RenderTransform.Children[1].Y"));
+        storyboard.Children.Add(keyFrames);
         storyboard.Begin();
     }
 }

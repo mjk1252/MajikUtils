@@ -77,7 +77,7 @@ public partial class App : System.Windows.Application
         var isFirstWindow = true;
         foreach (var monitor in MonitorService.GetMonitors())
         {
-            var window = new DockWindow(_viewModel!, monitor.WorkArea, position, enableGlobalHooks: isFirstWindow);
+            var window = new DockWindow(_viewModel!, monitor, position, enableGlobalHooks: isFirstWindow);
             if (isFirstWindow)
             {
                 window.PanicHotkeyPressed += RestoreTaskbarAndClearFlag;

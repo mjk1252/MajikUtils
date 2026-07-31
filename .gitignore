@@ -485,3 +485,7 @@ $RECYCLE.BIN/
 
 # Un-ignore our Dock.App project (matched by the *.app macOS bundle rule above)
 !src/Dock.App/
+
+# Installer output and Claude Code session state
+dist/
+.claude/

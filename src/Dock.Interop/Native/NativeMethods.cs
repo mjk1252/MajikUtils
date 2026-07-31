@@ -224,6 +224,36 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOWCOMPOSITIONATTRIBDATA data);
+
+    internal const uint ABM_NEW = 0x00000000;
+    internal const uint ABM_REMOVE = 0x00000001;
+    internal const uint ABM_QUERYPOS = 0x00000002;
+    internal const uint ABM_SETPOS = 0x00000003;
+
+    internal const uint ABE_LEFT = 0;
+    internal const uint ABE_TOP = 1;
+    internal const uint ABE_RIGHT = 2;
+    internal const uint ABE_BOTTOM = 3;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct APPBARDATA
+    {
+        public int cbSize;
+        public IntPtr hWnd;
+        public uint uCallbackMessage;
+        public uint uEdge;
+        public RECT rc;
+        public IntPtr lParam;
+    }
+
+    [DllImport("shell32.dll")]
+    internal static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA data);
+
+    [DllImport("shcore.dll")]
+    internal static extern int GetDpiForMonitor(IntPtr hMonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [DllImport("user32.dll")]
+    internal static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;

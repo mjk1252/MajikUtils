@@ -20,10 +20,12 @@ public static class WindowStyler
     /// </summary>
     public static void ApplyAcrylicBackdrop(IntPtr hwnd)
     {
-        var margins = new NativeMethods.MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-        NativeMethods.DwmExtendFrameIntoClientArea(hwnd, ref margins);
+        // Deliberately NOT calling DwmExtendFrameIntoClientArea here: that "sheet of glass"
+        // trick declares the whole client area a DWM glass region expecting real Aero-style
+        // color-keyed compositing, which doesn't apply on modern Windows and instead paints
+        // a solid black rectangle behind the (correctly transparent) acrylic accent below.
 
-        const int alpha = 0x28;   // ~16% -- low enough to read as genuinely translucent
+        const int alpha = 0x18;   // ~9% -- pushed further toward see-through per live feedback
         const int rgb = 0x1E1E1E; // neutral dark-gray tint, close to Windows' own dark-mode surfaces
         var gradientColor = (alpha << 24) | rgb;
 

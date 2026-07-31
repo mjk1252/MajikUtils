@@ -37,23 +37,26 @@
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
             <Setter Property="RenderTransform">
                 <Setter.Value>
-                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                    <TransformGroup>
+                        <ScaleTransform ScaleX="1" ScaleY="1"/>
+                        <TranslateTransform Y="0"/>
+                    </TransformGroup>
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
                 <EventTrigger RoutedEvent="MouseEnter">
                     <BeginStoryboard>
                         <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.25" Duration="0:0:0.12"/>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.25" Duration="0:0:0.12"/>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Children[0].ScaleX" To="1.25" Duration="0:0:0.12"/>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Children[0].ScaleY" To="1.25" Duration="0:0:0.12"/>
                         </Storyboard>
                     </BeginStoryboard>
                 </EventTrigger>
                 <EventTrigger RoutedEvent="MouseLeave">
                     <BeginStoryboard>
                         <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.15"/>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.15"/>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Children[0].ScaleX" To="1.0" Duration="0:0:0.15"/>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Children[0].ScaleY" To="1.0" Duration="0:0:0.15"/>
                         </Storyboard>
                     </BeginStoryboard>
                 </EventTrigger>
@@ -65,14 +68,14 @@
         <Border x:Name="GlassBorder"
                 CornerRadius="22"
                 Padding="12,8"
-                Background="#1FFFFFFF"
+                Background="#14FFFFFF"
                 BorderThickness="1"
                 MouseMove="OnGlassMouseMove">
             <Border.BorderBrush>
                 <LinearGradientBrush x:Name="RimBrush" StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop x:Name="RimStopLeft" Color="#2EFFFFFF" Offset="0"/>
-                    <GradientStop x:Name="RimStopMid" Color="#55FFFFFF" Offset="0.5"/>
-                    <GradientStop x:Name="RimStopRight" Color="#2EFFFFFF" Offset="1"/>
+                    <GradientStop x:Name="RimStopLeft" Color="#20FFFFFF" Offset="0"/>
+                    <GradientStop x:Name="RimStopMid" Color="#45FFFFFF" Offset="0.5"/>
+                    <GradientStop x:Name="RimStopRight" Color="#20FFFFFF" Offset="1"/>
                 </LinearGradientBrush>
             </Border.BorderBrush>
 
