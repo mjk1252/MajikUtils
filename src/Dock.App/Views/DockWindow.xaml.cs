@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Dock.Core.ViewModels;
 using Dock.Interop.Windowing;
 
@@ -17,6 +18,7 @@ public partial class DockWindow : Window
     private readonly DockViewModel _viewModel;
     private readonly Rectangle _workArea;
     private readonly bool _enableGlobalHooks;
+    private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private uint _taskbarCreatedMessage;
 
     public event Action? PanicHotkeyPressed;
@@ -34,6 +36,36 @@ public partial class DockWindow : Window
         Top = -10000;
 
         InitializeComponent();
+
+        _clockTimer.Tick += (_, _) => UpdateClock();
+        _clockTimer.Start();
+        UpdateClock();
+
+        Closed += (_, _) => _clockTimer.Stop();
+    }
+
+    private void UpdateClock()
+    {
+        var now = DateTime.Now;
+        ClockTimeText.Text = now.ToString("h:mm tt");
+        ClockDateText.Text = now.ToString("ddd, MMM d");
+        FlyoutTimeText.Text = now.ToString("h:mm tt");
+        FlyoutDateText.Text = now.ToString("dddd, MMMM d, yyyy");
+    }
+
+    private void OnClockClick(object sender, MouseButtonEventArgs e)
+    {
+        ClockFlyout.IsOpen = !ClockFlyout.IsOpen;
+    }
+
+    private void OnGlassMouseMove(object sender, MouseEventArgs e)
+    {
+        if (ActualWidth <= 0)
+            return;
+
+        var position = e.GetPosition(GlassBorder);
+        var ratio = Math.Clamp(position.X / ActualWidth, 0.05, 0.95);
+        RimStopMid.Offset = ratio;
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -87,6 +119,10 @@ public partial class DockWindow : Window
     {
         ApplyPillRegionAndPosition();
         SizeChanged += (_, _) => ApplyPillRegionAndPosition();
+
+        // Popups have their own NameScope, so ElementName bindings inside one can't resolve a
+        // sibling outside it -- assign the placement target directly instead.
+        ClockFlyout.PlacementTarget = ClockWidget;
     }
 
     private void ApplyPillRegionAndPosition()
@@ -102,7 +138,8 @@ public partial class DockWindow : Window
         if (widthPx <= 0 || heightPx <= 0)
             return;
 
-        WindowStyler.ApplyPillRegion(hwnd, widthPx, heightPx);
+        var cornerRadiusPx = (int)(22 * dpiScale);
+        WindowStyler.ApplyRoundedRegion(hwnd, widthPx, heightPx, cornerRadiusPx);
 
         var marginPx = (int)(12 * dpiScale);
         var x = _workArea.Left + (_workArea.Width - widthPx) / 2;

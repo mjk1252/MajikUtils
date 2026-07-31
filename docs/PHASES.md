@@ -5,7 +5,7 @@
 - [x] **Phase 2** — Running-app tracking + mirrored dock across both monitors.
 - [x] **Phase 3** — System tray icon hosting (relay Explorer's tray).
 - [x] **Phase 4** — Taskbar hide/restore with watchdog safety net + Game Mode.
-- [ ] **Phase 5** — Clock widget + full Liquid Glass visual polish.
+- [x] **Phase 5** — Clock widget + full Liquid Glass visual polish.
 - [ ] **Phase 6** — Installer (Inno Setup) + settings UI → v1.0.
 - [ ] **Phase 7 (stretch)** — Icon pack support.
 

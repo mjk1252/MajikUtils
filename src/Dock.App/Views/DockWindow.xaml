@@ -54,82 +54,146 @@
         </Style>
     </Window.Resources>
 
-    <Border x:Name="GlassBorder"
-            CornerRadius="32"
-            Padding="12,8"
-            Background="#33FFFFFF"
-            BorderBrush="#40FFFFFF"
-            BorderThickness="1">
-        <StackPanel Orientation="Horizontal">
-            <ItemsControl ItemsSource="{Binding Items}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Style="{StaticResource DockItemStyle}"
-                                ToolTip="{Binding Name}"
-                                MouseLeftButtonUp="OnItemClick"
-                                MouseRightButtonUp="OnItemRightClick">
-                            <Grid>
-                                <Border CornerRadius="10" Background="#4D000000"
-                                        Visibility="{Binding IconPng, Converter={StaticResource NullToVisibility}}">
-                                    <TextBlock Text="{Binding Name, Converter={StaticResource NameToInitial}}"
-                                               FontSize="20" FontWeight="SemiBold"
-                                               Foreground="White"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
+    <Grid>
+        <Border x:Name="GlassBorder"
+                CornerRadius="22"
+                Padding="12,8"
+                Background="#14FFFFFF"
+                BorderThickness="1"
+                MouseMove="OnGlassMouseMove">
+            <Border.BorderBrush>
+                <LinearGradientBrush x:Name="RimBrush" StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop x:Name="RimStopLeft" Color="#14FFFFFF" Offset="0"/>
+                    <GradientStop x:Name="RimStopMid" Color="#50FFFFFF" Offset="0.5"/>
+                    <GradientStop x:Name="RimStopRight" Color="#14FFFFFF" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.BorderBrush>
+
+            <Grid>
+                <StackPanel Orientation="Horizontal">
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource DockItemStyle}"
+                                        ToolTip="{Binding Name}"
+                                        MouseLeftButtonUp="OnItemClick"
+                                        MouseRightButtonUp="OnItemRightClick">
+                                    <Grid>
+                                        <Border CornerRadius="10" Background="#4D000000"
+                                                Visibility="{Binding IconPng, Converter={StaticResource NullToVisibility}}">
+                                            <TextBlock Text="{Binding Name, Converter={StaticResource NameToInitial}}"
+                                                       FontSize="20" FontWeight="SemiBold"
+                                                       Foreground="White"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"/>
+                                        </Border>
+                                        <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
+                                               Width="40" Height="40"
+                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        <Ellipse Width="5" Height="5" Fill="White"
+                                                 VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                                                 Margin="0,0,0,2"
+                                                 Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}"/>
+                                    </Grid>
                                 </Border>
-                                <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
-                                       Width="40" Height="40"
-                                       RenderOptions.BitmapScalingMode="HighQuality"/>
-                                <Ellipse Width="5" Height="5" Fill="White"
-                                         VerticalAlignment="Bottom" HorizontalAlignment="Center"
-                                         Margin="0,0,0,2"
-                                         Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}"/>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-            <Border Width="1" Margin="6,10" Background="#40FFFFFF"/>
+                    <Border Width="1" Margin="6,10" Background="#40FFFFFF"/>
 
-            <Border x:Name="AddButton"
-                    Width="52" Height="52" Margin="4,0"
-                    Cursor="Hand"
-                    ToolTip="Pin an application"
-                    MouseLeftButtonUp="OnAddClick">
-                <TextBlock Text="+" FontSize="26" FontWeight="Light"
-                           Foreground="White"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
+                    <Border x:Name="AddButton"
+                            Width="52" Height="52" Margin="4,0"
+                            Cursor="Hand"
+                            ToolTip="Pin an application"
+                            MouseLeftButtonUp="OnAddClick">
+                        <TextBlock Text="+" FontSize="26" FontWeight="Light"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+
+                    <Border Width="1" Margin="6,10" Background="#40FFFFFF"
+                            Visibility="{Binding TrayIcons.Count, Converter={StaticResource CountToVisibility}}"/>
+
+                    <ItemsControl ItemsSource="{Binding TrayIcons}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="34" Height="34" Margin="3,0"
+                                        Cursor="Hand"
+                                        MouseLeftButtonUp="OnTrayIconClick"
+                                        MouseRightButtonUp="OnTrayIconRightClick">
+                                    <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
+                                           Width="20" Height="20"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Border Width="1" Margin="6,10" Background="#40FFFFFF"/>
+
+                    <Border x:Name="ClockWidget"
+                            Padding="12,0" Margin="2,0"
+                            Cursor="Hand"
+                            MouseLeftButtonUp="OnClockClick">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="ClockTimeText" FontSize="15" FontWeight="SemiBold"
+                                       Foreground="White" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="ClockDateText" FontSize="10"
+                                       Foreground="#CCFFFFFF" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Liquid-glass top highlight: a soft sheen across the upper portion, non-interactive. -->
+                <Border CornerRadius="22,22,0,0" IsHitTestVisible="False" VerticalAlignment="Top" Height="20">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#14FFFFFF" Offset="0"/>
+                            <GradientStop Color="#00FFFFFF" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+
+                <!-- Subtle inner shadow along the bottom edge for a sense of glass thickness. -->
+                <Border CornerRadius="0,0,22,22" IsHitTestVisible="False" VerticalAlignment="Bottom" Height="10">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#00000000" Offset="0"/>
+                            <GradientStop Color="#22000000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Popup x:Name="ClockFlyout"
+               Placement="Top"
+               VerticalOffset="-10"
+               StaysOpen="True"
+               AllowsTransparency="True"
+               PopupAnimation="Fade">
+            <Border CornerRadius="20" Background="#EE1E1E1E" Padding="24,20"
+                    BorderBrush="#40FFFFFF" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock x:Name="FlyoutTimeText" FontSize="42" FontWeight="Light"
+                               Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="FlyoutDateText" FontSize="14"
+                               Foreground="#CCFFFFFF" HorizontalAlignment="Center" Margin="0,2,0,14"/>
+                    <Calendar x:Name="FlyoutCalendar" HorizontalAlignment="Center"/>
+                </StackPanel>
             </Border>
-
-            <Border Width="1" Margin="6,10" Background="#40FFFFFF"
-                    Visibility="{Binding TrayIcons.Count, Converter={StaticResource CountToVisibility}}"/>
-
-            <ItemsControl ItemsSource="{Binding TrayIcons}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Width="34" Height="34" Margin="3,0"
-                                Cursor="Hand"
-                                MouseLeftButtonUp="OnTrayIconClick"
-                                MouseRightButtonUp="OnTrayIconRightClick">
-                            <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
-                                   Width="20" Height="20"
-                                   RenderOptions.BitmapScalingMode="HighQuality"/>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </StackPanel>
-    </Border>
+        </Popup>
+    </Grid>
 </Window>

@@ -23,9 +23,9 @@ public static class WindowStyler
         NativeMethods.DwmExtendFrameIntoClientArea(hwnd, ref margins);
     }
 
-    public static void ApplyPillRegion(IntPtr hwnd, int widthPx, int heightPx)
+    public static void ApplyRoundedRegion(IntPtr hwnd, int widthPx, int heightPx, int cornerRadiusPx)
     {
-        var region = NativeMethods.CreateRoundRectRgn(0, 0, widthPx, heightPx, heightPx, heightPx);
+        var region = NativeMethods.CreateRoundRectRgn(0, 0, widthPx, heightPx, cornerRadiusPx, cornerRadiusPx);
         NativeMethods.SetWindowRgn(hwnd, region, true);
     }
 
