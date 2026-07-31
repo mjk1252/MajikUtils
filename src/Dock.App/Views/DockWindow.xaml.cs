@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -12,11 +13,18 @@ namespace Dock.App.Views;
 public partial class DockWindow : Window
 {
     private readonly DockViewModel _viewModel;
+    private readonly Rectangle _workArea;
 
-    public DockWindow(DockViewModel viewModel)
+    public DockWindow(DockViewModel viewModel, Rectangle workArea)
     {
         _viewModel = viewModel;
+        _workArea = workArea;
         DataContext = viewModel;
+
+        // Off-screen until we can precisely position the HWND in physical pixels (avoids a visible jump).
+        Left = -10000;
+        Top = -10000;
+
         InitializeComponent();
     }
 
@@ -45,23 +53,11 @@ public partial class DockWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        PositionAtBottomCenter();
-        ApplyPillRegion();
-        SizeChanged += (_, _) =>
-        {
-            PositionAtBottomCenter();
-            ApplyPillRegion();
-        };
+        ApplyPillRegionAndPosition();
+        SizeChanged += (_, _) => ApplyPillRegionAndPosition();
     }
 
-    private void PositionAtBottomCenter()
-    {
-        var workArea = SystemParameters.WorkArea;
-        Left = workArea.Left + (workArea.Width - ActualWidth) / 2;
-        Top = workArea.Bottom - ActualHeight - 12;
-    }
-
-    private void ApplyPillRegion()
+    private void ApplyPillRegionAndPosition()
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero)
@@ -75,6 +71,11 @@ public partial class DockWindow : Window
             return;
 
         WindowStyler.ApplyPillRegion(hwnd, widthPx, heightPx);
+
+        var marginPx = (int)(12 * dpiScale);
+        var x = _workArea.Left + (_workArea.Width - widthPx) / 2;
+        var y = _workArea.Bottom - heightPx - marginPx;
+        WindowStyler.SetWindowPosition(hwnd, x, y);
     }
 
     private void OnDrop(object sender, System.Windows.DragEventArgs e)
@@ -104,13 +105,39 @@ public partial class DockWindow : Window
         if (sender is not FrameworkElement { DataContext: DockItemViewModel item } element)
             return;
 
-        item.LaunchCommand.Execute(null);
-        AnimateBounce(element);
+        if (item.IsRunning && item.Windows.Count > 1)
+        {
+            ShowWindowChooser(item, element);
+        }
+        else
+        {
+            item.LaunchCommand.Execute(null);
+            AnimateBounce(element);
+        }
+    }
+
+    private void ShowWindowChooser(DockItemViewModel item, FrameworkElement anchor)
+    {
+        var menu = new ContextMenu();
+
+        foreach (var window in item.Windows)
+        {
+            var handle = window.Handle;
+            var menuItem = new MenuItem { Header = window.Title };
+            menuItem.Click += (_, _) => item.ActivateWindow(handle);
+            menu.Items.Add(menuItem);
+        }
+
+        anchor.ContextMenu = menu;
+        menu.IsOpen = true;
     }
 
     private void OnItemRightClick(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: DockItemViewModel item } element)
+            return;
+
+        if (!item.IsPinned)
             return;
 
         var menu = new ContextMenu();

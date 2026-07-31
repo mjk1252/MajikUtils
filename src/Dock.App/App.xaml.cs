@@ -11,7 +11,8 @@ namespace Dock.App;
 public partial class App : System.Windows.Application
 {
     private TrayIconService? _trayIcon;
-    private DockWindow? _dockWindow;
+    private RunningWindowSource? _runningAppSource;
+    private readonly List<DockWindow> _dockWindows = [];
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -22,8 +23,18 @@ public partial class App : System.Windows.Application
         IAppLauncher launcher = new ProcessAppLauncher();
         var viewModel = new DockViewModel(configStore, iconProvider, launcher);
 
-        _dockWindow = new DockWindow(viewModel);
-        _dockWindow.Show();
+        viewModel.AttachRunningApps(new WindowActivator());
+
+        foreach (var monitor in MonitorService.GetMonitors())
+        {
+            var window = new DockWindow(viewModel, monitor.WorkArea);
+            window.Show();
+            _dockWindows.Add(window);
+        }
+
+        _runningAppSource = new RunningWindowSource();
+        _runningAppSource.Updated += (_, groups) => Dispatcher.Invoke(() => viewModel.UpdateRunningApps(groups));
+        _runningAppSource.Start();
 
         CreateTrayIcon();
     }
@@ -58,6 +69,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _runningAppSource?.Dispose();
         _trayIcon?.Dispose();
         base.OnExit(e);
     }

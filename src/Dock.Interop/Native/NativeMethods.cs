@@ -134,4 +134,76 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern bool DestroyIcon(IntPtr handle);
+
+    internal const uint GW_OWNER = 4;
+    internal const int DWMWA_CLOAKED = 14;
+    internal const int SW_MINIMIZE = 6;
+    internal const int SW_RESTORE = 9;
+    internal const uint SWP_NOSIZE = 0x0001;
+    internal const uint SWP_NOZORDER = 0x0004;
+    internal const uint SWP_NOACTIVATE = 0x0010;
+    internal const uint MONITORINFOF_PRIMARY = 0x1;
+
+    internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    internal delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [DllImport("user32.dll")]
+    internal static extern bool EnumWindows(EnumWindowsProc enumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    internal static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+
+    [DllImport("user32.dll")]
+    internal static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    internal static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    internal static extern bool ShowWindow(IntPtr hWnd, int cmdShow);
+
+    [DllImport("user32.dll")]
+    internal static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    internal static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    internal static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc enumProc, IntPtr dwData);
+
+    [DllImport("user32.dll")]
+    internal static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
 }

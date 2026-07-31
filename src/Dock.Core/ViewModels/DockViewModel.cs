@@ -12,6 +12,9 @@ public partial class DockViewModel : ObservableObject
     private readonly IIconProvider _iconProvider;
     private readonly IAppLauncher _launcher;
     private readonly DockConfig _config;
+    private readonly Dictionary<string, DockItemViewModel> _transientRunningItems = new(StringComparer.OrdinalIgnoreCase);
+
+    private IWindowActivator? _windowActivator;
 
     public ObservableCollection<DockItemViewModel> Items { get; } = [];
 
@@ -30,6 +33,61 @@ public partial class DockViewModel : ObservableObject
     {
         IconPng = _iconProvider.GetIconPng(app.ExecutablePath, 48)
     };
+
+    public void AttachRunningApps(IWindowActivator activator)
+    {
+        _windowActivator = activator;
+    }
+
+    public void UpdateRunningApps(IReadOnlyList<RunningAppGroup> groups)
+    {
+        var activator = _windowActivator;
+        if (activator is null)
+            return;
+
+        var groupsByPath = new Dictionary<string, RunningAppGroup>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in groups)
+            groupsByPath[group.ProcessPath] = group;
+
+        var pinnedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in Items)
+        {
+            if (!item.IsPinned)
+                continue;
+
+            pinnedPaths.Add(item.ExecutablePath);
+            item.SetRunningState(
+                groupsByPath.TryGetValue(item.ExecutablePath, out var group) ? group.Windows : [],
+                activator);
+        }
+
+        foreach (var key in _transientRunningItems.Keys.ToList())
+        {
+            if (groupsByPath.ContainsKey(key) && !pinnedPaths.Contains(key))
+                continue;
+
+            Items.Remove(_transientRunningItems[key]);
+            _transientRunningItems.Remove(key);
+        }
+
+        foreach (var group in groups)
+        {
+            if (pinnedPaths.Contains(group.ProcessPath))
+                continue;
+
+            if (!_transientRunningItems.TryGetValue(group.ProcessPath, out var item))
+            {
+                item = new DockItemViewModel(group.ProcessPath, group.DisplayName, _launcher)
+                {
+                    IconPng = _iconProvider.GetIconPng(group.ProcessPath, 48)
+                };
+                _transientRunningItems[group.ProcessPath] = item;
+                Items.Add(item);
+            }
+
+            item.SetRunningState(group.Windows, activator);
+        }
+    }
 
     public void AddPinned(string executablePath)
     {
@@ -52,7 +110,7 @@ public partial class DockViewModel : ObservableObject
     [RelayCommand]
     private void Unpin(DockItemViewModel? item)
     {
-        if (item is null)
+        if (item?.App is null)
             return;
 
         _config.PinnedApps.RemoveAll(a => a.Id == item.App.Id);

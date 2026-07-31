@@ -28,4 +28,10 @@ public static class WindowStyler
         var region = NativeMethods.CreateRoundRectRgn(0, 0, widthPx, heightPx, heightPx, heightPx);
         NativeMethods.SetWindowRgn(hwnd, region, true);
     }
+
+    public static void SetWindowPosition(IntPtr hwnd, int x, int y)
+    {
+        NativeMethods.SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0,
+            NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+    }
 }

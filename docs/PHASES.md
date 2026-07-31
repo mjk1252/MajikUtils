@@ -2,7 +2,7 @@
 
 - [x] **Phase 0** — Toolchain + solution scaffold.
 - [x] **Phase 1** — Glass dock bar with pinned apps that launch (single monitor).
-- [ ] **Phase 2** — Running-app tracking + mirrored dock across both monitors.
+- [x] **Phase 2** — Running-app tracking + mirrored dock across both monitors.
 - [ ] **Phase 3** — System tray icon hosting (relay Explorer's tray).
 - [ ] **Phase 4** — Taskbar hide/restore with watchdog safety net + Game Mode.
 - [ ] **Phase 5** — Clock widget + full Liquid Glass visual polish.
