@@ -201,6 +201,29 @@ internal static class NativeMethods
     internal static extern int SHQueryUserNotificationState(out int state);
 
     internal const int QUNS_RUNNING_D3D_FULL_SCREEN = 2;
+
+    internal const int WCA_ACCENT_POLICY = 19;
+    internal const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct ACCENT_POLICY
+    {
+        public int AccentState;
+        public int AccentFlags;
+        public int GradientColor;
+        public int AnimationId;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct WINDOWCOMPOSITIONATTRIBDATA
+    {
+        public int Attribute;
+        public IntPtr Data;
+        public int SizeOfData;
+    }
+
+    [DllImport("user32.dll")]
+    internal static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOWCOMPOSITIONATTRIBDATA data);
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;

@@ -21,6 +21,7 @@ public partial class App : System.Windows.Application
     private bool _hiddenForGameMode;
     private SettingsStore? _settingsStore;
     private SettingsWindow? _settingsWindow;
+    private DockViewModel? _viewModel;
     private readonly List<DockWindow> _dockWindows = [];
 
     protected override void OnStartup(StartupEventArgs e)
@@ -45,14 +46,38 @@ public partial class App : System.Windows.Application
         var configStore = new ConfigStore();
         IIconProvider iconProvider = new ShellIconProvider();
         IAppLauncher launcher = new ProcessAppLauncher();
-        var viewModel = new DockViewModel(configStore, iconProvider, launcher);
+        _viewModel = new DockViewModel(configStore, iconProvider, launcher);
 
-        viewModel.AttachRunningApps(new WindowActivator());
+        _viewModel.AttachRunningApps(new WindowActivator());
 
+        CreateDockWindows(settings.Position);
+
+        _runningAppSource = new RunningWindowSource();
+        _runningAppSource.Updated += (_, groups) => Dispatcher.Invoke(() => _viewModel.UpdateRunningApps(groups));
+        _runningAppSource.Start();
+
+        _explorerTrayReader = new ExplorerTrayReader();
+        _viewModel.AttachTraySource(_explorerTrayReader);
+        _explorerTrayReader.Updated += (_, icons) => Dispatcher.Invoke(() => _viewModel.UpdateTrayIcons(icons));
+        _explorerTrayReader.Start();
+
+        CreateTrayIcon();
+
+        if (settings.HideTaskbar)
+            HideTaskbarAndMarkFlag();
+
+        StartupRegistration.SetEnabled(settings.StartWithWindows);
+        LaunchGuard();
+
+        _gameModeTimer = new System.Threading.Timer(_ => CheckGameMode(), null, 2000, 2000);
+    }
+
+    private void CreateDockWindows(Core.Models.DockPosition position)
+    {
         var isFirstWindow = true;
         foreach (var monitor in MonitorService.GetMonitors())
         {
-            var window = new DockWindow(viewModel, monitor.WorkArea, enableGlobalHooks: isFirstWindow);
+            var window = new DockWindow(_viewModel!, monitor.WorkArea, position, enableGlobalHooks: isFirstWindow);
             if (isFirstWindow)
             {
                 window.PanicHotkeyPressed += RestoreTaskbarAndClearFlag;
@@ -67,25 +92,15 @@ public partial class App : System.Windows.Application
             window.Show();
             _dockWindows.Add(window);
         }
+    }
 
-        _runningAppSource = new RunningWindowSource();
-        _runningAppSource.Updated += (_, groups) => Dispatcher.Invoke(() => viewModel.UpdateRunningApps(groups));
-        _runningAppSource.Start();
+    public void RebuildDockWindows(Core.Models.DockPosition position)
+    {
+        foreach (var window in _dockWindows)
+            window.Close();
 
-        _explorerTrayReader = new ExplorerTrayReader();
-        viewModel.AttachTraySource(_explorerTrayReader);
-        _explorerTrayReader.Updated += (_, icons) => Dispatcher.Invoke(() => viewModel.UpdateTrayIcons(icons));
-        _explorerTrayReader.Start();
-
-        CreateTrayIcon();
-
-        if (settings.HideTaskbar)
-            HideTaskbarAndMarkFlag();
-
-        StartupRegistration.SetEnabled(settings.StartWithWindows);
-        LaunchGuard();
-
-        _gameModeTimer = new System.Threading.Timer(_ => CheckGameMode(), null, 2000, 2000);
+        _dockWindows.Clear();
+        CreateDockWindows(position);
     }
 
     private void HideTaskbarAndMarkFlag()

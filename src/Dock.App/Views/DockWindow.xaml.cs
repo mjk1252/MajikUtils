@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Dock.Core.Models;
 using Dock.Core.ViewModels;
 using Dock.Interop.Windowing;
 
@@ -17,6 +18,7 @@ public partial class DockWindow : Window
 
     private readonly DockViewModel _viewModel;
     private readonly Rectangle _workArea;
+    private readonly DockPosition _position;
     private readonly bool _enableGlobalHooks;
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private uint _taskbarCreatedMessage;
@@ -24,10 +26,11 @@ public partial class DockWindow : Window
     public event Action? PanicHotkeyPressed;
     public event Action? ExplorerRestarted;
 
-    public DockWindow(DockViewModel viewModel, Rectangle workArea, bool enableGlobalHooks = false)
+    public DockWindow(DockViewModel viewModel, Rectangle workArea, DockPosition position = DockPosition.Bottom, bool enableGlobalHooks = false)
     {
         _viewModel = viewModel;
         _workArea = workArea;
+        _position = position;
         _enableGlobalHooks = enableGlobalHooks;
         DataContext = viewModel;
 
@@ -36,12 +39,33 @@ public partial class DockWindow : Window
         Top = -10000;
 
         InitializeComponent();
+        ApplyOrientation();
 
         _clockTimer.Tick += (_, _) => UpdateClock();
         _clockTimer.Start();
         UpdateClock();
 
         Closed += (_, _) => _clockTimer.Stop();
+    }
+
+    private void ApplyOrientation()
+    {
+        if (_position == DockPosition.Bottom)
+            return;
+
+        ContentStack.Orientation = Orientation.Vertical;
+
+        var verticalPanel = (ItemsPanelTemplate)FindResource("VerticalPanel");
+        PinnedItemsControl.ItemsPanel = verticalPanel;
+        TrayItemsControl.ItemsPanel = verticalPanel;
+
+        foreach (var separator in new[] { Separator1, Separator2, Separator3 })
+        {
+            var width = separator.Width;
+            separator.Width = double.NaN;
+            separator.Height = width;
+            separator.Margin = new Thickness(10, 6, 10, 6);
+        }
     }
 
     private void UpdateClock()
@@ -142,8 +166,24 @@ public partial class DockWindow : Window
         WindowStyler.ApplyRoundedRegion(hwnd, widthPx, heightPx, cornerRadiusPx);
 
         var marginPx = (int)(12 * dpiScale);
-        var x = _workArea.Left + (_workArea.Width - widthPx) / 2;
-        var y = _workArea.Bottom - heightPx - marginPx;
+        int x, y;
+
+        switch (_position)
+        {
+            case DockPosition.Left:
+                x = _workArea.Left + marginPx;
+                y = _workArea.Top + (_workArea.Height - heightPx) / 2;
+                break;
+            case DockPosition.Right:
+                x = _workArea.Right - widthPx - marginPx;
+                y = _workArea.Top + (_workArea.Height - heightPx) / 2;
+                break;
+            default:
+                x = _workArea.Left + (_workArea.Width - widthPx) / 2;
+                y = _workArea.Bottom - heightPx - marginPx;
+                break;
+        }
+
         WindowStyler.SetWindowPosition(hwnd, x, y);
     }
 

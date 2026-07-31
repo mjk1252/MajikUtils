@@ -1,4 +1,5 @@
 using System.Windows;
+using Dock.Core.Models;
 using Dock.Core.Services;
 using Dock.Interop.Shell;
 using Dock.Interop.Windowing;
@@ -18,6 +19,20 @@ public partial class SettingsWindow : Window
         var settings = _settingsStore.Load();
         HideTaskbarCheckBox.IsChecked = settings.HideTaskbar;
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
+
+        switch (settings.Position)
+        {
+            case DockPosition.Left:
+                PositionLeftRadio.IsChecked = true;
+                break;
+            case DockPosition.Right:
+                PositionRightRadio.IsChecked = true;
+                break;
+            default:
+                PositionBottomRadio.IsChecked = true;
+                break;
+        }
+
         _loaded = true;
     }
 
@@ -26,10 +41,16 @@ public partial class SettingsWindow : Window
         if (!_loaded)
             return;
 
-        var settings = new Core.Models.AppSettings
+        var position = PositionLeftRadio.IsChecked == true ? DockPosition.Left
+            : PositionRightRadio.IsChecked == true ? DockPosition.Right
+            : DockPosition.Bottom;
+
+        var previousSettings = _settingsStore.Load();
+        var settings = new AppSettings
         {
             HideTaskbar = HideTaskbarCheckBox.IsChecked == true,
-            StartWithWindows = StartWithWindowsCheckBox.IsChecked == true
+            StartWithWindows = StartWithWindowsCheckBox.IsChecked == true,
+            Position = position
         };
 
         _settingsStore.Save(settings);
@@ -46,6 +67,9 @@ public partial class SettingsWindow : Window
         }
 
         StartupRegistration.SetEnabled(settings.StartWithWindows);
+
+        if (settings.Position != previousSettings.Position && System.Windows.Application.Current is App app)
+            app.RebuildDockWindows(settings.Position);
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();

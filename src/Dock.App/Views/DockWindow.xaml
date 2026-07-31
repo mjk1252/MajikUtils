@@ -22,6 +22,13 @@
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:CountToVisibilityConverter x:Key="CountToVisibility"/>
 
+        <ItemsPanelTemplate x:Key="HorizontalPanel">
+            <StackPanel Orientation="Horizontal"/>
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="VerticalPanel">
+            <StackPanel Orientation="Vertical"/>
+        </ItemsPanelTemplate>
+
         <Style x:Key="DockItemStyle" TargetType="Border">
             <Setter Property="Width" Value="52"/>
             <Setter Property="Height" Value="52"/>
@@ -70,13 +77,8 @@
             </Border.BorderBrush>
 
             <Grid>
-                <StackPanel Orientation="Horizontal">
-                    <ItemsControl ItemsSource="{Binding Items}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
+                <StackPanel x:Name="ContentStack" Orientation="Horizontal">
+                    <ItemsControl x:Name="PinnedItemsControl" ItemsSource="{Binding Items}" ItemsPanel="{StaticResource HorizontalPanel}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Style="{StaticResource DockItemStyle}"
@@ -105,7 +107,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <Border Width="1" Margin="6,10" Background="#40FFFFFF"/>
+                    <Border x:Name="Separator1" Width="1" Margin="6,10" Background="#40FFFFFF"/>
 
                     <Border x:Name="AddButton"
                             Width="52" Height="52" Margin="4,0"
@@ -118,15 +120,10 @@
                                    VerticalAlignment="Center"/>
                     </Border>
 
-                    <Border Width="1" Margin="6,10" Background="#40FFFFFF"
+                    <Border x:Name="Separator2" Width="1" Margin="6,10" Background="#40FFFFFF"
                             Visibility="{Binding TrayIcons.Count, Converter={StaticResource CountToVisibility}}"/>
 
-                    <ItemsControl ItemsSource="{Binding TrayIcons}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
+                    <ItemsControl x:Name="TrayItemsControl" ItemsSource="{Binding TrayIcons}" ItemsPanel="{StaticResource HorizontalPanel}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Width="34" Height="34" Margin="3,0"
@@ -141,7 +138,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <Border Width="1" Margin="6,10" Background="#40FFFFFF"/>
+                    <Border x:Name="Separator3" Width="1" Margin="6,10" Background="#40FFFFFF"/>
 
                     <Border x:Name="ClockWidget"
                             Padding="12,0" Margin="2,0"

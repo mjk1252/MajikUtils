@@ -15,6 +15,14 @@
         <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start Dock automatically when Windows starts"
                   Foreground="White" Margin="0,0,0,20" Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
 
+        <TextBlock Text="Dock position" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <RadioButton x:Name="PositionBottomRadio" Content="Bottom" GroupName="Position"
+                     Foreground="White" Margin="0,0,0,6" Checked="OnSettingChanged"/>
+        <RadioButton x:Name="PositionLeftRadio" Content="Left" GroupName="Position"
+                     Foreground="White" Margin="0,0,0,6" Checked="OnSettingChanged"/>
+        <RadioButton x:Name="PositionRightRadio" Content="Right" GroupName="Position"
+                     Foreground="White" Margin="0,0,0,20" Checked="OnSettingChanged"/>
+
         <TextBlock Text="Panic hotkey: Ctrl+Alt+Shift+T instantly restores the taskbar."
                    Foreground="#AAAAAA" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,20"/>
 
