@@ -254,6 +254,12 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
+    internal const int WS_EX_LAYERED = 0x00080000;
+    internal const uint LWA_ALPHA = 0x2;
+
+    [DllImport("user32.dll")]
+    internal static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte alpha, uint flags);
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;

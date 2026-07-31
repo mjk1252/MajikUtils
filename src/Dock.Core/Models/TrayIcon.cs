@@ -4,6 +4,8 @@ public sealed class TrayIcon
 {
     public required string Name { get; init; }
     public byte[]? IconPng { get; init; }
+    public bool IsChevron { get; init; }
+    public bool IsClock { get; init; }
 
     // Classic relay path (Explorer's ToolbarWindow32, pre-XAML tray). Absent on newer builds.
     public IntPtr? OwnerHandle { get; init; }

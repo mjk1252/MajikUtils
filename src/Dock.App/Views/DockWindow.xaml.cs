@@ -62,7 +62,6 @@ public partial class DockWindow : Window
 
         var verticalPanel = (ItemsPanelTemplate)FindResource("VerticalPanel");
         PinnedItemsControl.ItemsPanel = verticalPanel;
-        TrayItemsControl.ItemsPanel = verticalPanel;
 
         foreach (var separator in new[] { Separator1, Separator2, Separator3 })
         {
@@ -84,7 +83,23 @@ public partial class DockWindow : Window
 
     private void OnClockClick(object sender, MouseButtonEventArgs e)
     {
-        ClockFlyout.IsOpen = !ClockFlyout.IsOpen;
+        // Prefer relaying to the real taskbar clock, which opens Windows' actual Notification
+        // Center (calendar + notifications) -- falls back to our own simple flyout if tray
+        // reading hasn't found it (e.g. this build's automation path failed).
+        if (_viewModel.ClockTrayIcon is { } clockIcon)
+            clockIcon.ClickCommand.Execute(null);
+        else
+            ClockFlyout.IsOpen = !ClockFlyout.IsOpen;
+    }
+
+    private void OnOverflowChevronClick(object sender, MouseButtonEventArgs e)
+    {
+        // Prefer relaying to the real "Show Hidden Icons" chevron, which opens Windows' actual
+        // overflow flyout -- falls back to our own icon-grid popup if it wasn't found.
+        if (_viewModel.ChevronTrayIcon is { } chevronIcon)
+            chevronIcon.ClickCommand.Execute(null);
+        else
+            OverflowFlyout.IsOpen = !OverflowFlyout.IsOpen;
     }
 
     private void OnGlassMouseMove(object sender, MouseEventArgs e)
@@ -155,6 +170,7 @@ public partial class DockWindow : Window
         // Popups have their own NameScope, so ElementName bindings inside one can't resolve a
         // sibling outside it -- assign the placement target directly instead.
         ClockFlyout.PlacementTarget = ClockWidget;
+        OverflowFlyout.PlacementTarget = OverflowChevron;
     }
 
     private void ApplyPillRegionAndPosition()

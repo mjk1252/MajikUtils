@@ -29,6 +29,17 @@
             <StackPanel Orientation="Vertical"/>
         </ItemsPanelTemplate>
 
+        <DataTemplate x:Key="TrayIconTemplate">
+            <Border Width="34" Height="34" Margin="3,0"
+                    Cursor="Hand"
+                    MouseLeftButtonUp="OnTrayIconClick"
+                    MouseRightButtonUp="OnTrayIconRightClick">
+                <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
+                       Width="20" Height="20"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
+            </Border>
+        </DataTemplate>
+
         <Style x:Key="DockItemStyle" TargetType="Border">
             <Setter Property="Width" Value="52"/>
             <Setter Property="Height" Value="52"/>
@@ -124,22 +135,17 @@
                     </Border>
 
                     <Border x:Name="Separator2" Width="1" Margin="6,10" Background="#40FFFFFF"
-                            Visibility="{Binding TrayIcons.Count, Converter={StaticResource CountToVisibility}}"/>
+                            Visibility="{Binding HasTrayIcons, Converter={StaticResource BoolToVisibility}}"/>
 
-                    <ItemsControl x:Name="TrayItemsControl" ItemsSource="{Binding TrayIcons}" ItemsPanel="{StaticResource HorizontalPanel}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Width="34" Height="34" Margin="3,0"
-                                        Cursor="Hand"
-                                        MouseLeftButtonUp="OnTrayIconClick"
-                                        MouseRightButtonUp="OnTrayIconRightClick">
-                                    <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
-                                           Width="20" Height="20"
-                                           RenderOptions.BitmapScalingMode="HighQuality"/>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <Border x:Name="OverflowChevron"
+                            Width="24" Height="34" Margin="0,0,2,0"
+                            Cursor="Hand"
+                            ToolTip="More tray icons"
+                            MouseLeftButtonUp="OnOverflowChevronClick"
+                            Visibility="{Binding HasTrayIcons, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="^" FontSize="14" Foreground="#CCFFFFFF"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
 
                     <Border x:Name="Separator3" Width="1" Margin="6,10" Background="#40FFFFFF"/>
 
@@ -193,6 +199,20 @@
                                Foreground="#CCFFFFFF" HorizontalAlignment="Center" Margin="0,2,0,14"/>
                     <Calendar x:Name="FlyoutCalendar" HorizontalAlignment="Center"/>
                 </StackPanel>
+            </Border>
+        </Popup>
+
+        <Popup x:Name="OverflowFlyout"
+               Placement="Top"
+               VerticalOffset="-10"
+               StaysOpen="True"
+               AllowsTransparency="True"
+               PopupAnimation="Fade">
+            <Border CornerRadius="18" Background="#EE1E1E1E" Padding="10"
+                    BorderBrush="#40FFFFFF" BorderThickness="1">
+                <ItemsControl ItemsSource="{Binding OverflowTrayIcons}"
+                              ItemsPanel="{StaticResource HorizontalPanel}"
+                              ItemTemplate="{StaticResource TrayIconTemplate}"/>
             </Border>
         </Popup>
     </Grid>

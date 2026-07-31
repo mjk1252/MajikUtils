@@ -239,7 +239,9 @@ public sealed class ExplorerTrayReader : ITraySource, IDisposable
                 Name = string.IsNullOrWhiteSpace(name) ? "Tray icon" : name,
                 IconPng = CaptureRegion(rect),
                 ClickX = centerX,
-                ClickY = centerY
+                ClickY = centerY,
+                IsChevron = className == "SystemTray.NormalButton" && name.Contains("hidden icons", StringComparison.OrdinalIgnoreCase),
+                IsClock = className == "SystemTray.OmniButton" && name.StartsWith("Clock", StringComparison.OrdinalIgnoreCase)
             });
         }
 

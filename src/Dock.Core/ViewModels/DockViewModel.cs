@@ -18,7 +18,16 @@ public partial class DockViewModel : ObservableObject
     private ITraySource? _traySource;
 
     public ObservableCollection<DockItemViewModel> Items { get; } = [];
-    public ObservableCollection<TrayIconViewModel> TrayIcons { get; } = [];
+    public ObservableCollection<TrayIconViewModel> OverflowTrayIcons { get; } = [];
+
+    [ObservableProperty]
+    private bool hasTrayIcons;
+
+    [ObservableProperty]
+    private TrayIconViewModel? chevronTrayIcon;
+
+    [ObservableProperty]
+    private TrayIconViewModel? clockTrayIcon;
 
     public DockViewModel(ConfigStore configStore, IIconProvider iconProvider, IAppLauncher launcher)
     {
@@ -102,20 +111,28 @@ public partial class DockViewModel : ObservableObject
         if (traySource is null)
             return;
 
-        var currentKeys = new HashSet<string>(TrayIcons.Select(t => TrayIconKey(t.Info)));
+        var currentKeys = new HashSet<string>(OverflowTrayIcons.Select(t => TrayIconKey(t.Info)));
         var newKeys = new HashSet<string>(icons.Select(TrayIconKey));
 
         if (currentKeys.SetEquals(newKeys))
             return;
 
-        TrayIcons.Clear();
+        OverflowTrayIcons.Clear();
+        ChevronTrayIcon = null;
+        ClockTrayIcon = null;
+
         foreach (var icon in icons)
         {
-            TrayIcons.Add(new TrayIconViewModel(icon, traySource)
-            {
-                IconPng = icon.IconPng
-            });
+            var vm = new TrayIconViewModel(icon, traySource) { IconPng = icon.IconPng };
+            OverflowTrayIcons.Add(vm);
+
+            if (icon.IsChevron)
+                ChevronTrayIcon = vm;
+            else if (icon.IsClock)
+                ClockTrayIcon = vm;
         }
+
+        HasTrayIcons = icons.Count > 0;
     }
 
     private static string TrayIconKey(TrayIcon icon) => icon.OwnerHandle is { } handle
