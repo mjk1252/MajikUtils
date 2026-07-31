@@ -1,0 +1,23 @@
+<Window x:Class="Dock.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Dock Settings"
+        Width="360" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#1E1E1E">
+    <StackPanel Margin="24">
+        <TextBlock Text="Dock Settings" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,16"/>
+
+        <CheckBox x:Name="HideTaskbarCheckBox" Content="Hide the Windows taskbar"
+                  Foreground="White" Margin="0,0,0,12" Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+        <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start Dock automatically when Windows starts"
+                  Foreground="White" Margin="0,0,0,20" Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+        <TextBlock Text="Panic hotkey: Ctrl+Alt+Shift+T instantly restores the taskbar."
+                   Foreground="#AAAAAA" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,20"/>
+
+        <Button Content="Close" Width="90" HorizontalAlignment="Right" Click="OnCloseClick"/>
+    </StackPanel>
+</Window>

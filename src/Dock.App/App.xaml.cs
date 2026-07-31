@@ -19,6 +19,8 @@ public partial class App : System.Windows.Application
     private ExplorerTrayReader? _explorerTrayReader;
     private System.Threading.Timer? _gameModeTimer;
     private bool _hiddenForGameMode;
+    private SettingsStore? _settingsStore;
+    private SettingsWindow? _settingsWindow;
     private readonly List<DockWindow> _dockWindows = [];
 
     protected override void OnStartup(StartupEventArgs e)
@@ -37,6 +39,9 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.ProcessExit += (_, _) => RestoreTaskbarAndClearFlag();
 
+        _settingsStore = new SettingsStore();
+        var settings = _settingsStore.Load();
+
         var configStore = new ConfigStore();
         IIconProvider iconProvider = new ShellIconProvider();
         IAppLauncher launcher = new ProcessAppLauncher();
@@ -51,7 +56,11 @@ public partial class App : System.Windows.Application
             if (isFirstWindow)
             {
                 window.PanicHotkeyPressed += RestoreTaskbarAndClearFlag;
-                window.ExplorerRestarted += HideTaskbarAndMarkFlag;
+                window.ExplorerRestarted += () =>
+                {
+                    if (_settingsStore!.Load().HideTaskbar)
+                        HideTaskbarAndMarkFlag();
+                };
             }
 
             isFirstWindow = false;
@@ -70,7 +79,10 @@ public partial class App : System.Windows.Application
 
         CreateTrayIcon();
 
-        HideTaskbarAndMarkFlag();
+        if (settings.HideTaskbar)
+            HideTaskbarAndMarkFlag();
+
+        StartupRegistration.SetEnabled(settings.StartWithWindows);
         LaunchGuard();
 
         _gameModeTimer = new System.Threading.Timer(_ => CheckGameMode(), null, 2000, 2000);
@@ -141,11 +153,28 @@ public partial class App : System.Windows.Application
             StaysOpen = false
         };
 
+        var settings = new MenuItem { Header = "Settings..." };
+        settings.Click += (_, _) => ShowSettingsWindow();
+        menu.Items.Add(settings);
+
         var exit = new MenuItem { Header = "Exit Dock" };
         exit.Click += (_, _) => Shutdown();
         menu.Items.Add(exit);
 
         menu.IsOpen = true;
+    }
+
+    private void ShowSettingsWindow()
+    {
+        if (_settingsWindow is { IsVisible: true })
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        _settingsWindow = new SettingsWindow(_settingsStore!);
+        _settingsWindow.Show();
+        _settingsWindow.Activate();
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

@@ -58,14 +58,14 @@
         <Border x:Name="GlassBorder"
                 CornerRadius="22"
                 Padding="12,8"
-                Background="#14FFFFFF"
+                Background="#1FFFFFFF"
                 BorderThickness="1"
                 MouseMove="OnGlassMouseMove">
             <Border.BorderBrush>
                 <LinearGradientBrush x:Name="RimBrush" StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop x:Name="RimStopLeft" Color="#14FFFFFF" Offset="0"/>
-                    <GradientStop x:Name="RimStopMid" Color="#50FFFFFF" Offset="0.5"/>
-                    <GradientStop x:Name="RimStopRight" Color="#14FFFFFF" Offset="1"/>
+                    <GradientStop x:Name="RimStopLeft" Color="#2EFFFFFF" Offset="0"/>
+                    <GradientStop x:Name="RimStopMid" Color="#55FFFFFF" Offset="0.5"/>
+                    <GradientStop x:Name="RimStopRight" Color="#2EFFFFFF" Offset="1"/>
                 </LinearGradientBrush>
             </Border.BorderBrush>
 
@@ -160,7 +160,7 @@
                 <Border CornerRadius="22,22,0,0" IsHitTestVisible="False" VerticalAlignment="Top" Height="20">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="#14FFFFFF" Offset="0"/>
+                            <GradientStop Color="#20FFFFFF" Offset="0"/>
                             <GradientStop Color="#00FFFFFF" Offset="1"/>
                         </LinearGradientBrush>
                     </Border.Background>
