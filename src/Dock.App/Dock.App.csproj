@@ -18,6 +18,14 @@
   <ItemGroup>
     <ProjectReference Include="..\Dock.Core\Dock.Core.csproj" />
     <ProjectReference Include="..\Dock.Interop\Dock.Interop.csproj" />
+    <ProjectReference Include="..\Dock.Guard\Dock.Guard.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="CopyGuardOutput" AfterTargets="Build">
+    <ItemGroup>
+      <GuardFiles Include="..\Dock.Guard\bin\$(Platform)\$(Configuration)\$(TargetFramework)\win-x64\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(GuardFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

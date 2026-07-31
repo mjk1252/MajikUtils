@@ -34,4 +34,13 @@ public static class WindowStyler
         NativeMethods.SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0,
             NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
     }
+
+    public const int WM_HOTKEY = NativeMethods.WM_HOTKEY;
+
+    public static bool RegisterPanicHotkey(IntPtr hwnd, int id) => NativeMethods.RegisterHotKey(
+        hwnd, id, NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_SHIFT, NativeMethods.VK_T);
+
+    public static void UnregisterHotkey(IntPtr hwnd, int id) => NativeMethods.UnregisterHotKey(hwnd, id);
+
+    public static uint RegisterTaskbarCreatedMessage() => NativeMethods.RegisterWindowMessage("TaskbarCreated");
 }

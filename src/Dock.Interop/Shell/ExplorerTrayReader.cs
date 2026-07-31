@@ -279,7 +279,77 @@ public sealed class ExplorerTrayReader : ITraySource, IDisposable
         }
         else if (icon.ClickX is int x && icon.ClickY is int y)
         {
+            if (!rightClick && TryInvokeViaAutomation(icon.Name, x, y))
+                return;
+
             InvokeViaSyntheticClick(x, y, rightClick);
+        }
+    }
+
+    /// <summary>
+    /// Re-finds the live automation element for this icon (cached coordinates can go stale
+    /// between polls) and calls its InvokePattern directly -- the same mechanism accessibility
+    /// tools use, which composition-hosted XAML controls are guaranteed to support even when
+    /// they don't respond to raw synthetic mouse input.
+    /// </summary>
+    private static bool TryInvokeViaAutomation(string name, int approxX, int approxY)
+    {
+        try
+        {
+            var trayWnd = NativeMethods.FindWindow("Shell_TrayWnd", null);
+            if (trayWnd == IntPtr.Zero)
+                return false;
+
+            NativeMethods.SetForegroundWindow(trayWnd);
+
+            var root = AutomationElement.FromHandle(trayWnd);
+            if (root is null)
+                return false;
+
+            var condition = new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button);
+            var buttons = root.FindAll(TreeScope.Descendants, condition);
+
+            AutomationElement? best = null;
+            var bestDistance = double.MaxValue;
+
+            foreach (AutomationElement button in buttons)
+            {
+                string className;
+                string elementName;
+                System.Windows.Rect rect;
+                try
+                {
+                    className = button.Current.ClassName ?? "";
+                    elementName = button.Current.Name ?? "";
+                    rect = button.Current.BoundingRectangle;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (!className.StartsWith("SystemTray.", StringComparison.Ordinal) || elementName != name)
+                    continue;
+
+                var cx = rect.X + rect.Width / 2;
+                var cy = rect.Y + rect.Height / 2;
+                var distance = Math.Abs(cx - approxX) + Math.Abs(cy - approxY);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = button;
+                }
+            }
+
+            if (best is null || !best.TryGetCurrentPattern(InvokePattern.Pattern, out var patternObj))
+                return false;
+
+            ((InvokePattern)patternObj).Invoke();
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -303,18 +373,20 @@ public sealed class ExplorerTrayReader : ITraySource, IDisposable
     {
         NativeMethods.GetCursorPos(out var original);
         NativeMethods.SetCursorPos(x, y);
+        Thread.Sleep(20);
 
-        if (rightClick)
-        {
-            NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, IntPtr.Zero);
-            NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, IntPtr.Zero);
-        }
-        else
-        {
-            NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, IntPtr.Zero);
-            NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, IntPtr.Zero);
-        }
+        var down = rightClick ? NativeMethods.MOUSEEVENTF_RIGHTDOWN : NativeMethods.MOUSEEVENTF_LEFTDOWN;
+        var up = rightClick ? NativeMethods.MOUSEEVENTF_RIGHTUP : NativeMethods.MOUSEEVENTF_LEFTUP;
 
+        var inputs = new NativeMethods.INPUT[]
+        {
+            new() { type = NativeMethods.INPUT_MOUSE, u = new NativeMethods.INPUTUNION { mi = new NativeMethods.MOUSEINPUT { dwFlags = down } } },
+            new() { type = NativeMethods.INPUT_MOUSE, u = new NativeMethods.INPUTUNION { mi = new NativeMethods.MOUSEINPUT { dwFlags = up } } }
+        };
+
+        NativeMethods.SendInput(2, inputs, System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.INPUT>());
+
+        Thread.Sleep(150);
         NativeMethods.SetCursorPos(original.X, original.Y);
     }
 

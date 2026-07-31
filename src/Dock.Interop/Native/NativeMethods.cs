@@ -93,6 +93,35 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern void mouse_event(uint flags, int dx, int dy, int data, IntPtr extraInfo);
 
+    internal const uint INPUT_MOUSE = 0;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct INPUTUNION
+    {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct INPUT
+    {
+        public uint type;
+        public INPUTUNION u;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint SendInput(uint numberOfInputs, INPUT[] inputs, int sizeOfInputStruct);
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     internal static extern IntPtr GetModuleHandle(string? moduleName);
 
@@ -148,8 +177,30 @@ internal static class NativeMethods
 
     internal const uint GW_OWNER = 4;
     internal const int DWMWA_CLOAKED = 14;
+    internal const int SW_HIDE = 0;
+    internal const int SW_SHOW = 5;
     internal const int SW_MINIMIZE = 6;
     internal const int SW_RESTORE = 9;
+
+    internal const int WM_HOTKEY = 0x0312;
+    internal const uint MOD_ALT = 0x0001;
+    internal const uint MOD_CONTROL = 0x0002;
+    internal const uint MOD_SHIFT = 0x0004;
+    internal const uint VK_T = 0x54;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint vk);
+
+    [DllImport("user32.dll")]
+    internal static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern uint RegisterWindowMessage(string message);
+
+    [DllImport("shell32.dll")]
+    internal static extern int SHQueryUserNotificationState(out int state);
+
+    internal const int QUNS_RUNNING_D3D_FULL_SCREEN = 2;
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;

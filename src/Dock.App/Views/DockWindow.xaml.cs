@@ -12,13 +12,21 @@ namespace Dock.App.Views;
 
 public partial class DockWindow : Window
 {
+    private const int PanicHotkeyId = 1;
+
     private readonly DockViewModel _viewModel;
     private readonly Rectangle _workArea;
+    private readonly bool _enableGlobalHooks;
+    private uint _taskbarCreatedMessage;
 
-    public DockWindow(DockViewModel viewModel, Rectangle workArea)
+    public event Action? PanicHotkeyPressed;
+    public event Action? ExplorerRestarted;
+
+    public DockWindow(DockViewModel viewModel, Rectangle workArea, bool enableGlobalHooks = false)
     {
         _viewModel = viewModel;
         _workArea = workArea;
+        _enableGlobalHooks = enableGlobalHooks;
         DataContext = viewModel;
 
         // Off-screen until we can precisely position the HWND in physical pixels (avoids a visible jump).
@@ -35,9 +43,21 @@ public partial class DockWindow : Window
         WindowStyler.ApplyAcrylicBackdrop(hwnd);
 
         HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
+
+        if (_enableGlobalHooks)
+        {
+            WindowStyler.RegisterPanicHotkey(hwnd, PanicHotkeyId);
+            _taskbarCreatedMessage = WindowStyler.RegisterTaskbarCreatedMessage();
+        }
+
+        Closed += (_, _) =>
+        {
+            if (_enableGlobalHooks)
+                WindowStyler.UnregisterHotkey(hwnd, PanicHotkeyId);
+        };
     }
 
-    private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const int WM_MOUSEACTIVATE = 0x0021;
         const int MA_NOACTIVATE = 3;
@@ -46,6 +66,18 @@ public partial class DockWindow : Window
         {
             handled = true;
             return new IntPtr(MA_NOACTIVATE);
+        }
+
+        if (_enableGlobalHooks)
+        {
+            if (msg == WindowStyler.WM_HOTKEY && wParam.ToInt32() == PanicHotkeyId)
+            {
+                PanicHotkeyPressed?.Invoke();
+            }
+            else if (_taskbarCreatedMessage != 0 && msg == _taskbarCreatedMessage)
+            {
+                ExplorerRestarted?.Invoke();
+            }
         }
 
         return IntPtr.Zero;
