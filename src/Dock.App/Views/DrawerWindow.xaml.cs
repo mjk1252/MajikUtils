@@ -53,6 +53,9 @@ public partial class DrawerWindow : PanelWindow
     protected override string DisplayName => "Dock Drawer";
     protected override string? RelaunchIconResource => PinnedIcon;
 
+    /// <summary>The one resizable panel, so the only one with a size worth remembering.</summary>
+    protected override bool PersistsSize => true;
+
     protected override IReadOnlyList<JumpListTask> ExtraJumpListTasks =>
     [
         new("Search apps", ExePath, "--panel launch"),

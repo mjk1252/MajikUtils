@@ -199,6 +199,48 @@ internal static class NativeMethods
     [DllImport("ole32.dll")]
     internal static extern int PropVariantClear(ref PROPVARIANT propVariant);
 
+    // --- Monitors -----------------------------------------------------------------------------
+
+    internal const uint MONITOR_DEFAULTTONEAREST = 2;
+    internal const int MDT_EFFECTIVE_DPI = 0;
+
+    internal const uint SWP_NOZORDER = 0x0004;
+    internal const uint SWP_NOACTIVATE = 0x0010;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr MonitorFromPoint(POINT point, uint flags);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    internal static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+
+    [DllImport("shcore.dll")]
+    internal static extern int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [DllImport("user32.dll")]
+    internal static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter,
+        int x, int y, int cx, int cy, uint flags);
+
     // --- Jump lists ---------------------------------------------------------------------------
     //
     // WPF's own System.Windows.Shell.JumpList targets the *process* AppUserModelID, so it can only

@@ -37,11 +37,21 @@ nearly all their time minimised.
 
 ## Two things the shell does for us
 
-**Placing a stack fan.** There is no API for a taskbar button's rectangle. But clicking a button
-leaves the cursor on it, so `StackWindow.PositionOnShow` reads the cursor and parks its bottom
-edge on the work area, centred there -- the fan appears to spring from the button itself. The
-window has no background at all (not even `Transparent`, which is still hit-testable), so the gaps
-between fan tiles pass clicks through to the desktop, and clicking through dismisses the fan.
+**Placing a panel.** There is no API for a taskbar button's rectangle. But clicking a button
+leaves the cursor on it, so every panel reads the cursor on open and parks its bottom edge on the
+work area, lined up horizontally with that point -- the stack fan then appears to spring from the
+button itself.
+
+The cursor also identifies *which monitor's* taskbar the click came from, which matters because
+`SystemParameters.WorkArea` only ever describes the primary monitor: positioning with it opens
+every panel on the primary no matter which screen the user is on. `MonitorPlacement` resolves the
+monitor under the cursor and works entirely in physical pixels, via `SetWindowPos` -- Dock is
+PerMonitorV2 DPI aware, so two monitors can be at different scales and WPF's DIP-based
+`Left`/`Top` become ambiguous the moment a window crosses between them. Physical coordinates are
+the one space every monitor agrees on.
+
+Because panels place themselves fresh on every open, only their *size* is persisted, and only for
+the drawer -- the one panel the user can resize.
 
 **Opening the shelf mid-drag.** Hovering a drag over a taskbar button makes the shell restore that
 window, which is the whole reason the shelf has a button of its own. The catch is that the

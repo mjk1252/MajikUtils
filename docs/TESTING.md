@@ -16,7 +16,10 @@ Run it with `dotnet build` then launch
       button icon, no percentages in the hover tooltip.
 - [ ] Right-click each button → Pin to taskbar. Fully exit Dock (Drawer → gear → Exit Dock).
       Click each pinned button — Dock relaunches and opens that panel.
-- [ ] Move and resize a panel, put it away, restart Dock — it comes back where you left it.
+- [ ] Resize the drawer, put it away, restart Dock — it comes back the same size.
+- [ ] **Second monitor**: click a Dock button on the secondary taskbar — the panel opens on *that*
+      monitor, above *that* taskbar, not on the primary.
+- [ ] A button near either end of a secondary taskbar still opens fully on-screen.
 
 ## Launcher (Drawer -> Launch tab)
 - [ ] The drawer opens on Launch with the caret already in the search box.

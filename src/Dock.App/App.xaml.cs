@@ -90,13 +90,12 @@ public partial class App : System.Windows.Application
     private void CreatePanelWindows(IWingetService wingetService)
     {
         _drawerWindow = new DrawerWindow(_viewModel!, wingetService);
-        _drawerWindow.AttachPlacementStore(_settingsStore!);
+        _drawerWindow.AttachSizeStore(_settingsStore!);
         _drawerWindow.SettingsRequested += ShowSettingsWindow;
         _drawerWindow.ExitRequested += Shutdown;
         _drawerWindow.Show();
 
         _shelfWindow = new ShelfWindow(_viewModel!);
-        _shelfWindow.AttachPlacementStore(_settingsStore!);
         _shelfWindow.Show();
 
         foreach (var stack in _viewModel!.Stacks)

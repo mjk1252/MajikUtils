@@ -11,7 +11,7 @@ using Dock.Interop.Windowing;
 namespace Dock.App.Views;
 
 /// <summary>
-/// Base for the two windows that own Dock's taskbar buttons.
+/// Base for every window that owns one of Dock's taskbar buttons.
 ///
 /// The central constraint: a window loses its taskbar button the instant it stops being visible,
 /// so a panel can never be hidden or closed while the app is running. It minimises instead --
@@ -68,10 +68,10 @@ public abstract class PanelWindow : Window
     protected bool SuppressAutoMinimise { get; set; }
 
     /// <summary>
-    /// Whether this panel should keep its own position across sessions. Panels that place
-    /// themselves relative to their taskbar button on every open have no position to remember.
+    /// Whether this panel's size is worth carrying across sessions. Only true for panels the user
+    /// can actually resize; a fixed-size one has nothing to remember.
     /// </summary>
-    protected virtual bool PersistsPlacement => true;
+    protected virtual bool PersistsSize => false;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -116,7 +116,7 @@ public abstract class PanelWindow : Window
                 return;
             }
 
-            SavePlacement();
+            SaveSize();
             WindowState = WindowState.Minimized;
         }, DispatcherPriority.Background);
     }
@@ -142,7 +142,7 @@ public abstract class PanelWindow : Window
         if (!_exiting)
         {
             e.Cancel = true;
-            SavePlacement();
+            SaveSize();
             WindowState = WindowState.Minimized;
             return;
         }
@@ -152,53 +152,40 @@ public abstract class PanelWindow : Window
 
     public void CloseForExit()
     {
-        SavePlacement();
+        SaveSize();
         _exiting = true;
         Close();
     }
 
     /// <summary>
-    /// Restores this panel's last position and size, and starts persisting changes to them.
-    /// Centres the window on first run, since a panel is summoned from the taskbar and has no
-    /// meaningful default edge to sit against.
+    /// Restores this panel's last size and starts persisting changes to it. Position is not
+    /// restored: every open places the panel against the taskbar button it was summoned from.
     /// </summary>
-    public void AttachPlacementStore(SettingsStore settingsStore)
+    public void AttachSizeStore(SettingsStore settingsStore)
     {
-        if (!PersistsPlacement)
+        if (!PersistsSize)
             return;
 
         _settingsStore = settingsStore;
 
-        if (settingsStore.Load().PanelPlacements.TryGetValue(AppId, out var placement) && placement.Width > 0)
+        if (settingsStore.Load().PanelSizes.TryGetValue(AppId, out var size) && size.Width > 0)
         {
-            Left = placement.Left;
-            Top = placement.Top;
-            Width = placement.Width;
-            Height = placement.Height;
-            return;
+            Width = size.Width;
+            Height = size.Height;
         }
-
-        Left = (SystemParameters.WorkArea.Width - Width) / 2;
-        Top = (SystemParameters.WorkArea.Height - Height) / 2;
     }
 
     /// <summary>
-    /// Saved when the panel is put away rather than on every move: LocationChanged fires per pixel
+    /// Saved when the panel is put away rather than on every resize: SizeChanged fires per pixel
     /// of a drag, and each save is a full read-modify-write of the settings file.
     /// </summary>
-    private void SavePlacement()
+    private void SaveSize()
     {
         if (_settingsStore is not { } store || WindowState != WindowState.Normal)
             return;
 
         var settings = store.Load();
-        settings.PanelPlacements[AppId] = new PanelPlacement
-        {
-            Left = Left,
-            Top = Top,
-            Width = Width,
-            Height = Height
-        };
+        settings.PanelSizes[AppId] = new PanelSize { Width = Width, Height = Height };
         store.Save(settings);
     }
 
@@ -250,20 +237,44 @@ public abstract class PanelWindow : Window
     {
     }
 
-    /// <summary>Hook for panels that place themselves fresh on every open.</summary>
+    /// <summary>
+    /// Parks the panel against the bottom of the monitor the cursor is on, horizontally centred on
+    /// it. Clicking a taskbar button leaves the cursor on that button, which is both how we find
+    /// the button (the shell exposes no API for its rect) and how we know which monitor's taskbar
+    /// the click came from.
+    ///
+    /// Everything here is in physical pixels: see <see cref="MonitorPlacement"/> for why DIPs are
+    /// not usable across monitors in a PerMonitorV2 app.
+    /// </summary>
     protected virtual void PositionOnShow()
     {
+        var work = MonitorPlacement.FromCursor();
+        PlaceAbove(work, anchorFromLeft: Width / 2);
     }
 
     /// <summary>
-    /// Screen position of the cursor, in DIPs. Clicking a taskbar button leaves the cursor on that
-    /// button, which is the only practical way to find out where the button is -- the shell
-    /// exposes no API for a taskbar button's rect.
+    /// Puts the window's bottom edge on the work area's lower edge, with the point
+    /// <paramref name="anchorFromLeft"/> DIPs in from its left edge sitting under the cursor.
+    /// Clamped so a button near either end of the taskbar still opens fully on-screen.
     /// </summary>
-    protected Point CursorPositionDips()
+    protected void PlaceAbove(WorkArea work, double anchorFromLeft)
     {
-        var (x, y) = CursorInfo.GetPosition();
-        var dpi = VisualTreeHelper.GetDpi(this);
-        return new Point(x / dpi.DpiScaleX, y / dpi.DpiScaleY);
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        // Sized from the target monitor's scale rather than the window's current one: the window
+        // may be crossing from a monitor at a different DPI, and SetWindowPos is what tells
+        // PerMonitorV2 WPF to re-render it at the new scale.
+        var width = (int)Math.Round(Width * work.Scale);
+        var height = (int)Math.Round(Height * work.Scale);
+
+        var (cursorX, _) = CursorInfo.GetPosition();
+        var left = (int)Math.Round(cursorX - anchorFromLeft * work.Scale);
+
+        left = Math.Clamp(left, work.Left, Math.Max(work.Left, work.Right - width));
+        var top = Math.Max(work.Top, work.Bottom - height);
+
+        MonitorPlacement.SetPhysicalBounds(hwnd, left, top, width, height);
     }
 }

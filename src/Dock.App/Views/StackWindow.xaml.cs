@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Dock.App.Views.Panels;
 using Dock.Core.ViewModels;
 using Dock.Interop.Shell;
+using Dock.Interop.Windowing;
 
 namespace Dock.App.Views;
 
@@ -90,10 +91,6 @@ public partial class StackWindow : PanelWindow
     protected override string DisplayName => _stack.Name;
     protected override string? RelaunchIconResource => _pinnedIcon;
 
-    // The fan is placed against its own taskbar button every time it opens, so there is no
-    // user-chosen position to carry across sessions.
-    protected override bool PersistsPlacement => false;
-
     /// <summary>
     /// The fan shows at most eight entries, so a stack's button needs a way through to the rest of
     /// the folder. This one runs Explorer directly rather than routing through Dock -- it has
@@ -105,20 +102,11 @@ public partial class StackWindow : PanelWindow
     ];
 
     /// <summary>
-    /// Parks the window's bottom edge on the top of the work area (i.e. just above the taskbar)
-    /// and centres it on the cursor, which is sitting on the taskbar button that was just clicked.
-    /// Clamped horizontally so a stack pinned near either end of the taskbar still fans fully
-    /// on-screen instead of half off it.
+    /// Lines the fan's anchor up with the cursor rather than the window's centre, so the arc reads
+    /// as springing from the taskbar button that was just clicked.
     /// </summary>
-    protected override void PositionOnShow()
-    {
-        var work = SystemParameters.WorkArea;
-        var cursor = CursorPositionDips();
-
-        // Line the anchor up with the cursor, so the arc reads as springing from the button.
-        Left = Math.Clamp(cursor.X - AnchorX, work.Left, Math.Max(work.Left, work.Right - CanvasWidth));
-        Top = Math.Max(work.Top, work.Bottom - CanvasHeight);
-    }
+    protected override void PositionOnShow() =>
+        PlaceAbove(MonitorPlacement.FromCursor(), anchorFromLeft: AnchorX);
 
     protected override void OnPanelShown()
     {
