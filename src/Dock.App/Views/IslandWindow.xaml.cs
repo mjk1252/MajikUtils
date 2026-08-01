@@ -52,6 +52,7 @@ public partial class IslandWindow : Window
 
     private static readonly Duration ShowDuration = TimeSpan.FromMilliseconds(220);
     private static readonly Duration ShapeDuration = TimeSpan.FromMilliseconds(200);
+    private static readonly Duration AccentDuration = TimeSpan.FromMilliseconds(320);
 
     /// <summary>
     /// One bar of the now-playing equalizer: how tall it reaches, how long a full rise takes, and
@@ -86,6 +87,12 @@ public partial class IslandWindow : Window
     private readonly DispatcherTimer _progressTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
     private readonly Rectangle[] _bars;
+
+    /// <summary>
+    /// Shared by all four bars so the accent is one animatable colour rather than four that have to
+    /// be kept in step.
+    /// </summary>
+    private readonly SolidColorBrush _barBrush = new(ArtworkAccent.Fallback);
 
     private IntPtr _hwnd;
     private WorkArea _work;
@@ -127,6 +134,8 @@ public partial class IslandWindow : Window
         _notes.Notes.CollectionChanged += (_, _) => ResizeForContentChange();
 
         _bars = [Bar1, Bar2, Bar3, Bar4];
+        foreach (var bar in _bars)
+            bar.Fill = _barBrush;
 
         _hoverTimer.Tick += (_, _) => UpdateFromPointer();
         _progressTimer.Tick += (_, _) => _media.Tick();
@@ -135,6 +144,8 @@ public partial class IslandWindow : Window
         {
             if (e.PropertyName is nameof(MediaViewModel.IsPlaying))
                 UpdateEqualizer();
+            else if (e.PropertyName is nameof(MediaViewModel.Artwork))
+                UpdateBarColour();
         };
     }
 
@@ -374,6 +385,18 @@ public partial class IslandWindow : Window
             });
         }
     }
+
+    /// <summary>
+    /// Tints the bars with the artwork's dominant colour. Crossfaded rather than swapped: the
+    /// artwork itself cuts between tracks, but four coloured bars snapping to an unrelated hue in
+    /// the corner of the eye reads as a glitch.
+    /// </summary>
+    private void UpdateBarColour() =>
+        _barBrush.BeginAnimation(SolidColorBrush.ColorProperty,
+            new ColorAnimation(ArtworkAccent.FromPng(_media.Artwork), AccentDuration)
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            });
 
     private static void Animate(IAnimatable target, DependencyProperty property, double to, Duration duration) =>
         target.BeginAnimation(property, new DoubleAnimation(to, duration)
