@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Dock.Core.Models;
 using Dock.Core.Services;
@@ -21,7 +22,7 @@ public abstract class PanelWindow : Window
 {
     private SettingsStore? _settingsStore;
     private bool _exiting;
-    private bool _awaitingActivation;
+    private DateTime _openedAt = DateTime.MinValue;
 
     protected PanelWindow()
     {
@@ -42,6 +43,19 @@ public abstract class PanelWindow : Window
 
     /// <summary>"path,index" for the pinned button's artwork, or null to fall back to the exe's own.</summary>
     protected virtual string? RelaunchIconResource => null;
+
+    /// <summary>
+    /// Holds the panel open through a deactivation it would otherwise treat as dismissal. Needed
+    /// while a drag hovers over a drop target: the dragging application owns the foreground for
+    /// the whole gesture, so the panel being dropped onto looks, by every other test, abandoned.
+    /// </summary>
+    protected bool SuppressAutoMinimise { get; set; }
+
+    /// <summary>
+    /// Whether this panel should keep its own position across sessions. Panels that place
+    /// themselves relative to their taskbar button on every open have no position to remember.
+    /// </summary>
+    protected virtual bool PersistsPlacement => true;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -76,8 +90,8 @@ public abstract class PanelWindow : Window
 
         Dispatcher.BeginInvoke(() =>
         {
-            if (_exiting || _awaitingActivation || WindowState != WindowState.Normal ||
-                ForegroundWindow.IsOwnedByThisProcess())
+            if (_exiting || SuppressAutoMinimise || JustOpened ||
+                WindowState != WindowState.Normal || ForegroundWindow.IsOwnedByThisProcess())
             {
                 return;
             }
@@ -88,16 +102,16 @@ public abstract class PanelWindow : Window
     }
 
     /// <summary>
-    /// A panel opened by <see cref="ShowPanel"/> stays up even if it never reached the foreground.
-    /// Windows refuses foreground changes requested by a process the user isn't currently working
-    /// in, so <c>Activate</c> can silently fail and hand us a Deactivated for a window that was
-    /// never active -- without this the panel would minimise itself the instant it appeared.
+    /// Ignores the deactivation that can arrive in the instant a panel opens. Windows refuses
+    /// foreground changes requested by a process the user isn't currently working in, so
+    /// <c>Activate</c> can silently fail and hand us a Deactivated for a window that was never
+    /// active -- without this the panel would minimise itself the moment it appeared.
+    ///
+    /// A grace period rather than a "has it been activated yet" flag, deliberately: when
+    /// activation is refused that flag never clears, and the panel then ignores every later
+    /// deactivation too, leaving it stuck open with no way to dismiss it.
     /// </summary>
-    protected override void OnActivated(EventArgs e)
-    {
-        base.OnActivated(e);
-        _awaitingActivation = false;
-    }
+    private bool JustOpened => DateTime.UtcNow - _openedAt < TimeSpan.FromMilliseconds(600);
 
     /// <summary>
     /// Alt+F4 and the title-bar close would destroy the taskbar button along with the window, so
@@ -130,6 +144,9 @@ public abstract class PanelWindow : Window
     /// </summary>
     public void AttachPlacementStore(SettingsStore settingsStore)
     {
+        if (!PersistsPlacement)
+            return;
+
         _settingsStore = settingsStore;
 
         if (settingsStore.Load().PanelPlacements.TryGetValue(AppId, out var placement) && placement.Width > 0)
@@ -166,23 +183,67 @@ public abstract class PanelWindow : Window
     }
 
     /// <summary>
-    /// Brings the panel up in response to its taskbar button (or a relaunch from a pinned copy).
-    /// Restore-then-Activate is deliberate: activating a minimised window does not restore it.
+    /// Brings the panel up from a relaunch or a hotkey. Restore-then-Activate is deliberate:
+    /// activating a minimised window does not restore it.
+    ///
+    /// Note this is *not* the path a taskbar-button click takes -- the shell restores the window
+    /// itself, without telling us. <see cref="OnStateChanged"/> is what both paths share, so the
+    /// per-open work belongs there and not here.
     /// </summary>
     public void ShowPanel()
     {
-        _awaitingActivation = true;
-
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
+        else
+            PrepareForDisplay();
 
         Show();
         Activate();
+    }
+
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+
+        if (WindowState == WindowState.Normal)
+            PrepareForDisplay();
+        else if (WindowState == WindowState.Minimized)
+            Topmost = false;
+    }
+
+    private void PrepareForDisplay()
+    {
+        // These are flyouts summoned from the taskbar, so they have to come out in front of
+        // whatever is already on screen. Activate() alone is not enough: Windows refuses
+        // foreground changes from a process the user isn't currently working in, which is exactly
+        // the case when the request arrives from a relaunch or the global hotkey rather than from
+        // a click. Dropped again on minimise so a put-away panel never sits above other windows.
+        Topmost = true;
+        _openedAt = DateTime.UtcNow;
+
+        PositionOnShow();
         OnPanelShown();
     }
 
     /// <summary>Hook for panels that refresh their contents each time they are opened.</summary>
     protected virtual void OnPanelShown()
     {
+    }
+
+    /// <summary>Hook for panels that place themselves fresh on every open.</summary>
+    protected virtual void PositionOnShow()
+    {
+    }
+
+    /// <summary>
+    /// Screen position of the cursor, in DIPs. Clicking a taskbar button leaves the cursor on that
+    /// button, which is the only practical way to find out where the button is -- the shell
+    /// exposes no API for a taskbar button's rect.
+    /// </summary>
+    protected Point CursorPositionDips()
+    {
+        var (x, y) = CursorInfo.GetPosition();
+        var dpi = VisualTreeHelper.GetDpi(this);
+        return new Point(x / dpi.DpiScaleX, y / dpi.DpiScaleY);
     }
 }

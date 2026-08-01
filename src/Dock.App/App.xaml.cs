@@ -16,6 +16,8 @@ public partial class App : System.Windows.Application
     private DockViewModel? _viewModel;
     private LaunchWindow? _launchWindow;
     private DrawerWindow? _drawerWindow;
+    private ShelfWindow? _shelfWindow;
+    private readonly Dictionary<StackItemViewModel, StackWindow> _stackWindows = [];
     private ClipboardMonitor? _clipboardMonitor;
     private SystemStatsSource? _systemStatsSource;
     private IIconProvider? _iconProvider;
@@ -41,11 +43,6 @@ public partial class App : System.Windows.Application
         _launcher = new ProcessAppLauncher();
         _viewModel = new DockViewModel(_iconProvider, _launcher);
         _viewModel.AttachClipboardWriter(new ClipboardWriter());
-
-        foreach (var stack in _viewModel.Stacks)
-            WatchStack(stack);
-
-        _viewModel.Stacks.CollectionChanged += OnStacksCollectionChanged;
 
         var wingetService = new WingetService();
         _viewModel.AttachWingetService(wingetService);
@@ -92,12 +89,54 @@ public partial class App : System.Windows.Application
         _drawerWindow.SettingsRequested += ShowSettingsWindow;
         _drawerWindow.ExitRequested += Shutdown;
         _drawerWindow.Show();
+
+        _shelfWindow = new ShelfWindow(_viewModel!);
+        _shelfWindow.AttachPlacementStore(_settingsStore!);
+        _shelfWindow.Show();
+
+        foreach (var stack in _viewModel!.Stacks)
+            AddStackWindow(stack);
+
+        _viewModel.Stacks.CollectionChanged += OnStacksCollectionChanged;
+    }
+
+    /// <summary>
+    /// Every stack gets its own taskbar button, so adding or removing one has to create or
+    /// destroy a window -- a button exists only for as long as its window does.
+    /// </summary>
+    private void AddStackWindow(StackItemViewModel stack)
+    {
+        var window = new StackWindow(stack);
+        window.Show();
+        _stackWindows[stack] = window;
+
+        WatchStack(stack);
+    }
+
+    private void RemoveStackWindow(StackItemViewModel stack)
+    {
+        if (_stackWindows.Remove(stack, out var window))
+            window.CloseForExit();
+
+        UnwatchStack(stack);
     }
 
     private void ShowPanel(string panel)
     {
+        if (panel.StartsWith("stack:", StringComparison.OrdinalIgnoreCase))
+        {
+            var id = panel["stack:".Length..];
+            var match = _stackWindows.FirstOrDefault(
+                p => string.Equals(p.Key.Folder.Id, id, StringComparison.OrdinalIgnoreCase));
+
+            match.Value?.ShowPanel();
+            return;
+        }
+
         if (string.Equals(panel, "launch", StringComparison.OrdinalIgnoreCase))
             _launchWindow?.ShowPanel();
+        else if (string.Equals(panel, "shelf", StringComparison.OrdinalIgnoreCase))
+            _shelfWindow?.ShowPanel();
         else
             _drawerWindow?.ShowPanel();
     }
@@ -144,13 +183,13 @@ public partial class App : System.Windows.Application
         if (e.OldItems is not null)
         {
             foreach (StackItemViewModel stack in e.OldItems)
-                UnwatchStack(stack);
+                RemoveStackWindow(stack);
         }
 
         if (e.NewItems is not null)
         {
             foreach (StackItemViewModel stack in e.NewItems)
-                WatchStack(stack);
+                AddStackWindow(stack);
         }
     }
 
@@ -213,8 +252,13 @@ public partial class App : System.Windows.Application
         _clipboardMonitor?.Dispose();
         _systemStatsSource?.Dispose();
 
+        foreach (var window in _stackWindows.Values)
+            window.CloseForExit();
+        _stackWindows.Clear();
+
         _launchWindow?.CloseForExit();
         _drawerWindow?.CloseForExit();
+        _shelfWindow?.CloseForExit();
 
         _singleInstance?.Dispose();
         base.OnExit(e);

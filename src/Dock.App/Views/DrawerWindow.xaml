@@ -80,8 +80,6 @@
                               Tag="&#xE81C;" Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
                 <ToggleButton x:Name="StacksTab" Style="{StaticResource RailButton}" Content="Stacks"
                               Tag="&#xE8B7;" Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
-                <ToggleButton x:Name="ShelfTab" Style="{StaticResource RailButton}" Content="Shelf"
-                              Tag="&#xE7B8;" Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
                 <ToggleButton x:Name="ClipboardTab" Style="{StaticResource RailButton}" Content="Clipboard"
                               Tag="&#xE8C8;" Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
             </StackPanel>
@@ -89,7 +87,6 @@
             <Grid Grid.Row="1" Grid.Column="1">
                 <panels:RecentPanel x:Name="RecentView"/>
                 <panels:StacksPanel x:Name="StacksView" Visibility="Collapsed"/>
-                <panels:ShelfPanel x:Name="ShelfView" Visibility="Collapsed"/>
                 <panels:ClipboardPanel x:Name="ClipboardView" Visibility="Collapsed"/>
             </Grid>
         </Grid>

@@ -93,6 +93,29 @@ public static class PanelIcons
         dc.DrawGeometry(null, pen, geometry);
     }
 
+    /// <summary>
+    /// Wraps shell-extracted PNG bytes (as carried on the view models) as an image source, for
+    /// windows whose taskbar icon should be the real folder icon rather than drawn artwork.
+    /// </summary>
+    public static BitmapSource? FromPng(byte[]? png)
+    {
+        if (png is null || png.Length == 0)
+            return null;
+
+        try
+        {
+            var decoder = new PngBitmapDecoder(new MemoryStream(png),
+                BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            frame.Freeze();
+            return frame;
+        }
+        catch (Exception ex) when (ex is NotSupportedException or ArgumentException or FileFormatException)
+        {
+            return null;
+        }
+    }
+
     private static BitmapSource Rasterize(DrawingVisual visual)
     {
         var bitmap = new RenderTargetBitmap(IconSize, IconSize, 96, 96, PixelFormats.Pbgra32);
@@ -125,11 +148,14 @@ public static class PanelIcons
             using var file = File.Create(path);
             using var writer = new BinaryWriter(file);
 
+            // A dimension of 256 is encoded as 0; nothing we generate is that large, but the
+            // source bitmap is not always our own 64px artwork -- shell folder icons come through
+            // here too, at whatever size the shell handed us.
             writer.Write((ushort)0);        // reserved
             writer.Write((ushort)1);        // type: icon
             writer.Write((ushort)1);        // image count
-            writer.Write((byte)IconSize);   // width
-            writer.Write((byte)IconSize);   // height
+            writer.Write((byte)(image.PixelWidth >= 256 ? 0 : image.PixelWidth));
+            writer.Write((byte)(image.PixelHeight >= 256 ? 0 : image.PixelHeight));
             writer.Write((byte)0);          // palette size (0 = no palette)
             writer.Write((byte)0);          // reserved
             writer.Write((ushort)1);        // colour planes

@@ -2,14 +2,19 @@
 
 A set of Windows 11 utility panels that live on the taskbar, built in WPF (.NET 9).
 
-Dock adds two independently pinnable taskbar buttons and leaves the real taskbar alone:
+Dock adds a set of independently pinnable taskbar buttons and leaves the real taskbar alone:
 
 - **Dock Launcher** — search installed apps, or find and install new ones via winget. The taskbar
   button shows a progress bar while an install runs.
-- **Dock Drawer** — recent files, folder stacks (with the fan-out), a drop shelf and clipboard
-  history. Its taskbar icon is a live CPU/GPU gauge; hovering the button shows the numbers.
+- **Dock Shelf** — a holding area for files. Drag a file down onto the button and hold: Windows
+  opens the shelf, and you drop straight into it. Drag items back out whenever you need them.
+- **Dock Drawer** — recent files, clipboard history, and the list of folders you've made stacks of.
+- **One button per folder stack** — each stack you add gets its own taskbar button wearing that
+  folder's own icon. Clicking it fans the folder's contents out in an arc right above the button,
+  so a folder's files are one click from the taskbar.
 
-Right-click either button and choose *Pin to taskbar* to keep it there.
+Right-click any of them and choose *Pin to taskbar* to keep it there. Stack buttons are the ones
+worth pinning: a pinned stack is permanent one-click access to that folder.
 
 Clipboard history is captured in the background whether or not a panel is open. Press
 `Ctrl+Alt+Shift+V` anywhere to open the drawer on its Clipboard tab.
