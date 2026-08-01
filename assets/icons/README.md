@@ -35,7 +35,11 @@ the largest frame.
 
 Restart MajikUtils. Icons are read once at startup.
 
-If a *pinned* button keeps its old artwork, that's the Windows icon cache rather than MajikUtils: unpin
-it, restart MajikUtils, and pin it again. MajikUtils regenerates the pinned copy under
-`%LOCALAPPDATA%\MajikUtils\icons\` from whatever icon it ends up using, so nothing needs converting by
-hand.
+Nothing needs converting by hand: MajikUtils regenerates the `.ico` a pinned button needs under
+`%LOCALAPPDATA%\MajikUtils\icons\` from whatever icon it ends up using. Those files are named with
+a hash of the artwork, deliberately — the shell caches a button's icon against the path it read it
+from and will not re-read a file whose name has not changed, so a new icon has to arrive at a new
+path to be picked up at all. Older hashes are cleaned up automatically.
+
+If a button still shows old artwork after a restart, that is Windows' own icon cache: unpin it,
+restart MajikUtils, and pin it again.

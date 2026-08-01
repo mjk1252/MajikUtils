@@ -188,6 +188,11 @@ public static class PanelIcons
     /// string the shell expects, or null if it could not be written. The .ico wraps the PNG bytes
     /// verbatim -- Vista and later read PNG-compressed icon entries directly, so no BMP/DIB
     /// conversion is needed.
+    ///
+    /// The filename carries a hash of the artwork, so swapping an icon produces a *different*
+    /// path. That is not cosmetic: the shell caches a taskbar button's icon against the path it
+    /// was read from and does not re-read a file whose name has not changed, so a fixed filename
+    /// left the old artwork on the button no matter what the app had actually loaded.
     /// </summary>
     public static string? EnsureIcoOnDisk(string name, BitmapSource image)
     {
@@ -195,13 +200,23 @@ public static class PanelIcons
         {
             var dir = AppPaths.IconsDirectory;
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, name + ".ico");
 
             using var png = new MemoryStream();
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
             encoder.Save(png);
             var pngBytes = png.ToArray();
+
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pngBytes))[..8]
+                .ToLowerInvariant();
+            var path = Path.Combine(dir, $"{name}-{hash}.ico");
+
+            PruneOlderVersions(dir, name, keep: Path.GetFileName(path));
+
+            // Same artwork as last run: the file is already correct, and rewriting it would only
+            // risk tripping over a shell that still has it open.
+            if (File.Exists(path))
+                return path + ",0";
 
             using var file = File.Create(path);
             using var writer = new BinaryWriter(file);
@@ -227,6 +242,27 @@ public static class PanelIcons
         {
             // Only costs the pinned button its custom artwork; it still pins and still launches.
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Removes earlier hashes for the same icon, so changing artwork a few times does not leave a
+    /// drift of dead files. A file the shell still has open simply stays until next time.
+    /// </summary>
+    private static void PruneOlderVersions(string directory, string name, string keep)
+    {
+        foreach (var stale in Directory.EnumerateFiles(directory, name + "-*.ico"))
+        {
+            if (string.Equals(Path.GetFileName(stale), keep, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            try
+            {
+                File.Delete(stale);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
         }
     }
 }
