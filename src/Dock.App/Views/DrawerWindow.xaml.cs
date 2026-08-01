@@ -18,7 +18,7 @@ public partial class DrawerWindow : PanelWindow
 
     // A custom icon dropped in by the user wins; the drawn glyph is only the fallback.
     private static readonly BitmapSource ButtonIcon =
-        PanelIcons.LoadCustom("drawer") ?? PanelIcons.RenderGlyph(DrawerGlyph);
+        PanelIcons.LoadCustom("drawer") ?? PanelIcons.RenderGlyph(DrawerGlyph, PanelIcons.DrawerAccent);
     private static readonly string? PinnedIcon = PanelIcons.EnsureIcoOnDisk("drawer", ButtonIcon);
 
     private ToggleButton _activeTab;
@@ -48,9 +48,9 @@ public partial class DrawerWindow : PanelWindow
         UpdateStats(0, 0);
     }
 
-    protected override string AppId => "Dock.Drawer";
+    protected override string AppId => "MajikUtils.Drawer";
     protected override string PanelArgument => "drawer";
-    protected override string DisplayName => "Dock Drawer";
+    protected override string DisplayName => "MajikUtils Drawer";
     protected override string? RelaunchIconResource => PinnedIcon;
 
     /// <summary>The one resizable panel, so the only one with a size worth remembering.</summary>
@@ -160,7 +160,7 @@ public partial class DrawerWindow : PanelWindow
         settings.Click += (_, _) => SettingsRequested?.Invoke();
         menu.Items.Add(settings);
 
-        var exit = new MenuItem { Header = "Exit Dock" };
+        var exit = new MenuItem { Header = "Exit MajikUtils" };
         exit.Click += (_, _) => ExitRequested?.Invoke();
         menu.Items.Add(exit);
 

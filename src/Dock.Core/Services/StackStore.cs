@@ -9,9 +9,7 @@ public sealed class StackStore
 
     public StackStore()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Dock");
-        Directory.CreateDirectory(dir);
-        _stacksPath = Path.Combine(dir, "stacks.json");
+        _stacksPath = AppPaths.FilePath("stacks.json");
     }
 
     public List<StackFolder> Load()

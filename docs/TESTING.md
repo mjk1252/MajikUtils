@@ -3,21 +3,21 @@
 Things to try yourself when you're at the machine.
 
 Run it with `dotnet build` then launch
-`src/Dock.App/bin/x64/Debug/net9.0-windows/win-x64/Dock.exe`.
+`src/Dock.App/bin/x64/Debug/net9.0-windows/win-x64/MajikUtils.exe`.
 
 ## Taskbar buttons
 - [ ] The **real Windows taskbar is visible and behaves normally** — nothing hides it any more.
-- [ ] Separate, ungrouped buttons appear: "Dock Drawer", "Dock Shelf", and one per folder stack
+- [ ] Separate, ungrouped buttons appear: "MajikUtils Drawer", "MajikUtils Shelf", and one per folder stack
       wearing that folder's own icon.
 - [ ] Click Drawer — it restores. Click again — it minimises.
 - [ ] Alt+F4 on a panel — it minimises, and the button survives. So does Windows' own
-      *Close window*; **Exit Dock** in the jump list is what actually quits.
+      *Close window*; **Exit MajikUtils** in the jump list is what actually quits.
 - [ ] CPU/GPU appear in the drawer's own header, and **nowhere on the taskbar** — no animated
       button icon, no percentages in the hover tooltip.
-- [ ] Right-click each button → Pin to taskbar. Fully exit Dock (Drawer → gear → Exit Dock).
-      Click each pinned button — Dock relaunches and opens that panel.
-- [ ] Resize the drawer, put it away, restart Dock — it comes back the same size.
-- [ ] **Second monitor**: click a Dock button on the secondary taskbar — the panel opens on *that*
+- [ ] Right-click each button → Pin to taskbar. Fully exit MajikUtils (Drawer → gear → Exit MajikUtils).
+      Click each pinned button — MajikUtils relaunches and opens that panel.
+- [ ] Resize the drawer, put it away, restart MajikUtils — it comes back the same size.
+- [ ] **Second monitor**: click a MajikUtils button on the secondary taskbar — the panel opens on *that*
       monitor, above *that* taskbar, not on the primary.
 - [ ] A button near either end of a secondary taskbar still opens fully on-screen.
 
@@ -54,19 +54,19 @@ Run it with `dotnet build` then launch
 - [ ] `Ctrl+Alt+Shift+V` from anywhere opens the drawer on its Clipboard tab.
 
 ## Jump lists (right-click a taskbar button)
-- [ ] Every Dock button offers **Exit Dock**, and it actually quits Dock.
+- [ ] Every MajikUtils button offers **Exit MajikUtils**, and it actually quits MajikUtils.
 - [ ] Drawer also offers Search apps / Clipboard history / Settings, each opening the right thing.
 - [ ] A stack also offers **Open folder**, opening it in Explorer.
-- [ ] Pin a button, exit Dock, then use its jump list — Dock starts and does the thing.
-- [ ] Exit Dock while Dock is already closed does nothing (no window flashes up).
+- [ ] Pin a button, exit MajikUtils, then use its jump list — MajikUtils starts and does the thing.
+- [ ] Exit MajikUtils while MajikUtils is already closed does nothing (no window flashes up).
 
 ## Settings + installer
 - [ ] Drawer → gear → Settings — toggling "Start with Windows" persists across a restart.
 - [ ] Reboot with start-with-Windows on: every button reappears, taskbar unaffected.
-- [ ] Installer at `dist/Dock-Setup-1.0.0.exe` — installs to `%LOCALAPPDATA%\Programs\Dock`,
+- [ ] Installer at `dist/MajikUtils-Setup-1.0.0.exe` — installs to `%LOCALAPPDATA%\Programs\MajikUtils`,
       adds a Start Menu shortcut, and uninstalls cleanly.
 
 ## General
-- [ ] Leave Dock running during normal use — check it doesn't get in the way or use noticeably
+- [ ] Leave MajikUtils running during normal use — check it doesn't get in the way or use noticeably
       more CPU/RAM than expected (Task Manager → Details). The Drawer redraws its icon once a
       second whether or not it is open.

@@ -10,10 +10,10 @@ namespace Dock.App.Views.Panels;
 public sealed class FileDragGesture
 {
     /// <summary>
-    /// Marks a drag as originating inside Dock, so a panel that is itself a drop target can tell
+    /// Marks a drag as originating inside MajikUtils, so a panel that is itself a drop target can tell
     /// its own items apart from files dragged in from Explorer.
     /// </summary>
-    public const string InternalDragFormat = "Dock.InternalDrag";
+    public const string InternalDragFormat = "MajikUtils.InternalDrag";
 
     private Point? _start;
 

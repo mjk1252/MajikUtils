@@ -24,7 +24,7 @@ public partial class ShelfWindow : PanelWindow
 
     // A custom icon dropped in by the user wins; the drawn glyph is only the fallback.
     private static readonly BitmapSource ButtonIcon =
-        PanelIcons.LoadCustom("shelf") ?? PanelIcons.RenderGlyph(ShelfGlyph);
+        PanelIcons.LoadCustom("shelf") ?? PanelIcons.RenderGlyph(ShelfGlyph, PanelIcons.ShelfAccent);
     private static readonly string? PinnedIcon = PanelIcons.EnsureIcoOnDisk("shelf", ButtonIcon);
 
     private static readonly Brush DropHintBorder = new SolidColorBrush(Color.FromRgb(0x4F, 0xC3, 0xF7));
@@ -40,9 +40,9 @@ public partial class ShelfWindow : PanelWindow
         Icon = ButtonIcon;
     }
 
-    protected override string AppId => "Dock.Shelf";
+    protected override string AppId => "MajikUtils.Shelf";
     protected override string PanelArgument => "shelf";
-    protected override string DisplayName => "Dock Shelf";
+    protected override string DisplayName => "MajikUtils Shelf";
     protected override string? RelaunchIconResource => PinnedIcon;
 
     private DockViewModel ViewModel => (DockViewModel)DataContext;

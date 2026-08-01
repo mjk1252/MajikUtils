@@ -4,17 +4,17 @@ using System.IO.Pipes;
 namespace Dock.App;
 
 /// <summary>
-/// Keeps one Dock process alive and routes every later launch into it.
+/// Keeps one MajikUtils process alive and routes every later launch into it.
 ///
 /// This exists because of pinning: a pinned taskbar button relaunches the exe with
 /// "--panel &lt;name&gt;" rather than talking to the running app, so without this a second click on a
-/// pinned button would start a whole second Dock -- two more taskbar buttons, a second clipboard
+/// pinned button would start a whole second copy -- two more taskbar buttons, a second clipboard
 /// listener, a duplicate hotkey registration that fails.
 /// </summary>
 public sealed class SingleInstance : IDisposable
 {
-    private const string MutexName = @"Global\Dock.SingleInstance";
-    private const string PipeName = "Dock.Panel";
+    private const string MutexName = @"Global\MajikUtils.SingleInstance";
+    private const string PipeName = "MajikUtils.Panel";
 
     private readonly Mutex _mutex;
     private CancellationTokenSource? _listenerCancellation;

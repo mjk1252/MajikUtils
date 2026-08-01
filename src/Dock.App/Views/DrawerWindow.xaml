@@ -3,7 +3,7 @@
                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                    xmlns:views="clr-namespace:Dock.App.Views"
                    xmlns:panels="clr-namespace:Dock.App.Views.Panels"
-                   Title="Dock Drawer"
+                   Title="MajikUtils Drawer"
                    Width="660" Height="580"
                    MinWidth="460" MinHeight="360"
                    WindowStyle="None"

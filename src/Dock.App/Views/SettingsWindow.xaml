@@ -1,18 +1,18 @@
 <Window x:Class="Dock.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Dock Settings"
+        Title="MajikUtils Settings"
         Width="360" SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Background="#1E1E1E">
     <StackPanel Margin="24">
-        <TextBlock Text="Dock Settings" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,8"/>
+        <TextBlock Text="MajikUtils Settings" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,8"/>
 
         <TextBlock Foreground="#99FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
-                   Text="Dock lives on the taskbar as two buttons: Launcher and Drawer. Right-click either one and choose Pin to taskbar to keep it there."/>
+                   Text="MajikUtils lives on the taskbar: a Drawer, a Shelf, and one button per folder stack. Right-click any of them and choose Pin to taskbar to keep it there."/>
 
-        <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start Dock automatically when Windows starts"
+        <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start MajikUtils automatically when Windows starts"
                   Foreground="White" Margin="0,0,0,16"
                   Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
 

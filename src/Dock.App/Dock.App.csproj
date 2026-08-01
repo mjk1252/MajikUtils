@@ -11,7 +11,7 @@
     <PublishReadyToRun>true</PublishReadyToRun>
     <PublishSingleFile>false</PublishSingleFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>Dock</AssemblyName>
+    <AssemblyName>MajikUtils</AssemblyName>
     <RootNamespace>Dock.App</RootNamespace>
   </PropertyGroup>
 

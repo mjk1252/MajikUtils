@@ -15,9 +15,7 @@ public sealed class SettingsStore
 
     public SettingsStore()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Dock");
-        Directory.CreateDirectory(dir);
-        _settingsPath = Path.Combine(dir, "settings.json");
+        _settingsPath = AppPaths.FilePath("settings.json");
     }
 
     public AppSettings Load()

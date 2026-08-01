@@ -5,7 +5,7 @@ namespace Dock.Interop.Shell;
 public static class StartupRegistration
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "Dock";
+    private const string ValueName = "MajikUtils";
 
     public static void SetEnabled(bool enabled)
     {

@@ -14,12 +14,12 @@ public sealed record JumpListTask(string Title, string Target, string Arguments 
 /// Builds the Tasks section of a taskbar button's jump list.
 ///
 /// WPF's <c>System.Windows.Shell.JumpList</c> cannot be used here: it targets the process
-/// AppUserModelID, so it can only ever describe one list, whereas each of Dock's buttons carries
+/// AppUserModelID, so it can only ever describe one list, whereas each of MajikUtils' buttons carries
 /// its own ID. Driving ICustomDestinationList directly is what allows a per-button list, via the
 /// SetAppID call WPF never exposes.
 ///
 /// Jump lists live in the shell, not in the process, so entries registered here keep working on a
-/// pinned button after Dock has exited -- which is the point: that is how "Exit Dock" can sit on a
+/// pinned button after MajikUtils has exited -- which is the point: that is how "Exit MajikUtils" can sit on a
 /// button whose window is long gone.
 /// </summary>
 public static class JumpListBuilder
@@ -129,7 +129,7 @@ public static class JumpListBuilder
 
             // The visible label is a property on the link, not its description: SetDescription only
             // sets the tooltip, and a link with no title renders in the menu as its target's file
-            // name -- every Dock task would read "Dock".
+            // name -- every MajikUtils task would read "MajikUtils".
             if (link is NativeMethods.IPropertyStore store)
             {
                 var key = new NativeMethods.PROPERTYKEY(NativeMethods.PKEY_Title_Format, NativeMethods.PID_Title);

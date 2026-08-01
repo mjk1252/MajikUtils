@@ -11,7 +11,7 @@ using Dock.Interop.Windowing;
 namespace Dock.App.Views;
 
 /// <summary>
-/// Base for every window that owns one of Dock's taskbar buttons.
+/// Base for every window that owns one of MajikUtils' taskbar buttons.
 ///
 /// The central constraint: a window loses its taskbar button the instant it stops being visible,
 /// so a panel can never be hidden or closed while the app is running. It minimises instead --
@@ -58,7 +58,7 @@ public abstract class PanelWindow : Window
     /// </summary>
     protected virtual IReadOnlyList<JumpListTask> ExtraJumpListTasks => [];
 
-    protected static string ExePath => Environment.ProcessPath ?? "Dock.exe";
+    protected static string ExePath => Environment.ProcessPath ?? "MajikUtils.exe";
 
     /// <summary>
     /// Holds the panel open through a deactivation it would otherwise treat as dismissal. Needed
@@ -88,8 +88,8 @@ public abstract class PanelWindow : Window
 
         // Right-clicking a taskbar button is where people reach for "close", and Windows' own
         // Close window entry only minimises these panels -- it has to, since a real close would
-        // destroy the button. Exit Dock sits right next to it and does what that reaches for.
-        JumpListBuilder.Apply(AppId, [.. ExtraJumpListTasks, new JumpListTask("Exit Dock", ExePath, "--exit")]);
+        // destroy the button. Exit MajikUtils sits right next to it and does what that reaches for.
+        JumpListBuilder.Apply(AppId, [.. ExtraJumpListTasks, new JumpListTask("Exit MajikUtils", ExePath, "--exit")]);
     }
 
     /// <summary>

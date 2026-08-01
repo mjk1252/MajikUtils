@@ -20,7 +20,7 @@ The history is kept here because the feature list carried over intact.
       folder stack.
 - [x] **Phase 8** — Per-button jump lists via `ICustomDestinationList` (WPF's own `JumpList` binds
       to the process AppUserModelID, so it cannot give the buttons different lists). Every button
-      carries *Exit Dock*, which is what makes quitting reachable now that the tray icon is gone.
+      carries *Exit MajikUtils*, which is what makes quitting reachable now that the tray icon is gone.
 - [ ] **Phase 9 (stretch)** — A "Recent" jump-list category on the drawer, and a Frequent/Recent
       category per stack, using `AppendKnownCategory` / `AppendCategory`.
 

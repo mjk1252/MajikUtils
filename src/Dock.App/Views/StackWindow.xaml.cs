@@ -86,7 +86,7 @@ public partial class StackWindow : PanelWindow
         Title = stack.Name;
     }
 
-    protected override string AppId => "Dock.Stack." + _stack.Folder.Id;
+    protected override string AppId => "MajikUtils.Stack." + _stack.Folder.Id;
     protected override string PanelArgument => "stack:" + _stack.Folder.Id;
     protected override string DisplayName => _stack.Name;
     protected override string? RelaunchIconResource => _pinnedIcon;

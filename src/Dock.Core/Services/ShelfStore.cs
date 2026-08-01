@@ -9,9 +9,7 @@ public sealed class ShelfStore
 
     public ShelfStore()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Dock");
-        Directory.CreateDirectory(dir);
-        _shelfPath = Path.Combine(dir, "shelf.json");
+        _shelfPath = AppPaths.FilePath("shelf.json");
     }
 
     public List<ShelfItem> Load()

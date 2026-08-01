@@ -2,33 +2,104 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Dock.Core.Services;
 
 namespace Dock.App;
 
 /// <summary>
-/// Draws the two taskbar-button icons at runtime.
+/// Supplies the artwork for MajikUtils' taskbar buttons: a user-supplied image where there is one,
+/// otherwise a drawn badge.
 ///
-/// Nothing ships as a binary asset: the Launch button is a Segoe MDL2 glyph on a rounded plate,
-/// and the Drawer button is a live CPU/GPU gauge that has to be redrawn every second anyway.
-/// A pinned button is the one case that needs a real file on disk -- the shell reads
-/// PKEY_AppUserModel_RelaunchIconResource while the app is *not* running, so it cannot ask us --
-/// which is what <see cref="EnsureIcoOnDisk"/> is for.
+/// Drawing them rather than shipping bitmaps keeps the repo free of binary assets and lets every
+/// badge share one look. A pinned button is the one case that needs a real file on disk -- the
+/// shell reads PKEY_AppUserModel_RelaunchIconResource while the app is *not* running, so it cannot
+/// ask us -- which is what <see cref="EnsureIcoOnDisk"/> is for.
 /// </summary>
 public static class PanelIcons
 {
-    private const int IconSize = 64;
+    /// <summary>
+    /// Drawn at 256 rather than at a taskbar's actual 16-32px: Windows scales down from whatever it
+    /// is given, and downscaling is the direction that stays sharp. It is also the size the
+    /// generated .ico wants for a pinned button on a high-DPI display.
+    /// </summary>
+    private const int IconSize = 256;
 
     private static readonly Typeface GlyphTypeface = new("Segoe MDL2 Assets");
-    private static readonly Brush PlateBrush = Frozen(new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x26)));
-    private static readonly Brush TrackBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)));
-    private static readonly Brush CpuBrush = Frozen(new SolidColorBrush(Color.FromRgb(0x4F, 0xC3, 0xF7)));
-    private static readonly Brush GpuBrush = Frozen(new SolidColorBrush(Color.FromRgb(0xA5, 0xD6, 0xA7)));
 
-    private static Brush Frozen(SolidColorBrush brush)
+    // Accents, one per button, so the badges are told apart by colour at a glance as well as by
+    // their glyph -- at 16px on a taskbar the glyph alone is close to unreadable.
+    public static readonly Color DrawerAccent = Color.FromRgb(0x4F, 0xC3, 0xF7);
+    public static readonly Color ShelfAccent = Color.FromRgb(0xFF, 0xB7, 0x4D);
+
+    /// <summary>
+    /// A badge: rounded slate plate, a lit rim and top sheen, the glyph, and an accent bar along
+    /// the bottom. The bar is what survives being scaled to taskbar size -- it stays a legible
+    /// block of colour long after the glyph has turned to mush.
+    /// </summary>
+    public static BitmapSource RenderGlyph(string glyph, Color accent)
     {
-        brush.Freeze();
-        return brush;
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            const double radius = 56;
+            var bounds = new Rect(0, 0, IconSize, IconSize);
+
+            var plate = new LinearGradientBrush(
+                Color.FromRgb(0x2E, 0x33, 0x42), Color.FromRgb(0x14, 0x16, 0x1C), 90);
+            plate.Freeze();
+            dc.DrawRoundedRectangle(plate, null, bounds, radius, radius);
+
+            // A faint wash of the accent over the plate, so the badge reads as tinted rather than
+            // as a grey box with a coloured stripe bolted on.
+            var wash = new LinearGradientBrush(
+                Color.FromArgb(0x2E, accent.R, accent.G, accent.B), Color.FromArgb(0x00, accent.R, accent.G, accent.B), 90);
+            wash.Freeze();
+            dc.DrawRoundedRectangle(wash, null, bounds, radius, radius);
+
+            // Rim and sheen: a light edge along the top half only, which is what reads as a raised
+            // surface rather than a flat fill.
+            var rim = new LinearGradientBrush(
+                Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF), 90);
+            rim.Freeze();
+            dc.DrawRoundedRectangle(null, new Pen(rim, 3), Deflate(bounds, 1.5), radius - 1.5, radius - 1.5);
+
+            DrawGlyph(dc, glyph);
+
+            var bar = new SolidColorBrush(accent);
+            bar.Freeze();
+            const double barWidth = 104;
+            const double barHeight = 12;
+            dc.DrawRoundedRectangle(bar, null,
+                new Rect((IconSize - barWidth) / 2, IconSize - 40, barWidth, barHeight),
+                barHeight / 2, barHeight / 2);
+        }
+
+        return Rasterize(visual);
     }
+
+    private static void DrawGlyph(DrawingContext dc, string glyph)
+    {
+        var text = new FormattedText(glyph, System.Globalization.CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, GlyphTypeface, 120, Brushes.White, 1.0);
+
+        // Sits above centre to leave the accent bar its own space; without the offset the glyph and
+        // the bar crowd each other and the badge looks bottom-heavy.
+        var origin = new Point((IconSize - text.Width) / 2, (IconSize - text.Height) / 2 - 14);
+
+        // Drawn once in black underneath as a cheap shadow, which keeps the glyph legible if a
+        // custom accent ever lands close to white.
+        dc.PushOpacity(0.35);
+        dc.DrawText(
+            new FormattedText(glyph, System.Globalization.CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, GlyphTypeface, 120, Brushes.Black, 1.0),
+            new Point(origin.X, origin.Y + 3));
+        dc.Pop();
+
+        dc.DrawText(text, origin);
+    }
+
+    private static Rect Deflate(Rect rect, double amount) =>
+        new(rect.X + amount, rect.Y + amount, rect.Width - amount * 2, rect.Height - amount * 2);
 
     /// <summary>
     /// A custom icon supplied for <paramref name="name"/>, or null to fall back to drawn artwork.
@@ -41,8 +112,7 @@ public static class PanelIcons
     {
         string[] roots =
         [
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Dock", "icons", "custom"),
+            AppPaths.CustomIconsDirectory,
             Path.Combine(AppContext.BaseDirectory, "assets", "icons")
         ];
 
@@ -76,73 +146,10 @@ public static class PanelIcons
         catch (Exception ex) when (ex is IOException or NotSupportedException
                                       or ArgumentException or FileFormatException)
         {
-            // A corrupt or unreadable file falls back to the drawn glyph rather than failing to
+            // A corrupt or unreadable file falls back to the drawn badge rather than failing to
             // build a window that the taskbar button depends on existing.
             return null;
         }
-    }
-
-    public static BitmapSource RenderGlyph(string glyph)
-    {
-        var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen())
-        {
-            DrawPlate(dc);
-
-            var text = new FormattedText(glyph, System.Globalization.CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, GlyphTypeface, 34, Brushes.White, 1.0);
-
-            dc.DrawText(text, new Point((IconSize - text.Width) / 2, (IconSize - text.Height) / 2));
-        }
-
-        return Rasterize(visual);
-    }
-
-    /// <summary>
-    /// Two concentric arcs sweeping clockwise from 12 o'clock: outer ring is CPU, inner is GPU.
-    /// Both percentages are 0-100.
-    /// </summary>
-    public static BitmapSource RenderStatsGauge(double cpuPercent, double gpuPercent)
-    {
-        var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen())
-        {
-            DrawPlate(dc);
-            DrawRing(dc, radius: 23, thickness: 7, fraction: cpuPercent / 100.0, brush: CpuBrush);
-            DrawRing(dc, radius: 13, thickness: 6, fraction: gpuPercent / 100.0, brush: GpuBrush);
-        }
-
-        return Rasterize(visual);
-    }
-
-    private static void DrawPlate(DrawingContext dc) =>
-        dc.DrawRoundedRectangle(PlateBrush, null, new Rect(0, 0, IconSize, IconSize), 12, 12);
-
-    private static void DrawRing(DrawingContext dc, double radius, double thickness, double fraction, Brush brush)
-    {
-        var centre = new Point(IconSize / 2.0, IconSize / 2.0);
-        dc.DrawEllipse(null, new Pen(TrackBrush, thickness), centre, radius, radius);
-
-        fraction = Math.Clamp(fraction, 0, 1);
-        if (fraction <= 0)
-            return;
-
-        var pen = new Pen(brush, thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
-
-        // A full sweep can't be expressed as a single arc segment (start and end points coincide,
-        // which ArcSegment renders as nothing at all), so cap it just short of a closed circle.
-        var sweep = Math.Min(fraction, 0.999) * 360.0;
-        var start = new Point(centre.X, centre.Y - radius);
-        var endAngle = (sweep - 90) * Math.PI / 180.0;
-        var end = new Point(centre.X + radius * Math.Cos(endAngle), centre.Y + radius * Math.Sin(endAngle));
-
-        var figure = new PathFigure { StartPoint = start, IsClosed = false, IsFilled = false };
-        figure.Segments.Add(new ArcSegment(end, new Size(radius, radius), 0,
-            isLargeArc: sweep > 180, SweepDirection.Clockwise, isStroked: true));
-
-        var geometry = new PathGeometry();
-        geometry.Figures.Add(figure);
-        dc.DrawGeometry(null, pen, geometry);
     }
 
     /// <summary>
@@ -177,17 +184,16 @@ public static class PanelIcons
     }
 
     /// <summary>
-    /// Writes <paramref name="image"/> to %LOCALAPPDATA%\Dock\icons\{name}.ico and returns the
-    /// "path,index" string the shell expects, or null if it could not be written. The .ico wraps
-    /// the PNG bytes verbatim -- Vista and later read PNG-compressed icon entries directly, so no
-    /// BMP/DIB conversion is needed.
+    /// Writes <paramref name="image"/> into the app's icons folder and returns the "path,index"
+    /// string the shell expects, or null if it could not be written. The .ico wraps the PNG bytes
+    /// verbatim -- Vista and later read PNG-compressed icon entries directly, so no BMP/DIB
+    /// conversion is needed.
     /// </summary>
     public static string? EnsureIcoOnDisk(string name, BitmapSource image)
     {
         try
         {
-            var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Dock", "icons");
+            var dir = AppPaths.IconsDirectory;
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, name + ".ico");
 
@@ -200,9 +206,8 @@ public static class PanelIcons
             using var file = File.Create(path);
             using var writer = new BinaryWriter(file);
 
-            // A dimension of 256 is encoded as 0; nothing we generate is that large, but the
-            // source bitmap is not always our own 64px artwork -- shell folder icons come through
-            // here too, at whatever size the shell handed us.
+            // A dimension of 256 is encoded as 0; the source bitmap is not always our own artwork
+            // -- shell folder icons come through here too, at whatever size the shell handed us.
             writer.Write((ushort)0);        // reserved
             writer.Write((ushort)1);        // type: icon
             writer.Write((ushort)1);        // image count

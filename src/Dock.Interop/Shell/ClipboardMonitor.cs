@@ -30,7 +30,7 @@ public sealed class ClipboardMonitor : IDisposable
         {
             lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate),
             hInstance = NativeMethods.GetModuleHandle(null),
-            lpszClassName = "DockClipboardMonitor_" + Guid.NewGuid().ToString("N")
+            lpszClassName = "MajikUtilsClipboardMonitor_" + Guid.NewGuid().ToString("N")
         };
 
         NativeMethods.RegisterClass(ref wndClass);
