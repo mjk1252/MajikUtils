@@ -11,7 +11,8 @@ Run it with `dotnet build` then launch
       wearing that folder's own icon.
 - [ ] Click Drawer — it restores. Click again — it minimises.
 - [ ] Alt+F4 on a panel — it minimises, and the button survives.
-- [ ] Drawer's icon animates with CPU/GPU load; hovering the button shows the percentages.
+- [ ] CPU/GPU appear in the drawer's own header, and **nowhere on the taskbar** — no animated
+      button icon, no percentages in the hover tooltip.
 - [ ] Right-click each button → Pin to taskbar. Fully exit Dock (Drawer → gear → Exit Dock).
       Click each pinned button — Dock relaunches and opens that panel.
 - [ ] Move and resize a panel, put it away, restart Dock — it comes back where you left it.
@@ -42,13 +43,15 @@ Run it with `dotnet build` then launch
       dropping adds the file. This is the one that needs SuppressAutoMinimise to work.
 - [ ] Drag items back out; right-click to remove.
 - [ ] Clicking the button twice opens and closes it.
-- [ ] **Clipboard** — copy text in another app **while both panels are minimised**, then open the
+
+## Clipboard
+- [ ] Copy text in another app **while every panel is minimised**, then open the drawer's
       Clipboard tab and confirm it was captured. Clicking an entry re-copies it.
 - [ ] `Ctrl+Alt+Shift+V` from anywhere opens the drawer on its Clipboard tab.
 
 ## Settings + installer
 - [ ] Drawer → gear → Settings — toggling "Start with Windows" persists across a restart.
-- [ ] Reboot with start-with-Windows on: both buttons appear, taskbar unaffected.
+- [ ] Reboot with start-with-Windows on: every button reappears, taskbar unaffected.
 - [ ] Installer at `dist/Dock-Setup-1.0.0.exe` — installs to `%LOCALAPPDATA%\Programs\Dock`,
       adds a Start Menu shortcut, and uninstalls cleanly.
 
