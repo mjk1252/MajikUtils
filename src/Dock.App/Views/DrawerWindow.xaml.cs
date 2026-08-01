@@ -3,6 +3,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Windows.Shell;
+using System.Windows.Threading;
+using Dock.Core.Services;
 using Dock.Core.ViewModels;
 
 namespace Dock.App.Views;
@@ -20,17 +23,24 @@ public partial class DrawerWindow : PanelWindow
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
 
-    public DrawerWindow(DockViewModel viewModel)
+    public DrawerWindow(DockViewModel viewModel, IWingetService wingetService)
     {
         InitializeComponent();
 
         DataContext = viewModel;
         Icon = ButtonIcon;
 
+        LauncherView.WingetService = wingetService;
+        LauncherView.InstallStarted += OnInstallStarted;
+
+        // The taskbar button's progress bar. Indeterminate is the honest state: winget reports no
+        // percentage back, only "finished".
+        TaskbarItemInfo = new TaskbarItemInfo();
+
         // Selected here rather than via IsChecked="True" in the XAML: that fires Checked partway
         // through InitializeComponent, when the panels the handler touches are still null.
-        _activeTab = RecentTab;
-        RecentTab.IsChecked = true;
+        _activeTab = LauncherTab;
+        LauncherTab.IsChecked = true;
 
         UpdateStats(0, 0);
     }
@@ -49,15 +59,26 @@ public partial class DrawerWindow : PanelWindow
         StatsText.Text = $"CPU {cpuPercent:0}%   GPU {gpuPercent:0}%";
 
     /// <summary>Brings the drawer up on its Clipboard tab, for the global clipboard hotkey.</summary>
-    public void ShowClipboard()
+    public void ShowClipboard() => ShowOnTab(ClipboardTab);
+
+    /// <summary>Brings the drawer up on its Launch tab, for a relaunch from a pinned launcher shortcut.</summary>
+    public void ShowLauncher() => ShowOnTab(LauncherTab);
+
+    private void ShowOnTab(ToggleButton tab)
     {
-        ClipboardTab.IsChecked = true;
+        tab.IsChecked = true;
         ShowPanel();
     }
 
+    /// <summary>
+    /// Opening the drawer on the Launch tab puts the caret straight in the search box, so the
+    /// button acts as "press it and start typing".
+    /// </summary>
     protected override void OnPanelShown()
     {
-        if (ReferenceEquals(_activeTab, RecentTab))
+        if (ReferenceEquals(_activeTab, LauncherTab))
+            LauncherView.FocusSearch();
+        else if (ReferenceEquals(_activeTab, RecentTab))
             RecentView.Refresh();
     }
 
@@ -72,11 +93,14 @@ public partial class DrawerWindow : PanelWindow
                 other.IsChecked = false;
         }
 
+        LauncherView.Visibility = VisibilityFor(tab, LauncherTab);
         RecentView.Visibility = VisibilityFor(tab, RecentTab);
         StacksView.Visibility = VisibilityFor(tab, StacksTab);
         ClipboardView.Visibility = VisibilityFor(tab, ClipboardTab);
 
-        if (ReferenceEquals(tab, RecentTab))
+        if (ReferenceEquals(tab, LauncherTab))
+            LauncherView.FocusSearch();
+        else if (ReferenceEquals(tab, RecentTab))
             RecentView.Refresh();
     }
 
@@ -90,10 +114,26 @@ public partial class DrawerWindow : PanelWindow
             ((ToggleButton)sender).IsChecked = true;
     }
 
-    private ToggleButton[] Tabs => [RecentTab, StacksTab, ClipboardTab];
+    private ToggleButton[] Tabs => [LauncherTab, RecentTab, StacksTab, ClipboardTab];
 
     private static Visibility VisibilityFor(ToggleButton active, ToggleButton tab) =>
         ReferenceEquals(active, tab) ? Visibility.Visible : Visibility.Collapsed;
+
+    private void OnInstallStarted()
+    {
+        TaskbarItemInfo.ProgressState = TaskbarItemProgressState.Indeterminate;
+
+        // WingetResultViewModel owns the install and doesn't surface completion, so the bar is
+        // cleared on a fixed delay rather than left spinning forever on a button the user has
+        // most likely already put away.
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            TaskbarItemInfo.ProgressState = TaskbarItemProgressState.None;
+        };
+        timer.Start();
+    }
 
     private void OnHeaderDrag(object sender, MouseButtonEventArgs e) => DragMove();
 

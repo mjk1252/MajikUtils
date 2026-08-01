@@ -14,7 +14,6 @@ public partial class App : System.Windows.Application
     private SettingsStore? _settingsStore;
     private SettingsWindow? _settingsWindow;
     private DockViewModel? _viewModel;
-    private LaunchWindow? _launchWindow;
     private DrawerWindow? _drawerWindow;
     private ShelfWindow? _shelfWindow;
     private readonly Dictionary<StackItemViewModel, StackWindow> _stackWindows = [];
@@ -57,7 +56,7 @@ public partial class App : System.Windows.Application
         StartupRegistration.SetEnabled(_settingsStore.Load().StartWithWindows);
 
         // A launch carrying an explicit panel came from a pinned taskbar button, so open that
-        // panel. A plain launch (startup, first install) leaves both buttons sitting minimised.
+        // panel. A plain launch (startup, first install) leaves every button sitting minimised.
         if (requestedPanel is not null)
             ShowPanel(requestedPanel);
     }
@@ -74,17 +73,13 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Both windows are created up front and never destroyed: a taskbar button only exists while
-    /// its window does, so creating one lazily would mean the button the user is trying to click
-    /// isn't there yet.
+    /// Every panel window is created up front and never destroyed: a taskbar button only exists
+    /// while its window does, so creating one lazily would mean the button the user is trying to
+    /// click isn't there yet.
     /// </summary>
     private void CreatePanelWindows(IWingetService wingetService)
     {
-        _launchWindow = new LaunchWindow(_viewModel!, wingetService);
-        _launchWindow.AttachPlacementStore(_settingsStore!);
-        _launchWindow.Show();
-
-        _drawerWindow = new DrawerWindow(_viewModel!);
+        _drawerWindow = new DrawerWindow(_viewModel!, wingetService);
         _drawerWindow.AttachPlacementStore(_settingsStore!);
         _drawerWindow.SettingsRequested += ShowSettingsWindow;
         _drawerWindow.ExitRequested += Shutdown;
@@ -133,8 +128,10 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // "launch" is still honoured: the launcher used to have a taskbar button of its own, and
+        // a shortcut pinned back then still relaunches with it.
         if (string.Equals(panel, "launch", StringComparison.OrdinalIgnoreCase))
-            _launchWindow?.ShowPanel();
+            _drawerWindow?.ShowLauncher();
         else if (string.Equals(panel, "shelf", StringComparison.OrdinalIgnoreCase))
             _shelfWindow?.ShowPanel();
         else
@@ -256,7 +253,6 @@ public partial class App : System.Windows.Application
             window.CloseForExit();
         _stackWindows.Clear();
 
-        _launchWindow?.CloseForExit();
         _drawerWindow?.CloseForExit();
         _shelfWindow?.CloseForExit();
 

@@ -4,11 +4,12 @@ A set of Windows 11 utility panels that live on the taskbar, built in WPF (.NET 
 
 Dock adds a set of independently pinnable taskbar buttons and leaves the real taskbar alone:
 
-- **Dock Launcher** — search installed apps, or find and install new ones via winget. The taskbar
-  button shows a progress bar while an install runs.
+- **Dock Drawer** — four tabs: **Launch** (search installed apps, or find and install new ones via
+  winget — the taskbar button shows a progress bar while an install runs), **Recent**, **Stacks**
+  (which folders are stacks) and **Clipboard**. Opens on Launch with the caret already in the
+  search box, so the button is press-and-type.
 - **Dock Shelf** — a holding area for files. Drag a file down onto the button and hold: Windows
   opens the shelf, and you drop straight into it. Drag items back out whenever you need them.
-- **Dock Drawer** — recent files, clipboard history, and the list of folders you've made stacks of.
 - **One button per folder stack** — each stack you add gets its own taskbar button wearing that
   folder's own icon. Clicking it fans the folder's contents out in an arc right above the button,
   so a folder's files are one click from the taskbar.

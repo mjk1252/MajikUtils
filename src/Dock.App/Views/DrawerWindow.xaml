@@ -4,7 +4,7 @@
                    xmlns:views="clr-namespace:Dock.App.Views"
                    xmlns:panels="clr-namespace:Dock.App.Views.Panels"
                    Title="Dock Drawer"
-                   Width="620" Height="520"
+                   Width="660" Height="580"
                    MinWidth="460" MinHeight="360"
                    WindowStyle="None"
                    AllowsTransparency="True"
@@ -76,6 +76,8 @@
             </Grid>
 
             <StackPanel Grid.Row="1" Margin="0,6,0,0">
+                <ToggleButton x:Name="LauncherTab" Style="{StaticResource RailButton}" Content="Launch"
+                              Tag="&#xE721;" Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
                 <ToggleButton x:Name="RecentTab" Style="{StaticResource RailButton}" Content="Recent"
                               Tag="&#xE81C;" Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
                 <ToggleButton x:Name="StacksTab" Style="{StaticResource RailButton}" Content="Stacks"
@@ -85,7 +87,8 @@
             </StackPanel>
 
             <Grid Grid.Row="1" Grid.Column="1">
-                <panels:RecentPanel x:Name="RecentView"/>
+                <panels:LauncherPanel x:Name="LauncherView"/>
+                <panels:RecentPanel x:Name="RecentView" Visibility="Collapsed"/>
                 <panels:StacksPanel x:Name="StacksView" Visibility="Collapsed"/>
                 <panels:ClipboardPanel x:Name="ClipboardView" Visibility="Collapsed"/>
             </Grid>

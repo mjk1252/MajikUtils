@@ -7,7 +7,8 @@ Run it with `dotnet build` then launch
 
 ## Taskbar buttons
 - [ ] The **real Windows taskbar is visible and behaves normally** — nothing hides it any more.
-- [ ] Two separate, ungrouped buttons appear: "Dock Launcher" and "Dock Drawer".
+- [ ] Separate, ungrouped buttons appear: "Dock Drawer", "Dock Shelf", and one per folder stack
+      wearing that folder's own icon.
 - [ ] Click Drawer — it restores. Click again — it minimises.
 - [ ] Alt+F4 on a panel — it minimises, and the button survives.
 - [ ] Drawer's icon animates with CPU/GPU load; hovering the button shows the percentages.
@@ -15,21 +16,32 @@ Run it with `dotnet build` then launch
       Click each pinned button — Dock relaunches and opens that panel.
 - [ ] Move and resize a panel, put it away, restart Dock — it comes back where you left it.
 
-## Launcher panel
+## Launcher (Drawer -> Launch tab)
+- [ ] The drawer opens on Launch with the caret already in the search box.
 - [ ] Typing filters installed apps; clicking one launches it.
 - [ ] A query of 2+ characters also searches winget after a short pause.
-- [ ] Clicking Install shows a progress bar on the Launch taskbar button.
+- [ ] Clicking Install shows a progress bar on the Drawer taskbar button.
 
 ## Drawer panel
-- [ ] Rail switches between Recent, Stacks, Shelf and Clipboard; the active tab stays lit and
+- [ ] Rail switches between Launch, Recent, Stacks and Clipboard; the active tab stays lit and
       clicking it again does not deselect it.
 - [ ] **Recent** — lists recent files, opens one on click, drags one out to another app.
-- [ ] **Stacks** — "Add folder..." registers a folder. Clicking a tile **fans its contents out in
-      an arc**. Clicking the same tile again closes the fan (this is the fiddly one — the dismiss
-      used to reopen it instead). Entries open on click and drag out to other apps. Edits to the
-      folder on disk show up without reopening.
-- [ ] Fan closes when you switch tabs or minimise the window (no orphaned popup left on screen).
-- [ ] **Shelf** — drag a file onto the panel to hold it; drag it back out; right-click to remove.
+- [ ] **Stacks** — "Add folder..." registers a folder, and a taskbar button for it appears
+      immediately. Removing it makes the button disappear.
+
+## Stack buttons
+- [ ] Clicking a stack's taskbar button **fans its contents out in an arc** above that button.
+- [ ] Clicking the button again puts it away. So does clicking empty space in the fan, or
+      clicking another app.
+- [ ] The furthest (top-right) entry is fully on screen, not clipped.
+- [ ] Entries open on click and drag out to other apps. Edits to the folder show up on reopen.
+- [ ] A stack near either end of the taskbar still fans fully on-screen.
+
+## Shelf button
+- [ ] Drag a file from Explorer onto the Shelf taskbar button and hold — the shelf opens, and
+      dropping adds the file. This is the one that needs SuppressAutoMinimise to work.
+- [ ] Drag items back out; right-click to remove.
+- [ ] Clicking the button twice opens and closes it.
 - [ ] **Clipboard** — copy text in another app **while both panels are minimised**, then open the
       Clipboard tab and confirm it was captured. Clicking an entry re-copies it.
 - [ ] `Ctrl+Alt+Shift+V` from anywhere opens the drawer on its Clipboard tab.

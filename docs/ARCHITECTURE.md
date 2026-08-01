@@ -12,8 +12,10 @@
 
 ## Why several windows
 
-Every taskbar button is a window: `LaunchWindow`, `DrawerWindow`, `ShelfWindow`, and one
-`StackWindow` per configured folder, created and destroyed as the `Stacks` collection changes.
+Every taskbar button is a window: `DrawerWindow`, `ShelfWindow`, and one `StackWindow` per
+configured folder, created and destroyed as the `Stacks` collection changes. Anything that does
+*not* need a button of its own is a tab inside the drawer instead -- the launcher, recent files,
+the stack list and clipboard history all live there.
 
 Windows groups taskbar buttons by AppUserModelID, so several buttons from one process only stay
 separate if each HWND is stamped with a distinct ID — see `Dock.Interop/Shell/AppIdRegistrar.cs`.
