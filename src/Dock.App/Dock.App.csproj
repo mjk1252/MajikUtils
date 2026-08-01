@@ -11,6 +11,8 @@
     <PublishReadyToRun>true</PublishReadyToRun>
     <PublishSingleFile>false</PublishSingleFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Regenerate with tools/make-icon.ps1 after changing assets/icon-source.png. -->
+    <ApplicationIcon>..\..\assets\MajikUtils.ico</ApplicationIcon>
     <AssemblyName>MajikUtils</AssemblyName>
     <RootNamespace>Dock.App</RootNamespace>
   </PropertyGroup>

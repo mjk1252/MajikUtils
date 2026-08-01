@@ -28,7 +28,13 @@ destroy the taskbar button along with the window. *Exit MajikUtils* is the one t
 Clipboard history is captured in the background whether or not a panel is open. Press
 `Ctrl+Alt+Shift+V` anywhere to open the drawer on its Clipboard tab.
 
-## Custom icons
+## Icons
+
+The exe icon is `assets/MajikUtils.ico`, built from `assets/icon-source.png` by
+`tools/make-icon.ps1` — rerun that after changing the source art. It carries 16/24/32/48/64 as
+BMP frames and 128/256 as PNG, which is the encoding split the Windows shell expects.
+
+## Custom taskbar button icons
 
 Drop your own artwork in `assets/icons/` (shipped with a build) or `%LOCALAPPDATA%\MajikUtils\icons\custom\`
 (no rebuild needed, checked first). `drawer.png`, `shelf.png`, and `stack-<folder>.png` for a
