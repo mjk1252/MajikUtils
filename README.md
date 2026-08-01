@@ -17,6 +17,15 @@ MajikUtils adds a set of independently pinnable taskbar buttons and leaves the r
 Right-click any of them and choose *Pin to taskbar* to keep it there. Stack buttons are the ones
 worth pinning: a pinned stack is permanent one-click access to that folder.
 
+One thing does not live on the taskbar:
+
+- **Media island** — a pill hanging from the top edge of the primary monitor showing whatever is
+  playing. Point at it and it opens into album art, a progress bar and prev/play-pause/next. It
+  shows itself whenever something is playing and hides again when nothing is; with nothing playing,
+  brushing the top edge of the screen brings it out anyway. It has no button, never takes focus,
+  lets clicks through unless its controls are showing, and gets out of the way of full-screen apps.
+  Turn it off in *Settings*.
+
 **Right-click any MajikUtils button** for its jump list: every one offers *Exit MajikUtils*, the drawer adds
 Search apps / Clipboard history / Settings, and a stack adds *Open folder* for the contents its
 fan doesn't show. These work on a pinned button even when MajikUtils isn't running -- clicking one

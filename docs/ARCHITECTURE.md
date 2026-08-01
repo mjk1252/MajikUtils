@@ -58,6 +58,52 @@ window, which is the whole reason the shelf has a button of its own. The catch i
 dragging application owns the foreground for the entire gesture, so the restored shelf looks
 abandoned by every test `PanelWindow` uses -- hence `SuppressAutoMinimise`, raised on `DragEnter`.
 
+## The media island
+
+`IslandWindow` is the one window that is not a `PanelWindow`, and inverts nearly all of their
+constraints: it owns no taskbar button, so it is free to hide; it must never take focus, since it
+sits where the pointer passes; and it has to let clicks through, because it covers a strip of
+screen other windows use.
+
+**Where the media comes from.** `MediaSessionSource` reads WinRT's
+`GlobalSystemMediaTransportControls` -- the same session behind the volume flyout -- so every
+player that appears there is covered without any per-application work. That projection only exists
+on a Windows-versioned TFM, which is why `Dock.Interop` and `Dock.App` target
+`net9.0-windows10.0.19041.0` rather than plain `net9.0-windows`.
+
+The session belongs to another process that can exit mid-call, so every read is best-effort. What
+matters more is telling *"nothing is playing"* apart from *"this reading tells us nothing"*: a
+track change is not one event, and publishing an empty snapshot for the gap between two songs
+would tear the island down and rebuild it between tracks. Transient states return "ignore" and
+publish nothing; only a real stop publishes null. `App` then holds even that back for a grace
+period, so a player restarting its session does not blink the island away.
+
+Positions are extrapolated, not polled: the system republishes a position only when something
+changes it, so `MediaSnapshot` carries the position *and the moment it was read*, and
+`MediaViewModel.Tick` runs the clock forward from there.
+
+**Why the pointer is polled.** The window is click-through whenever its controls are not showing,
+and a click-through window receives no mouse messages at all -- so the very state the pointer has
+to break it out of is the one that cannot report the pointer. A 120ms `GetCursorPos` poll drives
+the whole behaviour instead, and covers the idle top-edge strip too, where there is no window
+under the pointer to raise anything. `WS_EX_TRANSPARENT` is dropped only while the transport
+buttons are on screen (`OverlayWindowStyles`).
+
+**Why the window never resizes.** Only the pill inside it grows and shrinks; the window stays at
+the expanded footprint throughout. Animating a layered top-level window's bounds per frame is what
+makes overlays like this stutter. The pill's silhouette is a `NotchShape` rather than a rounded
+`Border`, because its top corners have to curve back *outwards* into the screen edge -- a rounded
+rectangle stuck to the top of a screen reads as a window that was pushed off it.
+
+Placement is on the primary monitor's work area rather than the cursor's monitor -- the one thing
+in MajikUtils that does not follow the pointer -- but goes through the same physical-pixel
+`MonitorPlacement` path as the panels, for the same DPI reasons.
+
+`ForegroundWindow.IsFullScreenOnPrimary` takes the island off screen when a game or a full-screen
+video owns the monitor. It compares rectangles rather than window styles: exclusive full-screen,
+borderless windows and full-screen browser tabs all get there differently and only agree on the
+result.
+
 ## Jump lists
 
 `JumpListBuilder` drives `ICustomDestinationList` directly rather than using WPF's
@@ -73,7 +119,8 @@ button whose window is long gone.
 
 ## State
 
-- `%LOCALAPPDATA%\MajikUtils\settings.json` — start-with-Windows, per-panel window placement.
+- `%LOCALAPPDATA%\MajikUtils\settings.json` — start-with-Windows, whether the media island is
+  shown, per-panel window placement.
 - `%LOCALAPPDATA%\MajikUtils\shelf.json`, `stacks.json` — shelf items and stack folders.
 - `%LOCALAPPDATA%\MajikUtils\icons\*.ico` — generated artwork for the pinned taskbar buttons.
 - `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations\*.customDestinations-ms` — the shell's

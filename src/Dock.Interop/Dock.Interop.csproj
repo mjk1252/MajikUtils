@@ -1,7 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <!-- windows10.0.19041 rather than plain windows: the media island reads the system's media
+         session through the WinRT Windows.Media.Control projection, which only exists on a
+         Windows-versioned TFM. SupportedOSPlatformVersion stays at 10.0.17763, the version that
+         API actually shipped in, so nothing newer is used without a warning. -->
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

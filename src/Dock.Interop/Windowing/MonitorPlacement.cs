@@ -38,6 +38,29 @@ public static class MonitorPlacement
     public static WorkArea FromWindow(IntPtr hwnd) =>
         Describe(NativeMethods.MonitorFromWindow(hwnd, NativeMethods.MONITOR_DEFAULTTONEAREST));
 
+    /// <summary>
+    /// The primary monitor's work area, for the one thing that does not follow the cursor: the
+    /// media island hangs from the top of the primary screen wherever the user is working.
+    /// </summary>
+    public static WorkArea FromPrimary() => Describe(PrimaryMonitor);
+
+    internal static IntPtr PrimaryMonitor =>
+        NativeMethods.MonitorFromPoint(default, NativeMethods.MONITOR_DEFAULTTOPRIMARY);
+
+    /// <summary>A monitor's full bounds, taskbar included -- unlike <see cref="WorkArea"/>.</summary>
+    internal static bool TryGetBounds(IntPtr monitor, out NativeMethods.RECT bounds)
+    {
+        var info = new MONITORINFOInitialised();
+        if (monitor != IntPtr.Zero && NativeMethods.GetMonitorInfo(monitor, ref info.Value))
+        {
+            bounds = info.Value.rcMonitor;
+            return true;
+        }
+
+        bounds = default;
+        return false;
+    }
+
     private static WorkArea Describe(IntPtr monitor)
     {
         var info = new MONITORINFOInitialised();

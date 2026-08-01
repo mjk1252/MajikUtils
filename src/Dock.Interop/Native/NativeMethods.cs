@@ -201,6 +201,7 @@ internal static class NativeMethods
 
     // --- Monitors -----------------------------------------------------------------------------
 
+    internal const uint MONITOR_DEFAULTTOPRIMARY = 1;
     internal const uint MONITOR_DEFAULTTONEAREST = 2;
     internal const int MDT_EFFECTIVE_DPI = 0;
 
@@ -240,6 +241,32 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter,
         int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    internal static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+
+    /// <summary>The desktop's own window. Always "full screen", and never a reason to hide anything.</summary>
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetShellWindow();
+
+    // --- Extended window styles (the media island's overlay behaviour) -------------------------
+
+    internal const int GWL_EXSTYLE = -20;
+
+    /// <summary>Clicks fall through to whatever is underneath.</summary>
+    internal const int WS_EX_TRANSPARENT = 0x00000020;
+
+    /// <summary>Keeps the window out of Alt+Tab.</summary>
+    internal const int WS_EX_TOOLWINDOW = 0x00000080;
+
+    /// <summary>The window never takes the foreground, so hovering it cannot steal focus.</summary>
+    internal const int WS_EX_NOACTIVATE = 0x08000000;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    internal static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    internal static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
 
     // --- Jump lists ---------------------------------------------------------------------------
     //

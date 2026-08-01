@@ -1,6 +1,8 @@
 using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Threading;
 using Dock.App.Views;
+using Dock.Core.Models;
 using Dock.Core.Services;
 using Dock.Core.ViewModels;
 using Dock.Interop.Shell;
@@ -19,6 +21,11 @@ public partial class App : System.Windows.Application
     private readonly Dictionary<StackItemViewModel, StackWindow> _stackWindows = [];
     private ClipboardMonitor? _clipboardMonitor;
     private SystemStatsSource? _systemStatsSource;
+    private MediaSessionSource? _mediaSource;
+    private MediaViewModel? _mediaViewModel;
+    private NotesViewModel? _notesViewModel;
+    private IslandWindow? _islandWindow;
+    private DispatcherTimer? _mediaClearTimer;
     private IIconProvider? _iconProvider;
     private IAppLauncher? _launcher;
     private readonly Dictionary<StackItemViewModel, StackFolderWatcher> _stackWatchers = [];
@@ -60,6 +67,9 @@ public partial class App : System.Windows.Application
         CreatePanelWindows(wingetService);
         StartClipboardMonitor();
         StartSystemStats();
+
+        if (_settingsStore.Load().ShowMediaIsland)
+            StartMediaIsland();
 
         _singleInstance.StartListening(panel => Dispatcher.Invoke(() => ShowPanel(panel)));
 
@@ -204,6 +214,78 @@ public partial class App : System.Windows.Application
         _systemStatsSource.Start();
     }
 
+    /// <summary>
+    /// Brings up the media island. Unlike the panels this is torn down and rebuilt when the user
+    /// toggles it, since it owns no taskbar button that has to outlive it.
+    /// </summary>
+    private void StartMediaIsland()
+    {
+        if (_islandWindow is not null)
+            return;
+
+        _mediaSource = new MediaSessionSource();
+        _mediaViewModel = new MediaViewModel(_mediaSource);
+        _notesViewModel = new NotesViewModel(new NotesStore());
+
+        // Media notifications arrive on the thread pool, like the system stats above.
+        _mediaSource.Changed += (_, snapshot) => Dispatcher.Invoke(() => ApplyMediaSnapshot(snapshot));
+        _mediaSource.Start();
+
+        _islandWindow = new IslandWindow(_mediaViewModel, _notesViewModel);
+        _islandWindow.Show();
+    }
+
+    /// <summary>
+    /// Applies a snapshot, holding back the one that empties the island.
+    ///
+    /// Losing the session is routine and usually momentary -- closing one tab of several, a player
+    /// restarting its session between albums -- and the island is a strip of screen the user may
+    /// be pointing at when it happens. Anything arriving inside the grace period cancels the
+    /// clear, so only a session that stays gone actually puts it away.
+    /// </summary>
+    private void ApplyMediaSnapshot(MediaSnapshot? snapshot)
+    {
+        _mediaClearTimer?.Stop();
+
+        if (snapshot is not null)
+        {
+            _mediaViewModel?.Apply(snapshot);
+            return;
+        }
+
+        // Nothing to hold back if it is already empty.
+        if (_mediaViewModel is not { HasSession: true })
+        {
+            _mediaViewModel?.Apply(null);
+            return;
+        }
+
+        _mediaClearTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+        _mediaClearTimer.Tick -= OnMediaClearElapsed;
+        _mediaClearTimer.Tick += OnMediaClearElapsed;
+        _mediaClearTimer.Start();
+    }
+
+    private void OnMediaClearElapsed(object? sender, EventArgs e)
+    {
+        _mediaClearTimer?.Stop();
+        _mediaViewModel?.Apply(null);
+    }
+
+    private void StopMediaIsland()
+    {
+        _mediaClearTimer?.Stop();
+        _mediaClearTimer = null;
+
+        _islandWindow?.CloseForExit();
+        _islandWindow = null;
+
+        _mediaSource?.Dispose();
+        _mediaSource = null;
+        _mediaViewModel = null;
+        _notesViewModel = null;
+    }
+
     private void OnStacksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.OldItems is not null)
@@ -265,6 +347,13 @@ public partial class App : System.Windows.Application
         }
 
         _settingsWindow = new SettingsWindow(_settingsStore!);
+        _settingsWindow.MediaIslandToggled += show =>
+        {
+            if (show)
+                StartMediaIsland();
+            else
+                StopMediaIsland();
+        };
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
@@ -277,6 +366,7 @@ public partial class App : System.Windows.Application
 
         _clipboardMonitor?.Dispose();
         _systemStatsSource?.Dispose();
+        StopMediaIsland();
 
         foreach (var window in _stackWindows.Values)
             window.CloseForExit();

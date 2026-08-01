@@ -201,6 +201,8 @@ public static class PanelIcons
             var dir = AppPaths.IconsDirectory;
             Directory.CreateDirectory(dir);
 
+            image = ToIconCanvas(image);
+
             using var png = new MemoryStream();
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
@@ -243,6 +245,40 @@ public static class PanelIcons
             // Only costs the pinned button its custom artwork; it still pins and still launches.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Redraws artwork onto the full <see cref="IconSize"/> square, scaled to fit and centred.
+    ///
+    /// Both parts of that matter to the shell, and neither matters to WPF -- which is why a stack
+    /// button could show the right icon on its *window* while the taskbar showed the generic
+    /// blank-document one. The shell refuses a non-square frame outright, and reads a
+    /// PNG-compressed frame reliably only at 256: below that it wants a BMP/DIB, so a 42px PNG
+    /// entry loads as nothing at all.
+    ///
+    /// Only shell-extracted artwork is ever affected. The badges drawn above are already 256
+    /// squares; a folder icon arrives at whatever size the shell had, trimmed to its opaque bounds
+    /// by <c>ShellIconProvider</c> -- and a folder is wider than it is tall.
+    /// </summary>
+    private static BitmapSource ToIconCanvas(BitmapSource image)
+    {
+        if (image.PixelWidth == IconSize && image.PixelHeight == IconSize)
+            return image;
+
+        if (image.PixelWidth == 0 || image.PixelHeight == 0)
+            return image;
+
+        var scale = Math.Min((double)IconSize / image.PixelWidth, (double)IconSize / image.PixelHeight);
+        var width = image.PixelWidth * scale;
+        var height = image.PixelHeight * scale;
+
+        var visual = new DrawingVisual();
+        RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
+
+        using (var dc = visual.RenderOpen())
+            dc.DrawImage(image, new Rect((IconSize - width) / 2, (IconSize - height) / 2, width, height));
+
+        return Rasterize(visual);
     }
 
     /// <summary>
