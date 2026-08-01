@@ -198,4 +198,93 @@ internal static class NativeMethods
 
     [DllImport("ole32.dll")]
     internal static extern int PropVariantClear(ref PROPVARIANT propVariant);
+
+    // --- Jump lists ---------------------------------------------------------------------------
+    //
+    // WPF's own System.Windows.Shell.JumpList targets the *process* AppUserModelID, so it can only
+    // ever describe one list. Dock's taskbar buttons each carry their own ID, so building per-button
+    // lists means driving ICustomDestinationList directly and calling SetAppID on it.
+
+    /// <summary>Title shown for a jump-list task, set on the shortcut's own property store.</summary>
+    internal static readonly Guid PKEY_Title_Format = new("F29F85E0-4FF9-1068-AB91-08002B27B3D9");
+    internal const uint PID_Title = 2;
+
+    internal static readonly Guid CLSID_DestinationList = new("77F10CF0-3DB5-4966-B520-B7C54FD35ED6");
+    internal static readonly Guid CLSID_EnumerableObjectCollection = new("2D3468C1-36A7-43B6-AC24-D3F02FD9607A");
+    internal static readonly Guid CLSID_ShellLink = new("00021401-0000-0000-C000-000000000046");
+    internal static Guid IID_IObjectArray = new("92CA9DCD-5622-4BBA-A805-5E9F541BD8C9");
+
+    [ComImport]
+    [Guid("92CA9DCD-5622-4BBA-A805-5E9F541BD8C9")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IObjectArray
+    {
+        [PreserveSig] int GetCount(out uint count);
+        [PreserveSig] int GetAt(uint index, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out object item);
+    }
+
+    /// <summary>
+    /// Redeclares IObjectArray's two members rather than inheriting the interface: a COM interop
+    /// interface's vtable is built from the members declared on it alone, so inheriting would
+    /// silently place AddObject at slot 3 instead of 5.
+    /// </summary>
+    [ComImport]
+    [Guid("5632B1A4-E38A-400A-928A-D4CD63230295")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IObjectCollection
+    {
+        [PreserveSig] int GetCount(out uint count);
+        [PreserveSig] int GetAt(uint index, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out object item);
+        [PreserveSig] int AddObject([MarshalAs(UnmanagedType.Interface)] object item);
+        [PreserveSig] int AddFromArray([MarshalAs(UnmanagedType.Interface)] IObjectArray source);
+        [PreserveSig] int RemoveObjectAt(uint index);
+        [PreserveSig] int Clear();
+    }
+
+    [ComImport]
+    [Guid("6332DEBF-87B5-4670-90C0-5E57B408A49E")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface ICustomDestinationList
+    {
+        [PreserveSig] int SetAppID([MarshalAs(UnmanagedType.LPWStr)] string appId);
+        [PreserveSig] int BeginList(out uint minSlots, ref Guid iid,
+            [MarshalAs(UnmanagedType.Interface)] out object removed);
+        [PreserveSig] int AppendCategory([MarshalAs(UnmanagedType.LPWStr)] string category, IObjectArray items);
+        [PreserveSig] int AppendKnownCategory(int category);
+        [PreserveSig] int AddUserTasks([MarshalAs(UnmanagedType.Interface)] IObjectArray items);
+        [PreserveSig] int CommitList();
+        [PreserveSig] int GetRemovedDestinations(ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out object removed);
+        [PreserveSig] int DeleteList([MarshalAs(UnmanagedType.LPWStr)] string appId);
+        [PreserveSig] int AbortList();
+    }
+
+    /// <summary>
+    /// Only the setters Dock needs are given real signatures; the rest exist to hold their vtable
+    /// slots. Getters take a buffer we never supply, so they are declared with opaque parameters
+    /// rather than marshalling that could not work if it were ever called.
+    /// </summary>
+    [ComImport]
+    [Guid("000214F9-0000-0000-C000-000000000046")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IShellLinkW
+    {
+        [PreserveSig] int GetPath(IntPtr file, int cch, IntPtr findData, uint flags);
+        [PreserveSig] int GetIDList(out IntPtr idList);
+        [PreserveSig] int SetIDList(IntPtr idList);
+        [PreserveSig] int GetDescription(IntPtr name, int cch);
+        [PreserveSig] int SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+        [PreserveSig] int GetWorkingDirectory(IntPtr dir, int cch);
+        [PreserveSig] int SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
+        [PreserveSig] int GetArguments(IntPtr args, int cch);
+        [PreserveSig] int SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+        [PreserveSig] int GetHotkey(out ushort hotkey);
+        [PreserveSig] int SetHotkey(ushort hotkey);
+        [PreserveSig] int GetShowCmd(out int showCmd);
+        [PreserveSig] int SetShowCmd(int showCmd);
+        [PreserveSig] int GetIconLocation(IntPtr iconPath, int cch, out int iconIndex);
+        [PreserveSig] int SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string iconPath, int iconIndex);
+        [PreserveSig] int SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pathRel, uint reserved);
+        [PreserveSig] int Resolve(IntPtr hwnd, uint flags);
+        [PreserveSig] int SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
+    }
 }

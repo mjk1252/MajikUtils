@@ -52,6 +52,15 @@ public abstract class PanelWindow : Window
     protected virtual string? RelaunchIconResource => null;
 
     /// <summary>
+    /// Extra entries for this button's right-click menu, beyond the Exit every panel gets. The
+    /// commands run as fresh processes, so anything that has to reach the running instance goes
+    /// through <c>--panel</c> and the single-instance pipe rather than being called directly.
+    /// </summary>
+    protected virtual IReadOnlyList<JumpListTask> ExtraJumpListTasks => [];
+
+    protected static string ExePath => Environment.ProcessPath ?? "Dock.exe";
+
+    /// <summary>
     /// Holds the panel open through a deactivation it would otherwise treat as dismissal. Needed
     /// while a drag hovers over a drop target: the dragging application owns the foreground for
     /// the whole gesture, so the panel being dropped onto looks, by every other test, abandoned.
@@ -69,14 +78,18 @@ public abstract class PanelWindow : Window
         base.OnSourceInitialized(e);
 
         var hwnd = new WindowInteropHelper(this).Handle;
-        var exePath = Environment.ProcessPath ?? "Dock.exe";
 
         AppIdRegistrar.Stamp(
             hwnd,
             AppId,
-            relaunchCommand: $"\"{exePath}\" --panel {PanelArgument}",
+            relaunchCommand: $"\"{ExePath}\" --panel {PanelArgument}",
             displayName: DisplayName,
-            iconResource: RelaunchIconResource ?? $"{exePath},0");
+            iconResource: RelaunchIconResource ?? $"{ExePath},0");
+
+        // Right-clicking a taskbar button is where people reach for "close", and Windows' own
+        // Close window entry only minimises these panels -- it has to, since a real close would
+        // destroy the button. Exit Dock sits right next to it and does what that reaches for.
+        JumpListBuilder.Apply(AppId, [.. ExtraJumpListTasks, new JumpListTask("Exit Dock", ExePath, "--exit")]);
     }
 
     /// <summary>

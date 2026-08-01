@@ -48,8 +48,24 @@ window, which is the whole reason the shelf has a button of its own. The catch i
 dragging application owns the foreground for the entire gesture, so the restored shelf looks
 abandoned by every test `PanelWindow` uses -- hence `SuppressAutoMinimise`, raised on `DragEnter`.
 
+## Jump lists
+
+`JumpListBuilder` drives `ICustomDestinationList` directly rather than using WPF's
+`System.Windows.Shell.JumpList`, which targets the *process* AppUserModelID and so can only ever
+describe one list. `SetAppID` -- the call WPF does not expose -- is what gives each button its own.
+
+Jump-list entries are shortcuts: they start a new process and cannot call into the running one, so
+anything that must reach it goes through `--panel` (or `--exit`) and the single-instance pipe.
+`--exit` with nothing running exits immediately rather than starting a UI just to close it.
+
+Entries persist in the shell, not the process, which is why *Exit Dock* still works on a pinned
+button whose window is long gone.
+
 ## State
 
 - `%LOCALAPPDATA%\Dock\settings.json` — start-with-Windows, per-panel window placement.
 - `%LOCALAPPDATA%\Dock\shelf.json`, `stacks.json` — shelf items and stack folders.
 - `%LOCALAPPDATA%\Dock\icons\*.ico` — generated artwork for the pinned taskbar buttons.
+- `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations\*.customDestinations-ms` — the shell's
+  own copy of each button's jump list. Written by the shell, not by us; listed here because it
+  outlives the process and is where to look when a jump list seems stale.

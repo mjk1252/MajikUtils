@@ -10,7 +10,8 @@ Run it with `dotnet build` then launch
 - [ ] Separate, ungrouped buttons appear: "Dock Drawer", "Dock Shelf", and one per folder stack
       wearing that folder's own icon.
 - [ ] Click Drawer — it restores. Click again — it minimises.
-- [ ] Alt+F4 on a panel — it minimises, and the button survives.
+- [ ] Alt+F4 on a panel — it minimises, and the button survives. So does Windows' own
+      *Close window*; **Exit Dock** in the jump list is what actually quits.
 - [ ] CPU/GPU appear in the drawer's own header, and **nowhere on the taskbar** — no animated
       button icon, no percentages in the hover tooltip.
 - [ ] Right-click each button → Pin to taskbar. Fully exit Dock (Drawer → gear → Exit Dock).
@@ -48,6 +49,13 @@ Run it with `dotnet build` then launch
 - [ ] Copy text in another app **while every panel is minimised**, then open the drawer's
       Clipboard tab and confirm it was captured. Clicking an entry re-copies it.
 - [ ] `Ctrl+Alt+Shift+V` from anywhere opens the drawer on its Clipboard tab.
+
+## Jump lists (right-click a taskbar button)
+- [ ] Every Dock button offers **Exit Dock**, and it actually quits Dock.
+- [ ] Drawer also offers Search apps / Clipboard history / Settings, each opening the right thing.
+- [ ] A stack also offers **Open folder**, opening it in Explorer.
+- [ ] Pin a button, exit Dock, then use its jump list — Dock starts and does the thing.
+- [ ] Exit Dock while Dock is already closed does nothing (no window flashes up).
 
 ## Settings + installer
 - [ ] Drawer → gear → Settings — toggling "Start with Windows" persists across a restart.

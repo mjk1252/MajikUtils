@@ -17,6 +17,14 @@ Dock adds a set of independently pinnable taskbar buttons and leaves the real ta
 Right-click any of them and choose *Pin to taskbar* to keep it there. Stack buttons are the ones
 worth pinning: a pinned stack is permanent one-click access to that folder.
 
+**Right-click any Dock button** for its jump list: every one offers *Exit Dock*, the drawer adds
+Search apps / Clipboard history / Settings, and a stack adds *Open folder* for the contents its
+fan doesn't show. These work on a pinned button even when Dock isn't running -- clicking one
+starts it.
+
+Note that Windows' own *Close window* entry only puts a panel away. It has to: a real close would
+destroy the taskbar button along with the window. *Exit Dock* is the one that quits.
+
 Clipboard history is captured in the background whether or not a panel is open. Press
 `Ctrl+Alt+Shift+V` anywhere to open the drawer on its Clipboard tab.
 

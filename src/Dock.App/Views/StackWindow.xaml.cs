@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using Dock.App.Views.Panels;
 using Dock.Core.ViewModels;
+using Dock.Interop.Shell;
 
 namespace Dock.App.Views;
 
@@ -88,6 +89,16 @@ public partial class StackWindow : PanelWindow
     // The fan is placed against its own taskbar button every time it opens, so there is no
     // user-chosen position to carry across sessions.
     protected override bool PersistsPlacement => false;
+
+    /// <summary>
+    /// The fan shows at most eight entries, so a stack's button needs a way through to the rest of
+    /// the folder. This one runs Explorer directly rather than routing through Dock -- it has
+    /// nothing to ask the running instance for, and so keeps working from a pinned button.
+    /// </summary>
+    protected override IReadOnlyList<JumpListTask> ExtraJumpListTasks =>
+    [
+        new("Open folder", "explorer.exe", $"\"{_stack.Path}\"")
+    ];
 
     /// <summary>
     /// Parks the window's bottom edge on the top of the work area (i.e. just above the taskbar)

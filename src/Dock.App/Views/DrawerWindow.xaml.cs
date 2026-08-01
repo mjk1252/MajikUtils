@@ -7,6 +7,7 @@ using System.Windows.Shell;
 using System.Windows.Threading;
 using Dock.Core.Services;
 using Dock.Core.ViewModels;
+using Dock.Interop.Shell;
 
 namespace Dock.App.Views;
 
@@ -49,6 +50,13 @@ public partial class DrawerWindow : PanelWindow
     protected override string PanelArgument => "drawer";
     protected override string DisplayName => "Dock Drawer";
     protected override string? RelaunchIconResource => PinnedIcon;
+
+    protected override IReadOnlyList<JumpListTask> ExtraJumpListTasks =>
+    [
+        new("Search apps", ExePath, "--panel launch"),
+        new("Clipboard history", ExePath, "--panel clipboard"),
+        new("Settings...", ExePath, "--panel settings")
+    ];
 
     /// <summary>
     /// Shows the latest stats sample in the drawer's own header. Deliberately not pushed onto the

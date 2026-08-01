@@ -27,10 +27,20 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
-        var requestedPanel = ParsePanelArgument(e.Args);
+        // "--exit" arrives from a jump-list entry, which always starts a *new* process: the work is
+        // to tell the running instance to quit, then quit ourselves without ever building a UI.
+        var exitRequested = e.Args.Any(a => string.Equals(a, "--exit", StringComparison.OrdinalIgnoreCase));
+        var requestedPanel = exitRequested ? "exit" : ParsePanelArgument(e.Args);
 
         _singleInstance = new SingleInstance();
         if (!_singleInstance.IsFirstInstance && SingleInstance.SendToRunningInstance(requestedPanel ?? "drawer"))
+        {
+            Shutdown();
+            return;
+        }
+
+        // Nothing was running to forward to, so there is nothing to close either.
+        if (exitRequested)
         {
             Shutdown();
             return;
@@ -128,14 +138,34 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        // "launch" is still honoured: the launcher used to have a taskbar button of its own, and
-        // a shortcut pinned back then still relaunches with it.
-        if (string.Equals(panel, "launch", StringComparison.OrdinalIgnoreCase))
-            _drawerWindow?.ShowLauncher();
-        else if (string.Equals(panel, "shelf", StringComparison.OrdinalIgnoreCase))
-            _shelfWindow?.ShowPanel();
-        else
-            _drawerWindow?.ShowPanel();
+        switch (panel.ToLowerInvariant())
+        {
+            case "exit":
+                Shutdown();
+                break;
+
+            // Still honoured: the launcher used to have a taskbar button of its own, so a shortcut
+            // pinned back then relaunches with it.
+            case "launch":
+                _drawerWindow?.ShowLauncher();
+                break;
+
+            case "clipboard":
+                _drawerWindow?.ShowClipboard();
+                break;
+
+            case "settings":
+                ShowSettingsWindow();
+                break;
+
+            case "shelf":
+                _shelfWindow?.ShowPanel();
+                break;
+
+            default:
+                _drawerWindow?.ShowPanel();
+                break;
+        }
     }
 
     private void StartClipboardMonitor()

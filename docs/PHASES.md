@@ -17,8 +17,10 @@ The history is kept here because the feature list carried over intact.
 - [x] **Phase 7** — Convert to taskbar buttons: two independently pinnable panels
       (Launcher, Drawer), per-window AppUserModelIDs, live CPU/GPU button icon. The real taskbar
       is left alone.
-- [ ] **Phase 8 (stretch)** — Per-button Jump Lists via `ICustomDestinationList` (WPF's own
-      `JumpList` binds to the process AppUserModelID, so it cannot give the two buttons different
-      lists). Drawer → "Recent" category plus a Task per stack; Launcher → common searches.
+- [x] **Phase 8** — Per-button jump lists via `ICustomDestinationList` (WPF's own `JumpList` binds
+      to the process AppUserModelID, so it cannot give the buttons different lists). Every button
+      carries *Exit Dock*, which is what makes quitting reachable now that the tray icon is gone.
+- [ ] **Phase 9 (stretch)** — A "Recent" jump-list category on the drawer, and a Frequent/Recent
+      category per stack, using `AppendKnownCategory` / `AppendCategory`.
 
 Each phase should build, run, and be visibly testable before moving to the next. Commit at the end of every phase.
