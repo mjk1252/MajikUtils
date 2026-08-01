@@ -4,7 +4,7 @@
                    xmlns:views="clr-namespace:Dock.App.Views"
                    WindowStyle="None"
                    AllowsTransparency="True"
-                   ResizeMode="NoResize">
+                   ResizeMode="CanMinimize">
     <!-- The window is one big invisible rectangle: a transparent WPF window is still hit-testable
          across its whole area, so clicks in the gaps between fan tiles land here rather than on
          the desktop underneath. OnBackdropMouseDown turns those into a dismiss, which is what

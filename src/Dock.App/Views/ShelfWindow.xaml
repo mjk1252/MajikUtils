@@ -6,7 +6,7 @@
                    Width="320" Height="300"
                    WindowStyle="None"
                    AllowsTransparency="True"
-                   ResizeMode="NoResize"
+                   ResizeMode="CanMinimize"
                    AllowDrop="True"
                    DragEnter="OnDragEnter"
                    DragLeave="OnDragLeave"

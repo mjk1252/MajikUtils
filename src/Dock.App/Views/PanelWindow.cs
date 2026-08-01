@@ -30,6 +30,13 @@ public abstract class PanelWindow : Window
         WindowStartupLocation = WindowStartupLocation.Manual;
         WindowState = WindowState.Minimized;
         Background = System.Windows.Media.Brushes.Transparent;
+
+        // The safe default, since a subclass's XAML overrides it: the shell only minimises a
+        // window on a second click of its taskbar button if the window carries WS_MINIMIZEBOX,
+        // which ResizeMode grants for everything except NoResize. A NoResize panel can be opened
+        // from its button but never put away again, because that second click merely re-activates
+        // a window that is already active. CanResize is fine; NoResize is the one to avoid.
+        ResizeMode = ResizeMode.CanMinimize;
     }
 
     /// <summary>Distinct per window: this is what stops the shell grouping both buttons into one.</summary>
