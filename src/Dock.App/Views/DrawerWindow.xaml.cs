@@ -16,7 +16,9 @@ public partial class DrawerWindow : PanelWindow
     /// <summary>Segoe MDL2 "Dock Bottom" -- a drawer of things kept to hand.</summary>
     private const string DrawerGlyph = "";
 
-    private static readonly BitmapSource ButtonIcon = PanelIcons.RenderGlyph(DrawerGlyph);
+    // A custom icon dropped in by the user wins; the drawn glyph is only the fallback.
+    private static readonly BitmapSource ButtonIcon =
+        PanelIcons.LoadCustom("drawer") ?? PanelIcons.RenderGlyph(DrawerGlyph);
     private static readonly string? PinnedIcon = PanelIcons.EnsureIcoOnDisk("drawer", ButtonIcon);
 
     private ToggleButton _activeTab;

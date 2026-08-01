@@ -16,6 +16,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Copied rather than embedded so the shipped icons can be swapped in place, and so the
+         shell can point a pinned button's RelaunchIconResource at a real file on disk. -->
+    <Content Include="..\..\assets\icons\**\*.*" LinkBase="assets\icons"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Dock.Core\Dock.Core.csproj" />
     <ProjectReference Include="..\Dock.Interop\Dock.Interop.csproj" />
   </ItemGroup>

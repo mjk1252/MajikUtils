@@ -28,6 +28,13 @@ destroy the taskbar button along with the window. *Exit Dock* is the one that qu
 Clipboard history is captured in the background whether or not a panel is open. Press
 `Ctrl+Alt+Shift+V` anywhere to open the drawer on its Clipboard tab.
 
+## Custom icons
+
+Drop your own artwork in `assets/icons/` (shipped with a build) or `%LOCALAPPDATA%\Dock\icons\custom\`
+(no rebuild needed, checked first). `drawer.png`, `shelf.png`, and `stack-<folder>.png` for a
+stack — e.g. `stack-downloads.png`. See [`assets/icons/README.md`](assets/icons/README.md) for
+sizes and the caveat about Windows caching pinned button icons.
+
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for project layout.
 
 ## Projects

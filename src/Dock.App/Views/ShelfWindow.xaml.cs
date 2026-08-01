@@ -22,7 +22,9 @@ public partial class ShelfWindow : PanelWindow
     /// <summary>Segoe MDL2 "Tiles" -- a tray of held items.</summary>
     private const string ShelfGlyph = "";
 
-    private static readonly BitmapSource ButtonIcon = PanelIcons.RenderGlyph(ShelfGlyph);
+    // A custom icon dropped in by the user wins; the drawn glyph is only the fallback.
+    private static readonly BitmapSource ButtonIcon =
+        PanelIcons.LoadCustom("shelf") ?? PanelIcons.RenderGlyph(ShelfGlyph);
     private static readonly string? PinnedIcon = PanelIcons.EnsureIcoOnDisk("shelf", ButtonIcon);
 
     private static readonly Brush DropHintBorder = new SolidColorBrush(Color.FromRgb(0x4F, 0xC3, 0xF7));

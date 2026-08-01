@@ -72,7 +72,11 @@ public partial class StackWindow : PanelWindow
         _stack = stack;
         DataContext = stack;
 
-        var folderIcon = PanelIcons.FromPng(stack.IconPng);
+        // Keyed on the folder's name rather than its id, so the file to drop in is guessable --
+        // a stack on C:\Users\me\Downloads is overridden by "stack-downloads.png".
+        var folderIcon = PanelIcons.LoadCustom("stack-" + stack.Name.ToLowerInvariant())
+                         ?? PanelIcons.FromPng(stack.IconPng);
+
         Icon = folderIcon;
         _pinnedIcon = folderIcon is null
             ? null

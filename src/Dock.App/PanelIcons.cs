@@ -30,6 +30,58 @@ public static class PanelIcons
         return brush;
     }
 
+    /// <summary>
+    /// A custom icon supplied for <paramref name="name"/>, or null to fall back to drawn artwork.
+    ///
+    /// Two locations, checked in order. The first is a drop-in folder in the user's own data
+    /// directory, so an icon can be swapped on a shipped build with nothing but a file copy; the
+    /// second ships alongside the exe and is what a build provides by default.
+    /// </summary>
+    public static BitmapSource? LoadCustom(string name)
+    {
+        string[] roots =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Dock", "icons", "custom"),
+            Path.Combine(AppContext.BaseDirectory, "assets", "icons")
+        ];
+
+        foreach (var root in roots)
+        {
+            foreach (var extension in new[] { ".png", ".ico" })
+            {
+                var path = Path.Combine(root, name + extension);
+                if (File.Exists(path) && Decode(path) is { } image)
+                    return image;
+            }
+        }
+
+        return null;
+    }
+
+    private static BitmapSource? Decode(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var decoder = BitmapDecoder.Create(stream,
+                BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+
+            // An .ico holds several sizes; take the largest, since the taskbar and the generated
+            // pinned icon both want more pixels than the 16px frame that tends to come first.
+            var frame = decoder.Frames.OrderByDescending(f => f.PixelWidth).First();
+            frame.Freeze();
+            return frame;
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException
+                                      or ArgumentException or FileFormatException)
+        {
+            // A corrupt or unreadable file falls back to the drawn glyph rather than failing to
+            // build a window that the taskbar button depends on existing.
+            return null;
+        }
+    }
+
     public static BitmapSource RenderGlyph(string glyph)
     {
         var visual = new DrawingVisual();
