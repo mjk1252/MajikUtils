@@ -23,10 +23,46 @@ public static class TaskbarController
 
     public static void Show() => SetVisible(true);
 
-    public static bool IsGameFullscreenActive()
+    /// <summary>
+    /// Returns the handle of the monitor currently showing a genuine fullscreen foreground
+    /// window (covering that monitor's entire bounds), or null if none -- used to auto-hide the
+    /// dock during games/fullscreen video on JUST that monitor, leaving other monitors' docks
+    /// alone. Deliberately does NOT use SHQueryUserNotificationState's
+    /// QUNS_RUNNING_D3D_FULL_SCREEN flag: that API is a well-known false-positive source for any
+    /// GPU-accelerated app (Electron apps like Discord included), since it infers "fullscreen"
+    /// heuristically (and system-wide, with no per-monitor answer) rather than checking actual
+    /// window geometry. Directly comparing the foreground window's rect against its own
+    /// monitor's bounds is what more reliable fullscreen-detectors (e.g. TranslucentTB) do
+    /// instead, and naturally answers "which monitor" along the way.
+    /// </summary>
+    public static IntPtr? GetFullscreenMonitor()
     {
-        return NativeMethods.SHQueryUserNotificationState(out var state) == 0
-            && state == NativeMethods.QUNS_RUNNING_D3D_FULL_SCREEN;
+        var hwnd = NativeMethods.GetForegroundWindow();
+        if (hwnd == IntPtr.Zero || hwnd == NativeMethods.GetShellWindow())
+            return null;
+
+        if (NativeMethods.IsIconic(hwnd) || !NativeMethods.IsWindowVisible(hwnd))
+            return null;
+
+        if (!NativeMethods.GetWindowRect(hwnd, out var windowRect))
+            return null;
+
+        var monitor = NativeMethods.MonitorFromWindow(hwnd, NativeMethods.MONITOR_DEFAULTTONEAREST);
+        var info = new NativeMethods.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
+        if (monitor == IntPtr.Zero || !NativeMethods.GetMonitorInfo(monitor, ref info))
+            return null;
+
+        var coversMonitor = windowRect.Left <= info.rcMonitor.Left && windowRect.Top <= info.rcMonitor.Top &&
+                             windowRect.Right >= info.rcMonitor.Right && windowRect.Bottom >= info.rcMonitor.Bottom;
+
+        if (!coversMonitor)
+            return null;
+
+        var buffer = new System.Text.StringBuilder(256);
+        NativeMethods.GetClassName(hwnd, buffer, buffer.Capacity);
+        var className = buffer.ToString();
+
+        return className is "Progman" or "WorkerW" or "Shell_TrayWnd" ? null : monitor;
     }
 
     private static IEnumerable<IntPtr> GetTaskbarWindows()

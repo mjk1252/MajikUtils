@@ -46,15 +46,21 @@ public sealed class RunningWindowSource : IRunningAppSource, IDisposable
             if (NativeMethods.DwmGetWindowAttribute(hWnd, NativeMethods.DWMWA_CLOAKED, out var cloaked, sizeof(int)) == 0 && cloaked != 0)
                 return true;
 
+            // No title/size filtering here anymore -- any window that clears the four structural
+            // checks above (visible, no owner, not a tool window, not DWM-cloaked) counts as a
+            // real app window, title or not. This intentionally lets some helper/IME windows
+            // through as noise in exchange for never again silently dropping a legitimate window
+            // (e.g. fullscreen/borderless games, which routinely have no title at all and were
+            // getting filtered out by earlier, stricter heuristics here).
             var length = NativeMethods.GetWindowTextLength(hWnd);
-            if (length == 0)
-                return true;
+            var title = "";
 
-            var buffer = new StringBuilder(length + 1);
-            NativeMethods.GetWindowText(hWnd, buffer, buffer.Capacity);
-            var title = buffer.ToString();
-            if (string.IsNullOrWhiteSpace(title))
-                return true;
+            if (length > 0)
+            {
+                var buffer = new StringBuilder(length + 1);
+                NativeMethods.GetWindowText(hWnd, buffer, buffer.Capacity);
+                title = buffer.ToString();
+            }
 
             NativeMethods.GetWindowThreadProcessId(hWnd, out var processId);
             list.Add((hWnd, title, processId));
@@ -70,16 +76,7 @@ public sealed class RunningWindowSource : IRunningAppSource, IDisposable
 
         foreach (var (handle, title, processId) in windows)
         {
-            string? path;
-            try
-            {
-                path = Process.GetProcessById((int)processId).MainModule?.FileName;
-            }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
-            {
-                continue;
-            }
-
+            var path = GetProcessImagePath(processId);
             if (string.IsNullOrEmpty(path))
                 continue;
 
@@ -93,10 +90,42 @@ public sealed class RunningWindowSource : IRunningAppSource, IDisposable
                 groups[path] = group;
             }
 
-            group.Windows.Add(new RunningWindow { Handle = handle, Title = title });
+            group.Windows.Add(new RunningWindow
+            {
+                Handle = handle,
+                Title = string.IsNullOrWhiteSpace(title) ? group.DisplayName : title,
+                ProcessId = (int)processId
+            });
         }
 
         return [.. groups.Values];
+    }
+
+    /// <summary>
+    /// Resolves a process's executable path via OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) +
+    /// QueryFullProcessImageName -- the same least-privilege path Task Manager uses -- rather
+    /// than <see cref="Process.MainModule"/>, which internally needs PROCESS_VM_READ. Anti-cheat
+    /// systems (e.g. Riot's Vanguard, used by League of Legends) routinely block VM_READ access
+    /// to the game process while still allowing this limited query, which is exactly why such
+    /// games' windows were silently dropped here before: MainModule threw access-denied and the
+    /// window got skipped.
+    /// </summary>
+    private static string? GetProcessImagePath(uint processId)
+    {
+        var handle = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+        if (handle == IntPtr.Zero)
+            return null;
+
+        try
+        {
+            var buffer = new StringBuilder(1024);
+            var size = (uint)buffer.Capacity;
+            return NativeMethods.QueryFullProcessImageName(handle, 0, buffer, ref size) ? buffer.ToString() : null;
+        }
+        finally
+        {
+            NativeMethods.CloseHandle(handle);
+        }
     }
 
     public void Dispose() => _timer.Dispose();

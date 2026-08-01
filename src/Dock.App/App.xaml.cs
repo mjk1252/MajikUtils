@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -17,8 +18,8 @@ public partial class App : System.Windows.Application
     private TrayIconService? _trayIcon;
     private RunningWindowSource? _runningAppSource;
     private ExplorerTrayReader? _explorerTrayReader;
+    private SystemStatsSource? _systemStatsSource;
     private System.Threading.Timer? _gameModeTimer;
-    private bool _hiddenForGameMode;
     private SettingsStore? _settingsStore;
     private SettingsWindow? _settingsWindow;
     private DockViewModel? _viewModel;
@@ -26,6 +27,7 @@ public partial class App : System.Windows.Application
     private IIconProvider? _iconProvider;
     private IAppLauncher? _launcher;
     private readonly List<DockWindow> _dockWindows = [];
+    private readonly Dictionary<Core.ViewModels.StackItemViewModel, StackFolderWatcher> _stackWatchers = [];
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -52,12 +54,18 @@ public partial class App : System.Windows.Application
         _viewModel = new DockViewModel(configStore, _iconProvider, _launcher);
 
         _viewModel.AttachRunningApps(new WindowActivator());
+        _viewModel.AttachClipboardWriter(new ClipboardWriter());
+
+        foreach (var stack in _viewModel.Stacks)
+            WatchStack(stack);
+
+        _viewModel.Stacks.CollectionChanged += OnStacksCollectionChanged;
 
         _wingetService = new WingetService();
         _viewModel.AttachWingetService(_wingetService);
         LoadInstalledAppsAsync();
 
-        CreateDockWindows(settings.Position);
+        CreateDockWindows(settings.Position, settings.AccentColor, settings.TintOpacity);
 
         _runningAppSource = new RunningWindowSource();
         _runningAppSource.Updated += (_, groups) => Dispatcher.Invoke(() => _viewModel.UpdateRunningApps(groups));
@@ -68,6 +76,11 @@ public partial class App : System.Windows.Application
         _explorerTrayReader.Updated += (_, icons) => Dispatcher.Invoke(() => _viewModel.UpdateTrayIcons(icons));
         _explorerTrayReader.Start();
 
+        _systemStatsSource = new SystemStatsSource();
+        _systemStatsSource.Updated += (_, stats) =>
+            Dispatcher.Invoke(() => _viewModel.UpdateSystemStats(stats.CpuPercent, stats.GpuPercent));
+        _systemStatsSource.Start();
+
         CreateTrayIcon();
 
         if (settings.HideTaskbar)
@@ -77,6 +90,34 @@ public partial class App : System.Windows.Application
         LaunchGuard();
 
         _gameModeTimer = new System.Threading.Timer(_ => CheckGameMode(), null, 2000, 2000);
+    }
+
+    private void OnStacksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (Core.ViewModels.StackItemViewModel stack in e.OldItems)
+                UnwatchStack(stack);
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (Core.ViewModels.StackItemViewModel stack in e.NewItems)
+                WatchStack(stack);
+        }
+    }
+
+    private void WatchStack(Core.ViewModels.StackItemViewModel stack)
+    {
+        var watcher = new StackFolderWatcher(stack.Path);
+        watcher.Changed += () => Dispatcher.Invoke(() => stack.Refresh(_iconProvider!, _launcher!));
+        _stackWatchers[stack] = watcher;
+    }
+
+    private void UnwatchStack(Core.ViewModels.StackItemViewModel stack)
+    {
+        if (_stackWatchers.Remove(stack, out var watcher))
+            watcher.Dispose();
     }
 
     private void LoadInstalledAppsAsync()
@@ -103,12 +144,31 @@ public partial class App : System.Windows.Application
         });
     }
 
-    private void CreateDockWindows(Core.Models.DockPosition position)
+    private void CreateDockWindows(Core.Models.DockPosition position, string accentColor, int tintOpacityPercent)
     {
         var isFirstWindow = true;
         foreach (var monitor in MonitorService.GetMonitors())
         {
-            var window = new DockWindow(_viewModel!, monitor, position, enableGlobalHooks: isFirstWindow, wingetService: _wingetService);
+            var window = new DockWindow(_viewModel!, monitor, position, enableGlobalHooks: isFirstWindow,
+                wingetService: _wingetService, accentColor: accentColor, tintOpacityPercent: tintOpacityPercent);
+
+            var savedSettings = _settingsStore!.Load();
+            window.IconSize = savedSettings.IconSizeByMonitor.TryGetValue(monitor.DeviceName, out var savedSize)
+                ? savedSize
+                : savedSettings.IconSize;
+
+            window.DockPadding = savedSettings.DockPadding;
+            window.IconSpacing = savedSettings.IconSpacing;
+            window.DockMargin = savedSettings.DockMargin;
+            window.AppClearance = savedSettings.AppClearance;
+
+            window.IconSizeChanged += size =>
+            {
+                var current = _settingsStore.Load();
+                current.IconSizeByMonitor[monitor.DeviceName] = size;
+                _settingsStore.Save(current);
+            };
+
             if (isFirstWindow)
             {
                 window.PanicHotkeyPressed += RestoreTaskbarAndClearFlag;
@@ -125,13 +185,29 @@ public partial class App : System.Windows.Application
         }
     }
 
-    public void RebuildDockWindows(Core.Models.DockPosition position)
+    /// <summary>
+    /// Pushes spacing onto the live dock windows instead of rebuilding them, so dragging the
+    /// sliders in Settings updates the dock continuously. Each window's SizeChanged handler
+    /// re-runs ApplyPillRegionAndPosition, so the rounded region and docked position follow.
+    /// </summary>
+    public void ApplyDockSpacing(double dockPadding, double iconSpacing, double dockMargin, double appClearance)
+    {
+        foreach (var window in _dockWindows)
+        {
+            window.DockPadding = dockPadding;
+            window.IconSpacing = iconSpacing;
+            window.DockMargin = dockMargin;
+            window.AppClearance = appClearance;
+        }
+    }
+
+    public void RebuildDockWindows(Core.Models.DockPosition position, string accentColor, int tintOpacityPercent)
     {
         foreach (var window in _dockWindows)
             window.Close();
 
         _dockWindows.Clear();
-        CreateDockWindows(position);
+        CreateDockWindows(position, accentColor, tintOpacityPercent);
     }
 
     private void HideTaskbarAndMarkFlag()
@@ -165,16 +241,18 @@ public partial class App : System.Windows.Application
 
     private void CheckGameMode()
     {
-        var isFullscreen = TaskbarController.IsGameFullscreenActive();
-        if (isFullscreen == _hiddenForGameMode)
-            return;
+        // Only the monitor actually showing the fullscreen window should have its dock hidden --
+        // otherwise fullscreening something on one monitor blanks every dock on every monitor.
+        var fullscreenMonitor = TaskbarController.GetFullscreenMonitor();
 
-        _hiddenForGameMode = isFullscreen;
-        var visibility = isFullscreen ? Visibility.Hidden : Visibility.Visible;
         Dispatcher.Invoke(() =>
         {
             foreach (var window in _dockWindows)
-                window.Visibility = visibility;
+            {
+                window.Visibility = window.MonitorHandle == fullscreenMonitor
+                    ? Visibility.Hidden
+                    : Visibility.Visible;
+            }
         });
     }
 
@@ -238,8 +316,12 @@ public partial class App : System.Windows.Application
     {
         _gameModeTimer?.Dispose();
         RestoreTaskbarAndClearFlag();
+        foreach (var watcher in _stackWatchers.Values)
+            watcher.Dispose();
+        _stackWatchers.Clear();
         _runningAppSource?.Dispose();
         _explorerTrayReader?.Dispose();
+        _systemStatsSource?.Dispose();
         _trayIcon?.Dispose();
         base.OnExit(e);
     }

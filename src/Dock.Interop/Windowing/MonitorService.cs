@@ -11,8 +11,8 @@ public static class MonitorService
 
         NativeMethods.EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMonitor, IntPtr _, ref NativeMethods.RECT _, IntPtr __) =>
         {
-            var info = new NativeMethods.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
-            if (NativeMethods.GetMonitorInfo(hMonitor, ref info))
+            var info = new NativeMethods.MONITORINFOEX { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFOEX>() };
+            if (NativeMethods.GetMonitorInfoEx(hMonitor, ref info))
             {
                 var bounds = ToRectangle(info.rcMonitor);
                 var workArea = ToRectangle(info.rcWork);
@@ -23,7 +23,7 @@ public static class MonitorService
                 if (NativeMethods.GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, out var dpiX, out _) == 0)
                     dpiScale = dpiX / 96.0;
 
-                results.Add(new MonitorSnapshot(bounds, workArea, isPrimary, hMonitor, dpiScale));
+                results.Add(new MonitorSnapshot(bounds, workArea, isPrimary, hMonitor, dpiScale, info.szDevice));
             }
 
             return true;

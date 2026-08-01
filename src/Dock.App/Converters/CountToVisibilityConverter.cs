@@ -7,7 +7,11 @@ namespace Dock.App.Converters;
 public sealed class CountToVisibilityConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is int count && count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    {
+        var hasItems = value is int count && count > 0;
+        var invert = string.Equals(parameter as string, "invert", StringComparison.OrdinalIgnoreCase);
+        return (hasItems != invert) ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

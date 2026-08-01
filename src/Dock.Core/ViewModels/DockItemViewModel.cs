@@ -66,4 +66,15 @@ public partial class DockItemViewModel : ObservableObject
     }
 
     public void ActivateWindow(IntPtr handle) => _activator?.Activate(handle);
+
+    [RelayCommand]
+    private void EndTask()
+    {
+        if (_activator is null || _windows.Count == 0)
+            return;
+
+        var handles = _windows.Select(w => w.Handle).ToList();
+        var processIds = _windows.Select(w => w.ProcessId).Distinct().ToList();
+        _activator.EndTask(handles, processIds);
+    }
 }

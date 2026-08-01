@@ -16,10 +16,45 @@ internal static class NativeMethods
     internal const uint SHGFI_ICON = 0x100;
     internal const uint SHGFI_LARGEICON = 0x0;
     internal const uint SHGFI_SMALLICON = 0x1;
+    internal const uint SHGFI_SYSICONINDEX = 0x4000;
+
+    // SHGFI_LARGEICON tops out at the system large-icon metric (32px at 100% scaling), so anything
+    // rendered bigger than that has to come from the shell's own extra-large/jumbo image lists.
+    internal const int SHIL_EXTRALARGE = 2;
+    internal const int SHIL_JUMBO = 4;
+
+    internal const int ILD_TRANSPARENT = 1;
+
+    internal static Guid IID_IImageList = new("46EB5926-582E-4017-9FDF-E8998DAA0950");
+
+    /// <summary>
+    /// Only declared as far as GetIcon -- the members before it exist purely to place GetIcon at
+    /// its correct vtable slot and are never called, so Draw's parameter is left as an opaque
+    /// pointer rather than dragging in the whole IMAGELISTDRAWPARAMS layout.
+    /// </summary>
+    [ComImport]
+    [Guid("46EB5926-582E-4017-9FDF-E8998DAA0950")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IImageList
+    {
+        [PreserveSig] int Add(IntPtr hbmImage, IntPtr hbmMask, ref int pi);
+        [PreserveSig] int ReplaceIcon(int i, IntPtr hicon, ref int pi);
+        [PreserveSig] int SetOverlayImage(int iImage, int iOverlay);
+        [PreserveSig] int Replace(int i, IntPtr hbmImage, IntPtr hbmMask);
+        [PreserveSig] int AddMasked(IntPtr hbmImage, int crMask, ref int pi);
+        [PreserveSig] int Draw(IntPtr pimldp);
+        [PreserveSig] int Remove(int i);
+        [PreserveSig] int GetIcon(int i, int flags, ref IntPtr picon);
+    }
+
+    // Exported by ordinal only; there is no named export for this on any Windows version.
+    [DllImport("shell32.dll", EntryPoint = "#727")]
+    internal static extern int SHGetImageList(int imageList, ref Guid riid, out IImageList ppv);
 
     internal const uint WM_APP = 0x8000;
     internal const uint WM_LBUTTONUP = 0x0202;
     internal const uint WM_RBUTTONUP = 0x0205;
+    internal const uint WM_CLOSE = 0x0010;
 
     internal const uint NIM_ADD = 0x0;
     internal const uint NIM_DELETE = 0x2;
@@ -157,6 +192,30 @@ internal static class NativeMethods
     [DllImport("dwmapi.dll")]
     internal static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
 
+    internal const uint DWM_TNP_RECTDESTINATION = 0x00000001;
+    internal const uint DWM_TNP_VISIBLE = 0x00000008;
+    internal const uint DWM_TNP_SOURCECLIENTAREAONLY = 0x00000010;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct DWM_THUMBNAIL_PROPERTIES
+    {
+        public uint dwFlags;
+        public RECT rcDestination;
+        public RECT rcSource;
+        public byte opacity;
+        public bool fVisible;
+        public bool fSourceClientAreaOnly;
+    }
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmRegisterThumbnail(IntPtr hwndDestination, IntPtr hwndSource, out IntPtr phThumbnailId);
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmUnregisterThumbnail(IntPtr hThumbnailId);
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmUpdateThumbnailProperties(IntPtr hThumbnailId, ref DWM_THUMBNAIL_PROPERTIES props);
+
     [DllImport("gdi32.dll")]
     internal static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int cellWidth, int cellHeight);
 
@@ -179,20 +238,33 @@ internal static class NativeMethods
     internal const int DWMWA_CLOAKED = 14;
     internal const int SW_HIDE = 0;
     internal const int SW_SHOW = 5;
+    internal const int SW_SHOWNOACTIVATE = 4;
     internal const int SW_MINIMIZE = 6;
     internal const int SW_RESTORE = 9;
+
+    internal static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    internal static readonly IntPtr HWND_TOPMOST = new(-1);
 
     internal const int WM_HOTKEY = 0x0312;
     internal const uint MOD_ALT = 0x0001;
     internal const uint MOD_CONTROL = 0x0002;
     internal const uint MOD_SHIFT = 0x0004;
     internal const uint VK_T = 0x54;
+    internal const uint VK_V = 0x56;
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint vk);
 
     [DllImport("user32.dll")]
     internal static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    internal const int WM_CLIPBOARDUPDATE = 0x031D;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool AddClipboardFormatListener(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool RemoveClipboardFormatListener(IntPtr hWnd);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern uint RegisterWindowMessage(string message);
@@ -261,6 +333,7 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte alpha, uint flags);
     internal const uint SWP_NOSIZE = 0x0001;
+    internal const uint SWP_NOMOVE = 0x0002;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint MONITORINFOF_PRIMARY = 0x1;
@@ -286,6 +359,20 @@ internal static class NativeMethods
         public uint dwFlags;
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct MONITORINFOEX
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
+    [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", CharSet = CharSet.Unicode)]
+    internal static extern bool GetMonitorInfoEx(IntPtr hMonitor, ref MONITORINFOEX info);
+
     [DllImport("user32.dll")]
     internal static extern bool EnumWindows(EnumWindowsProc enumFunc, IntPtr lParam);
 
@@ -309,6 +396,14 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetShellWindow();
+
+    internal const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
 
     [DllImport("user32.dll")]
     internal static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -337,6 +432,10 @@ internal static class NativeMethods
     internal const uint PROCESS_VM_READ = 0x0010;
     internal const uint PROCESS_VM_WRITE = 0x0020;
     internal const uint PROCESS_QUERY_INFORMATION = 0x0400;
+    internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern bool QueryFullProcessImageName(IntPtr hProcess, uint dwFlags, System.Text.StringBuilder lpExeName, ref uint lpdwSize);
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct TBBUTTON
