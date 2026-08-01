@@ -29,6 +29,10 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#AppExeName}
+SetupIconFile=..\assets\MajikUtils.ico
+VersionInfoVersion={#AppVersion}
+VersionInfoProductName={#AppName}
+VersionInfoCompany={#AppPublisher}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

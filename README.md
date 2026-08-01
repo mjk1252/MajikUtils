@@ -58,6 +58,16 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for project layout.
 dotnet build
 ```
 
+For a release build and installer:
+
+```
+pwsh tools/build-release.ps1
+```
+
+That publishes to `publish/MajikUtils` (self-contained, ReadyToRun) and compiles
+`dist/MajikUtils-Setup-<version>.exe`. Inno Setup 6 is needed for the installer step; note it
+installs per-user by default, under `%LOCALAPPDATA%\Programs`, not Program Files.
+
 ## Requirements
 
 - Windows 11
