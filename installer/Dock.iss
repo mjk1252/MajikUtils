@@ -1,9 +1,8 @@
 ; Inno Setup script for Dock.
 ; Builds a per-user installer (no admin/UAC prompt) from published output.
 ;
-; Before compiling, publish both apps as self-contained + ReadyToRun:
+; Before compiling, publish the app as self-contained + ReadyToRun:
 ;   dotnet publish src\Dock.App\Dock.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish\Dock.App
-;   dotnet publish src\Dock.Guard\Dock.Guard.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish\Dock.Guard
 ;
 ; Then compile this script with ISCC.exe (installed via Inno Setup).
 
@@ -40,7 +39,6 @@ Name: "startwithwindows"; Description: "Start Dock automatically when Windows st
 
 [Files]
 Source: "..\publish\Dock.App\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
-Source: "..\publish\Dock.Guard\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Dock"; Filename: "{app}\{#AppExeName}"
@@ -59,11 +57,9 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
-    // Dock.exe hides the real taskbar while running. Force-closing it here (rather than
-    // leaving that to file deletion) lets the running Dock.Guard watchdog detect the exit
-    // and restore the taskbar before we remove anything -- the same crash-recovery path
-    // used if the app were killed unexpectedly.
+    // Dock keeps two windows alive for its taskbar buttons and never exits on its own, so
+    // close it before removing files -- otherwise the in-use exe blocks the uninstall.
     Exec('taskkill.exe', '/F /IM Dock.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Sleep(1500);
+    Sleep(1000);
   end;
 end;

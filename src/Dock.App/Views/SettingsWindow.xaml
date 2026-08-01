@@ -7,97 +7,18 @@
         ResizeMode="NoResize"
         Background="#1E1E1E">
     <StackPanel Margin="24">
-        <TextBlock Text="Dock Settings" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,16"/>
+        <TextBlock Text="Dock Settings" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,8"/>
 
-        <CheckBox x:Name="HideTaskbarCheckBox" Content="Hide the Windows taskbar"
-                  Foreground="White" Margin="0,0,0,12" Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+        <TextBlock Foreground="#99FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
+                   Text="Dock lives on the taskbar as two buttons: Launcher and Drawer. Right-click either one and choose Pin to taskbar to keep it there."/>
 
         <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start Dock automatically when Windows starts"
-                  Foreground="White" Margin="0,0,0,20" Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+                  Foreground="White" Margin="0,0,0,16"
+                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
 
-        <TextBlock Text="Dock position" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,8"/>
-        <RadioButton x:Name="PositionBottomRadio" Content="Bottom" GroupName="Position"
-                     Foreground="White" Margin="0,0,0,6" Checked="OnSettingChanged"/>
-        <RadioButton x:Name="PositionLeftRadio" Content="Left" GroupName="Position"
-                     Foreground="White" Margin="0,0,0,6" Checked="OnSettingChanged"/>
-        <RadioButton x:Name="PositionRightRadio" Content="Right" GroupName="Position"
-                     Foreground="White" Margin="0,0,0,20" Checked="OnSettingChanged"/>
+        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
+                   Text="Clipboard history is captured in the background. Press Ctrl+Alt+Shift+V anywhere to open the drawer on its Clipboard tab."/>
 
-        <TextBlock Text="Appearance" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,8"/>
-        <StackPanel x:Name="SwatchPanel" Orientation="Horizontal" Margin="0,0,0,8"/>
-        <TextBox x:Name="CustomColorTextBox" Width="90" HorizontalAlignment="Left"
-                 Margin="0,0,0,12" LostFocus="OnCustomColorTextChanged"
-                 KeyDown="OnCustomColorKeyDown"/>
-
-        <TextBlock Text="Transparency" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,4"/>
-        <Grid Margin="0,0,0,20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="40"/>
-            </Grid.ColumnDefinitions>
-            <Slider x:Name="OpacitySlider" Minimum="0" Maximum="60"
-                    ValueChanged="OnOpacityChanged" IsMoveToPointEnabled="True"/>
-            <TextBlock x:Name="OpacityLabel" Grid.Column="1" Foreground="White"
-                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
-        </Grid>
-
-        <TextBlock Text="Spacing" Foreground="White" FontWeight="SemiBold" Margin="0,0,0,4"/>
-
-        <TextBlock Text="Dock padding" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,2"/>
-        <Grid Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="40"/>
-            </Grid.ColumnDefinitions>
-            <Slider x:Name="DockPaddingSlider" Minimum="0" Maximum="28"
-                    SmallChange="1" LargeChange="2" TickFrequency="1" IsSnapToTickEnabled="True"
-                    ValueChanged="OnSpacingChanged" IsMoveToPointEnabled="True"/>
-            <TextBlock x:Name="DockPaddingLabel" Grid.Column="1" Foreground="White"
-                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
-        </Grid>
-
-        <TextBlock Text="Icon spacing" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,2"/>
-        <Grid Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="40"/>
-            </Grid.ColumnDefinitions>
-            <Slider x:Name="IconSpacingSlider" Minimum="0" Maximum="24"
-                    SmallChange="1" LargeChange="2" TickFrequency="1" IsSnapToTickEnabled="True"
-                    ValueChanged="OnSpacingChanged" IsMoveToPointEnabled="True"/>
-            <TextBlock x:Name="IconSpacingLabel" Grid.Column="1" Foreground="White"
-                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
-        </Grid>
-
-        <TextBlock Text="Margin from screen edge" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,2"/>
-        <Grid Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="40"/>
-            </Grid.ColumnDefinitions>
-            <Slider x:Name="DockMarginSlider" Minimum="0" Maximum="64"
-                    SmallChange="1" LargeChange="4" TickFrequency="1" IsSnapToTickEnabled="True"
-                    ValueChanged="OnSpacingChanged" IsMoveToPointEnabled="True"/>
-            <TextBlock x:Name="DockMarginLabel" Grid.Column="1" Foreground="White"
-                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
-        </Grid>
-
-        <TextBlock Text="Clearance to app windows" Foreground="#AAAAAA" FontSize="11" Margin="0,0,0,2"/>
-        <Grid Margin="0,0,0,20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="40"/>
-            </Grid.ColumnDefinitions>
-            <Slider x:Name="AppClearanceSlider" Minimum="0" Maximum="64"
-                    SmallChange="1" LargeChange="4" TickFrequency="1" IsSnapToTickEnabled="True"
-                    ValueChanged="OnSpacingChanged" IsMoveToPointEnabled="True"/>
-            <TextBlock x:Name="AppClearanceLabel" Grid.Column="1" Foreground="White"
-                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
-        </Grid>
-
-        <TextBlock Text="Panic hotkey: Ctrl+Alt+Shift+T instantly restores the taskbar."
-                   Foreground="#AAAAAA" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,20"/>
-
-        <Button Content="Close" Width="90" HorizontalAlignment="Right" Click="OnCloseClick"/>
+        <Button Content="Close" Width="80" HorizontalAlignment="Right" Padding="0,4" Click="OnCloseClick"/>
     </StackPanel>
 </Window>

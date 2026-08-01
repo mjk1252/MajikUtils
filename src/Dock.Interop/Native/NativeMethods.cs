@@ -4,15 +4,6 @@ namespace Dock.Interop.Native;
 
 internal static class NativeMethods
 {
-    internal const int GWL_EXSTYLE = -20;
-    internal const int WS_EX_NOACTIVATE = 0x08000000;
-    internal const int WS_EX_TOOLWINDOW = 0x00000080;
-
-    internal const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-    internal const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
-    internal const int DWMSBT_TRANSIENTWINDOW = 3;
-    internal const int DWMWCP_ROUND = 2;
-
     internal const uint SHGFI_ICON = 0x100;
     internal const uint SHGFI_LARGEICON = 0x0;
     internal const uint SHGFI_SMALLICON = 0x1;
@@ -51,17 +42,6 @@ internal static class NativeMethods
     [DllImport("shell32.dll", EntryPoint = "#727")]
     internal static extern int SHGetImageList(int imageList, ref Guid riid, out IImageList ppv);
 
-    internal const uint WM_APP = 0x8000;
-    internal const uint WM_LBUTTONUP = 0x0202;
-    internal const uint WM_RBUTTONUP = 0x0205;
-    internal const uint WM_CLOSE = 0x0010;
-
-    internal const uint NIM_ADD = 0x0;
-    internal const uint NIM_DELETE = 0x2;
-    internal const uint NIF_MESSAGE = 0x1;
-    internal const uint NIF_ICON = 0x2;
-    internal const uint NIF_TIP = 0x4;
-
     internal delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)]
@@ -86,19 +66,6 @@ internal static class NativeMethods
         [MarshalAs(UnmanagedType.LPWStr)] public string lpszClassName;
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct NOTIFYICONDATA
-    {
-        public int cbSize;
-        public IntPtr hWnd;
-        public uint uID;
-        public uint uFlags;
-        public uint uCallbackMessage;
-        public IntPtr hIcon;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
-        public string szTip;
-    }
-
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern ushort RegisterClass(ref WNDCLASS wndClass);
 
@@ -117,60 +84,8 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern bool GetCursorPos(out POINT point);
 
-    [DllImport("user32.dll")]
-    internal static extern bool SetCursorPos(int x, int y);
-
-    internal const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
-    internal const uint MOUSEEVENTF_LEFTUP = 0x0004;
-    internal const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
-    internal const uint MOUSEEVENTF_RIGHTUP = 0x0010;
-
-    [DllImport("user32.dll")]
-    internal static extern void mouse_event(uint flags, int dx, int dy, int data, IntPtr extraInfo);
-
-    internal const uint INPUT_MOUSE = 0;
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct MOUSEINPUT
-    {
-        public int dx;
-        public int dy;
-        public uint mouseData;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    internal struct INPUTUNION
-    {
-        [FieldOffset(0)] public MOUSEINPUT mi;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct INPUT
-    {
-        public uint type;
-        public INPUTUNION u;
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern uint SendInput(uint numberOfInputs, INPUT[] inputs, int sizeOfInputStruct);
-
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     internal static extern IntPtr GetModuleHandle(string? moduleName);
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    internal static extern bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATA data);
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct MARGINS
-    {
-        public int Left;
-        public int Right;
-        public int Top;
-        public int Bottom;
-    }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     internal struct SHFILEINFO
@@ -186,70 +101,16 @@ internal static class NativeMethods
         public string szTypeName;
     }
 
-    [DllImport("dwmapi.dll")]
-    internal static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
-
-    [DllImport("dwmapi.dll")]
-    internal static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
-
-    internal const uint DWM_TNP_RECTDESTINATION = 0x00000001;
-    internal const uint DWM_TNP_VISIBLE = 0x00000008;
-    internal const uint DWM_TNP_SOURCECLIENTAREAONLY = 0x00000010;
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct DWM_THUMBNAIL_PROPERTIES
-    {
-        public uint dwFlags;
-        public RECT rcDestination;
-        public RECT rcSource;
-        public byte opacity;
-        public bool fVisible;
-        public bool fSourceClientAreaOnly;
-    }
-
-    [DllImport("dwmapi.dll")]
-    internal static extern int DwmRegisterThumbnail(IntPtr hwndDestination, IntPtr hwndSource, out IntPtr phThumbnailId);
-
-    [DllImport("dwmapi.dll")]
-    internal static extern int DwmUnregisterThumbnail(IntPtr hThumbnailId);
-
-    [DllImport("dwmapi.dll")]
-    internal static extern int DwmUpdateThumbnailProperties(IntPtr hThumbnailId, ref DWM_THUMBNAIL_PROPERTIES props);
-
-    [DllImport("gdi32.dll")]
-    internal static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int cellWidth, int cellHeight);
-
-    [DllImport("user32.dll")]
-    internal static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern int GetWindowLong(IntPtr hwnd, int index);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    internal static extern int SetWindowLong(IntPtr hwnd, int index, int value);
-
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     internal static extern IntPtr SHGetFileInfo(string path, uint fileAttributes, ref SHFILEINFO fileInfo, uint size, uint flags);
 
     [DllImport("user32.dll")]
     internal static extern bool DestroyIcon(IntPtr handle);
 
-    internal const uint GW_OWNER = 4;
-    internal const int DWMWA_CLOAKED = 14;
-    internal const int SW_HIDE = 0;
-    internal const int SW_SHOW = 5;
-    internal const int SW_SHOWNOACTIVATE = 4;
-    internal const int SW_MINIMIZE = 6;
-    internal const int SW_RESTORE = 9;
-
-    internal static readonly IntPtr HWND_TOP = IntPtr.Zero;
-    internal static readonly IntPtr HWND_TOPMOST = new(-1);
-
     internal const int WM_HOTKEY = 0x0312;
     internal const uint MOD_ALT = 0x0001;
     internal const uint MOD_CONTROL = 0x0002;
     internal const uint MOD_SHIFT = 0x0004;
-    internal const uint VK_T = 0x54;
     internal const uint VK_V = 0x56;
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -266,221 +127,75 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool RemoveClipboardFormatListener(IntPtr hWnd);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern uint RegisterWindowMessage(string message);
-
-    [DllImport("shell32.dll")]
-    internal static extern int SHQueryUserNotificationState(out int state);
-
-    internal const int QUNS_RUNNING_D3D_FULL_SCREEN = 2;
-
-    internal const int WCA_ACCENT_POLICY = 19;
-    internal const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct ACCENT_POLICY
-    {
-        public int AccentState;
-        public int AccentFlags;
-        public int GradientColor;
-        public int AnimationId;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct WINDOWCOMPOSITIONATTRIBDATA
-    {
-        public int Attribute;
-        public IntPtr Data;
-        public int SizeOfData;
-    }
-
-    [DllImport("user32.dll")]
-    internal static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOWCOMPOSITIONATTRIBDATA data);
-
-    internal const uint ABM_NEW = 0x00000000;
-    internal const uint ABM_REMOVE = 0x00000001;
-    internal const uint ABM_QUERYPOS = 0x00000002;
-    internal const uint ABM_SETPOS = 0x00000003;
-
-    internal const uint ABE_LEFT = 0;
-    internal const uint ABE_TOP = 1;
-    internal const uint ABE_RIGHT = 2;
-    internal const uint ABE_BOTTOM = 3;
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct APPBARDATA
-    {
-        public int cbSize;
-        public IntPtr hWnd;
-        public uint uCallbackMessage;
-        public uint uEdge;
-        public RECT rc;
-        public IntPtr lParam;
-    }
-
-    [DllImport("shell32.dll")]
-    internal static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA data);
-
-    [DllImport("shcore.dll")]
-    internal static extern int GetDpiForMonitor(IntPtr hMonitor, int dpiType, out uint dpiX, out uint dpiY);
-
-    [DllImport("user32.dll")]
-    internal static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-
-    internal const int WS_EX_LAYERED = 0x00080000;
-    internal const uint LWA_ALPHA = 0x2;
-
-    [DllImport("user32.dll")]
-    internal static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte alpha, uint flags);
-    internal const uint SWP_NOSIZE = 0x0001;
-    internal const uint SWP_NOMOVE = 0x0002;
-    internal const uint SWP_NOZORDER = 0x0004;
-    internal const uint SWP_NOACTIVATE = 0x0010;
-    internal const uint MONITORINFOF_PRIMARY = 0x1;
-
-    internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-    internal delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct MONITORINFO
-    {
-        public int cbSize;
-        public RECT rcMonitor;
-        public RECT rcWork;
-        public uint dwFlags;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct MONITORINFOEX
-    {
-        public int cbSize;
-        public RECT rcMonitor;
-        public RECT rcWork;
-        public uint dwFlags;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-        public string szDevice;
-    }
-
-    [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", CharSet = CharSet.Unicode)]
-    internal static extern bool GetMonitorInfoEx(IntPtr hMonitor, ref MONITORINFOEX info);
-
-    [DllImport("user32.dll")]
-    internal static extern bool EnumWindows(EnumWindowsProc enumFunc, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    internal static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    internal static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
-
-    [DllImport("user32.dll")]
-    internal static extern int GetWindowTextLength(IntPtr hWnd);
-
     [DllImport("user32.dll")]
     internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-    [DllImport("dwmapi.dll")]
-    internal static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
 
     [DllImport("user32.dll")]
     internal static extern IntPtr GetForegroundWindow();
 
-    [DllImport("user32.dll")]
-    internal static extern IntPtr GetShellWindow();
+    // --- Per-window AppUserModelID (taskbar button identity) ---------------------------------
 
-    internal const uint MONITOR_DEFAULTTONEAREST = 2;
+    /// <summary>
+    /// All four of the properties below live in this one format GUID and are told apart only by
+    /// their property id, so they share a single fmtid rather than getting one PROPERTYKEY
+    /// constant each with a duplicated Guid literal.
+    /// </summary>
+    internal static readonly Guid PKEY_AppUserModel = new("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3");
 
-    [DllImport("user32.dll")]
-    internal static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    internal const uint PID_AppUserModel_RelaunchCommand = 2;
+    internal const uint PID_AppUserModel_RelaunchIconResource = 3;
+    internal const uint PID_AppUserModel_RelaunchDisplayNameResource = 4;
+    internal const uint PID_AppUserModel_ID = 5;
 
-    [DllImport("user32.dll")]
-    internal static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    internal static extern bool ShowWindow(IntPtr hWnd, int cmdShow);
-
-    [DllImport("user32.dll")]
-    internal static extern bool IsIconic(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    internal static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
-
-    [DllImport("user32.dll")]
-    internal static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc enumProc, IntPtr dwData);
-
-    [DllImport("user32.dll")]
-    internal static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
-
-    internal const uint TB_BUTTONCOUNT = 0x0418;
-    internal const uint TB_GETBUTTON = 0x0417;
-    internal const uint MEM_COMMIT = 0x1000;
-    internal const uint MEM_RELEASE = 0x8000;
-    internal const uint PAGE_READWRITE = 0x04;
-    internal const uint PROCESS_VM_OPERATION = 0x0008;
-    internal const uint PROCESS_VM_READ = 0x0010;
-    internal const uint PROCESS_VM_WRITE = 0x0020;
-    internal const uint PROCESS_QUERY_INFORMATION = 0x0400;
-    internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern bool QueryFullProcessImageName(IntPtr hProcess, uint dwFlags, System.Text.StringBuilder lpExeName, ref uint lpdwSize);
+    internal static Guid IID_IPropertyStore = new("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99");
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct TBBUTTON
+    internal struct PROPERTYKEY(Guid formatId, uint propertyId)
     {
-        public int iBitmap;
-        public int idCommand;
-        public byte fsState;
-        public byte fsStyle;
-        public IntPtr dwData;
-        public IntPtr iString;
+        public Guid fmtid = formatId;
+        public uint pid = propertyId;
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern IntPtr FindWindow(string? className, string? windowName);
+    internal const ushort VT_LPWSTR = 31;
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string? className, string? windowName);
+    /// <summary>
+    /// Deliberately opaque past the leading discriminant and the first pointer: every value we
+    /// store is a VT_LPWSTR, whose payload is exactly that one pointer. The trailing field exists
+    /// purely to give the struct its true 24-byte (x64) size.
+    ///
+    /// Built by hand rather than through propsys's InitPropVariantFromString, which despite its
+    /// name is an inline helper in propvarutil.h and is not exported by propsys.dll at all --
+    /// P/Invoking it throws EntryPointNotFoundException. <see cref="PropVariantClear"/> is a real
+    /// export, and frees the string with CoTaskMemFree, which is what
+    /// <c>Marshal.StringToCoTaskMemUni</c> allocates with.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PROPVARIANT
+    {
+        public ushort vt;
+        public ushort wReserved1;
+        public ushort wReserved2;
+        public ushort wReserved3;
+        public IntPtr data;
+        public IntPtr dataHigh;
+    }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder buffer, int maxCount);
+    [ComImport]
+    [Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IPropertyStore
+    {
+        [PreserveSig] int GetCount(out uint propCount);
+        [PreserveSig] int GetAt(uint index, out PROPERTYKEY key);
+        [PreserveSig] int GetValue(ref PROPERTYKEY key, out PROPVARIANT value);
+        [PreserveSig] int SetValue(ref PROPERTYKEY key, ref PROPVARIANT value);
+        [PreserveSig] int Commit();
+    }
 
-    [DllImport("user32.dll")]
-    internal static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("shell32.dll")]
+    internal static extern int SHGetPropertyStoreForWindow(IntPtr hwnd, ref Guid iid,
+        [MarshalAs(UnmanagedType.Interface)] out IPropertyStore propertyStore);
 
-    [DllImport("user32.dll")]
-    internal static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    internal static extern bool AllowSetForegroundWindow(uint processId);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    internal static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, uint processId);
-
-    [DllImport("kernel32.dll")]
-    internal static extern bool CloseHandle(IntPtr handle);
-
-    [DllImport("kernel32.dll")]
-    internal static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr address, nuint size, uint allocationType, uint protect);
-
-    [DllImport("kernel32.dll")]
-    internal static extern bool VirtualFreeEx(IntPtr hProcess, IntPtr address, nuint size, uint freeType);
-
-    [DllImport("kernel32.dll")]
-    internal static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr baseAddress, byte[] buffer, nuint size, out nuint bytesRead);
+    [DllImport("ole32.dll")]
+    internal static extern int PropVariantClear(ref PROPVARIANT propVariant);
 }
