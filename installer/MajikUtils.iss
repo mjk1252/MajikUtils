@@ -2,7 +2,7 @@
 ; Builds a per-user installer (no admin/UAC prompt) from published output.
 ;
 ; Before compiling, publish the app as self-contained + ReadyToRun:
-;   dotnet publish src\Dock.App\Dock.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish\Dock.App
+;   dotnet publish src\Dock.App\Dock.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish\MajikUtils
 ;
 ; Then compile this script with ISCC.exe (installed via Inno Setup).
 
@@ -38,7 +38,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 Name: "startwithwindows"; Description: "Start MajikUtils automatically when Windows starts"; GroupDescription: "Startup:"
 
 [Files]
-Source: "..\publish\Dock.App\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "..\publish\MajikUtils\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{autoprograms}\MajikUtils"; Filename: "{app}\{#AppExeName}"
