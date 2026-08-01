@@ -14,9 +14,10 @@ The history is kept here because the feature list carried over intact.
 - [x] **Phase 6** — Installer (Inno Setup) + settings UI → v1.0.
 - [x] **Phase 6.5** — Shelf, folder stacks, clipboard history, recent files, system stats,
       app launcher + winget.
-- [x] **Phase 7** — Convert to taskbar buttons: two independently pinnable panels
-      (Launcher, Drawer), per-window AppUserModelIDs, live CPU/GPU button icon. The real taskbar
-      is left alone.
+- [x] **Phase 7** — Convert to taskbar buttons, each an independently pinnable window with its own
+      AppUserModelID. The real taskbar is left alone. Landed as: a Drawer (Launch / Recent /
+      Stacks / Clipboard), a Shelf that doubles as a drag target, and one fan-out button per
+      folder stack.
 - [x] **Phase 8** — Per-button jump lists via `ICustomDestinationList` (WPF's own `JumpList` binds
       to the process AppUserModelID, so it cannot give the buttons different lists). Every button
       carries *Exit Dock*, which is what makes quitting reachable now that the tray icon is gone.
