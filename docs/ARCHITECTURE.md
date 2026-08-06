@@ -12,10 +12,13 @@
 
 ## Why several windows
 
-Every taskbar button is a window: `DrawerWindow`, `ShelfWindow`, and one `StackWindow` per
-configured folder, created and destroyed as the `Stacks` collection changes. Anything that does
-*not* need a button of its own is a tab inside the drawer instead -- the launcher, recent files,
-the stack list and clipboard history all live there.
+Every taskbar button is a window. That used to mean three kinds of them; it now means one
+`StackWindow` per configured folder, created and destroyed as the `Stacks` collection changes.
+
+Everything else moved into `IslandWindow`. The drawer and the shelf were windows only because a
+taskbar button has to be one, and the island reaches all of it more directly: the launcher, recent
+files, the stack list, clipboard history and the shelf are sections of its expanded panel, and the
+`Views/Panels` UserControls they were always built from are simply hosted there instead.
 
 Windows groups taskbar buttons by AppUserModelID, so several buttons from one process only stay
 separate if each HWND is stamped with a distinct ID — see `Dock.Interop/Shell/AppIdRegistrar.cs`.
@@ -50,20 +53,31 @@ PerMonitorV2 DPI aware, so two monitors can be at different scales and WPF's DIP
 `Left`/`Top` become ambiguous the moment a window crosses between them. Physical coordinates are
 the one space every monitor agrees on.
 
-Because panels place themselves fresh on every open, only their *size* is persisted, and only for
-the drawer -- the one panel the user can resize.
+Because panels place themselves fresh on every open, only their *size* is persisted.
 
 **Opening the shelf mid-drag.** Hovering a drag over a taskbar button makes the shell restore that
-window, which is the whole reason the shelf has a button of its own. The catch is that the
-dragging application owns the foreground for the entire gesture, so the restored shelf looks
-abandoned by every test `PanelWindow` uses -- hence `SuppressAutoMinimise`, raised on `DragEnter`.
+window, which is why the shelf used to have a button of its own. The island gets there without the
+shell's help: its cursor poll keeps running during a drag, so a drag that reaches the top edge
+expands the island -- which is also what clears `WS_EX_TRANSPARENT` and makes it a drop target at
+all, since a click-through window is never found under the pointer.
 
-## The media island
+## The island
 
 `IslandWindow` is the one window that is not a `PanelWindow`, and inverts nearly all of their
-constraints: it owns no taskbar button, so it is free to hide; it must never take focus, since it
-sits where the pointer passes; and it has to let clicks through, because it covers a strip of
-screen other windows use.
+constraints: it owns no taskbar button, so it is free to hide; it must never take focus unasked,
+since it sits where the pointer passes; and it has to let clicks through, because it covers a strip
+of screen other windows use.
+
+**Hovered versus pinned.** A hover panel that vanishes when the pointer leaves is right for glancing
+at a track and wrong for everything else in it, so clicking a tab *pins* the island: the pointer
+poll stops deciding, `WS_EX_NOACTIVATE` is lifted so a search box can hold real keyboard focus, and
+it stays until Esc, a click on the lit tab, or the foreground moving to another application.
+
+**Shape and placement.** `NotchShape` draws either a notch fused to the screen edge (top corners
+flaring outwards, which is what makes it read as part of the edge rather than a window pushed off
+it) or a detached pill. Which one, which end of the edge, and which monitor are settings; the pill
+is anchored inside a window that spans the full expanded footprint, so growing it moves it inwards
+rather than off the side of the screen.
 
 **Where the media comes from.** `MediaSessionSource` reads WinRT's
 `GlobalSystemMediaTransportControls` -- the same session behind the volume flyout -- so every
@@ -86,8 +100,8 @@ changes it, so `MediaSnapshot` carries the position *and the moment it was read*
 and a click-through window receives no mouse messages at all -- so the very state the pointer has
 to break it out of is the one that cannot report the pointer. A 120ms `GetCursorPos` poll drives
 the whole behaviour instead, and covers the idle top-edge strip too, where there is no window
-under the pointer to raise anything. `WS_EX_TRANSPARENT` is dropped only while the transport
-buttons are on screen (`OverlayWindowStyles`).
+under the pointer to raise anything. `WS_EX_TRANSPARENT` is dropped only while the panel is open
+(`OverlayWindowStyles`), and the poll is skipped entirely while the island is pinned.
 
 **Why the window never resizes.** Only the pill inside it grows and shrinks; the window stays at
 the expanded footprint throughout. Animating a layered top-level window's bounds per frame is what
@@ -95,12 +109,14 @@ makes overlays like this stutter. The pill's silhouette is a `NotchShape` rather
 `Border`, because its top corners have to curve back *outwards* into the screen edge -- a rounded
 rectangle stuck to the top of a screen reads as a window that was pushed off it.
 
-Placement is on the primary monitor's work area rather than the cursor's monitor -- the one thing
-in MajikUtils that does not follow the pointer -- but goes through the same physical-pixel
-`MonitorPlacement` path as the panels, for the same DPI reasons.
+Placement is on the monitor named in settings (the primary by default) rather than the cursor's --
+the one thing in MajikUtils that does not follow the pointer -- but goes through the same
+physical-pixel `MonitorPlacement` path as the stack windows, for the same DPI reasons. The monitor
+is stored by adapter device name, the only identifier stable across sessions, and an unplugged
+screen falls back to the primary.
 
-`ForegroundWindow.IsFullScreenOnPrimary` takes the island off screen when a game or a full-screen
-video owns the monitor. It compares rectangles rather than window styles: exclusive full-screen,
+`ForegroundWindow.IsFullScreenOn` takes the island off screen when a game or a full-screen
+video owns that monitor. It compares rectangles rather than window styles: exclusive full-screen,
 borderless windows and full-screen browser tabs all get there differently and only agree on the
 result.
 
@@ -119,9 +135,10 @@ button whose window is long gone.
 
 ## State
 
-- `%LOCALAPPDATA%\MajikUtils\settings.json` — start-with-Windows, whether the media island is
-  shown, per-panel window placement.
+- `%LOCALAPPDATA%\MajikUtils\settings.json` — start-with-Windows, whether now-playing shows in the
+  island, its shape/alignment/monitor, per-panel window placement.
 - `%LOCALAPPDATA%\MajikUtils\shelf.json`, `stacks.json` — shelf items and stack folders.
+- `%LOCALAPPDATA%\MajikUtils\notes.json`, `todos.json` — the island's scratchpad.
 - `%LOCALAPPDATA%\MajikUtils\icons\*.ico` — generated artwork for the pinned taskbar buttons.
 - `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations\*.customDestinations-ms` — the shell's
   own copy of each button's jump list. Written by the shell, not by us; listed here because it

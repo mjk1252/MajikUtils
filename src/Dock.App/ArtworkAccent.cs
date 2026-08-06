@@ -5,11 +5,11 @@ using System.Windows.Media.Imaging;
 namespace Dock.App;
 
 /// <summary>
-/// Picks the one colour that reads as "this album" out of a piece of artwork.
+/// Picks the two colours that read as "this album" out of a piece of artwork.
 ///
 /// A plain average is the wrong answer here: averaging a cover mixes its accents back into the
 /// grey-brown its background already tends towards, and every record ends up the same colour. So
-/// the pixels are bucketed by hue instead and the heaviest bucket wins, with each pixel weighted
+/// the pixels are bucketed by hue instead and the heaviest buckets win, with each pixel weighted
 /// by how colourful it is -- a mostly-black sleeve with one red stripe should come back red.
 /// </summary>
 internal static class ArtworkAccent
@@ -35,24 +35,36 @@ internal static class ArtworkAccent
     private const double MaxValue = 0.97;
 
     /// <summary>
+    /// How far apart in hue the second colour has to sit from the first, in buckets. Two shades of
+    /// the same blue make a gradient nobody can see; this forces the pair at least 45 degrees apart.
+    /// </summary>
+    private const int MinBucketSeparation = 3;
+
+    /// <summary>Hue shift used to invent a partner when the cover only really has one colour.</summary>
+    private const double InventedPartnerShift = 42;
+
+    /// <summary>
     /// What the bars have always been, and what a cover with no usable colour in it still gets.
     /// </summary>
     public static readonly Color Fallback = Color.FromArgb(0xDD, 0xFF, 0xFF, 0xFF);
 
+    /// <summary>The cool end of the fallback gradient, so even a colourless cover has one.</summary>
+    public static readonly Color FallbackSecondary = Color.FromArgb(0xDD, 0xB4, 0xC4, 0xE4);
+
     /// <summary>
-    /// The accent for the given PNG bytes, or <see cref="Fallback"/> when the artwork is missing,
-    /// undecodable, or has no colour to speak of.
+    /// The two accents for the given PNG bytes, most prominent first, falling back to a plain
+    /// white-to-cool-grey pair when the artwork is missing, undecodable, or has no colour in it.
     /// </summary>
-    public static Color FromPng(byte[]? png)
+    public static (Color Primary, Color Secondary) PairFromPng(byte[]? png)
     {
         if (png is not { Length: > 0 })
-            return Fallback;
+            return (Fallback, FallbackSecondary);
 
         var pixels = TryDecode(png);
         if (pixels is null)
-            return Fallback;
+            return (Fallback, FallbackSecondary);
 
-        return Dominant(pixels) ?? Fallback;
+        return Dominant(pixels) ?? (Fallback, FallbackSecondary);
     }
 
     /// <summary>
@@ -86,11 +98,14 @@ internal static class ArtworkAccent
     }
 
     /// <summary>
-    /// Votes every pixel into a hue bucket, then averages the winning bucket's own pixels rather
+    /// Votes every pixel into a hue bucket, then averages each winning bucket's own pixels rather
     /// than returning the bucket's nominal hue -- the average keeps the shade the cover actually
     /// used, where the bucket alone would flatten a dozen sleeves onto the same dozen hues.
+    ///
+    /// The runner-up has to be a genuinely different hue to count, and a cover that has only one
+    /// colour gets a partner invented from it rather than a gradient between two identical stops.
     /// </summary>
-    private static Color? Dominant(byte[] pixels)
+    private static (Color Primary, Color Secondary)? Dominant(byte[] pixels)
     {
         var weights = new double[HueBuckets];
         var sums = new (double R, double G, double B, double Weight)[HueBuckets];
@@ -115,18 +130,41 @@ internal static class ArtworkAccent
                 sums[bucket].B + b * weight, sums[bucket].Weight + weight);
         }
 
-        var winner = -1;
-        for (var i = 0; i < HueBuckets; i++)
-        {
-            if (winner < 0 || weights[i] > weights[winner])
-                winner = i;
-        }
+        var ranked = Enumerable.Range(0, HueBuckets)
+            .Where(i => sums[i].Weight > 0)
+            .OrderByDescending(i => weights[i])
+            .ToList();
 
-        if (winner < 0 || sums[winner].Weight <= 0)
+        if (ranked.Count == 0)
             return null;
 
-        var (sr, sg, sb, total) = sums[winner];
-        return Legible(sr / total / 255.0, sg / total / 255.0, sb / total / 255.0);
+        var primary = Average(sums[ranked[0]]);
+
+        var partner = ranked.Skip(1).FirstOrDefault(i => Separation(i, ranked[0]) >= MinBucketSeparation, -1);
+        var secondary = partner >= 0 ? Average(sums[partner]) : Shifted(primary, InventedPartnerShift);
+
+        return (primary, secondary);
+    }
+
+    /// <summary>Circular distance between two hue buckets, in buckets.</summary>
+    private static int Separation(int a, int b)
+    {
+        var distance = Math.Abs(a - b);
+        return Math.Min(distance, HueBuckets - distance);
+    }
+
+    private static Color Average((double R, double G, double B, double Weight) bucket) =>
+        Legible(bucket.R / bucket.Weight / 255.0, bucket.G / bucket.Weight / 255.0,
+            bucket.B / bucket.Weight / 255.0);
+
+    /// <summary>The same colour rotated around the wheel, for covers with nothing to pair with.</summary>
+    private static Color Shifted(Color colour, double degrees)
+    {
+        var (hue, saturation, value) = ToHsv(colour.R / 255.0, colour.G / 255.0, colour.B / 255.0);
+        var (r, g, b) = FromHsv((hue + degrees) % 360, saturation, value);
+
+        return Color.FromArgb(colour.A, (byte)Math.Round(r * 255), (byte)Math.Round(g * 255),
+            (byte)Math.Round(b * 255));
     }
 
     /// <summary>

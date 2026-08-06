@@ -5,6 +5,7 @@ using Dock.App.Views;
 using Dock.Core.Models;
 using Dock.Core.Services;
 using Dock.Core.ViewModels;
+using Dock.Interop.Audio;
 using Dock.Interop.Shell;
 using Dock.Interop.Windowing;
 
@@ -16,14 +17,14 @@ public partial class App : System.Windows.Application
     private SettingsStore? _settingsStore;
     private SettingsWindow? _settingsWindow;
     private DockViewModel? _viewModel;
-    private DrawerWindow? _drawerWindow;
-    private ShelfWindow? _shelfWindow;
     private readonly Dictionary<StackItemViewModel, StackWindow> _stackWindows = [];
     private ClipboardMonitor? _clipboardMonitor;
     private SystemStatsSource? _systemStatsSource;
     private MediaSessionSource? _mediaSource;
     private MediaViewModel? _mediaViewModel;
     private NotesViewModel? _notesViewModel;
+    private TodosViewModel? _todosViewModel;
+    private AudioLoopbackSource? _audioSource;
     private IslandWindow? _islandWindow;
     private DispatcherTimer? _mediaClearTimer;
     private IIconProvider? _iconProvider;
@@ -64,12 +65,13 @@ public partial class App : System.Windows.Application
         _viewModel.AttachWingetService(wingetService);
         LoadInstalledAppsAsync();
 
-        CreatePanelWindows(wingetService);
+        CreateIsland(wingetService);
+        CreateStackWindows();
         StartClipboardMonitor();
         StartSystemStats();
 
         if (_settingsStore.Load().ShowMediaIsland)
-            StartMediaIsland();
+            StartMediaMonitoring();
 
         _singleInstance.StartListening(panel => Dispatcher.Invoke(() => ShowPanel(panel)));
 
@@ -93,21 +95,41 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Every panel window is created up front and never destroyed: a taskbar button only exists
-    /// while its window does, so creating one lazily would mean the button the user is trying to
-    /// click isn't there yet.
+    /// Builds the island. This is the application's surface now -- the drawer and the shelf used to
+    /// be windows of their own for the sake of the taskbar buttons they carried, and both are
+    /// sections of this panel instead. It exists for the whole run, regardless of the media
+    /// setting: that only governs whether anything is playing in it.
     /// </summary>
-    private void CreatePanelWindows(IWingetService wingetService)
+    private void CreateIsland(IWingetService wingetService)
     {
-        _drawerWindow = new DrawerWindow(_viewModel!, wingetService);
-        _drawerWindow.AttachSizeStore(_settingsStore!);
-        _drawerWindow.SettingsRequested += ShowSettingsWindow;
-        _drawerWindow.ExitRequested += Shutdown;
-        _drawerWindow.Show();
+        _mediaSource = new MediaSessionSource();
+        _mediaViewModel = new MediaViewModel(_mediaSource);
+        _notesViewModel = new NotesViewModel(new NotesStore());
+        _todosViewModel = new TodosViewModel(new TodosStore());
 
-        _shelfWindow = new ShelfWindow(_viewModel!);
-        _shelfWindow.Show();
+        // Media notifications arrive on the thread pool, like the system stats below.
+        _mediaSource.Changed += (_, snapshot) => Dispatcher.Invoke(() => ApplyMediaSnapshot(snapshot));
 
+        // The equalizer bars read the speakers directly. Created here and owned for the whole run;
+        // the island starts and stops the capture as the bars come and go.
+        _audioSource = new AudioLoopbackSource();
+
+        _islandWindow = new IslandWindow(
+            _mediaViewModel, _notesViewModel, _todosViewModel, _viewModel!, wingetService,
+            _audioSource, _settingsStore!.Load());
+
+        _islandWindow.SettingsRequested += ShowSettingsWindow;
+        _islandWindow.ExitRequested += Shutdown;
+        _islandWindow.Show();
+    }
+
+    /// <summary>
+    /// Stacks are the one thing still on the taskbar: a stack is a folder the user pinned there on
+    /// purpose. Each needs a window of its own, because a taskbar button exists only while its
+    /// window does -- so they are created up front and never hidden.
+    /// </summary>
+    private void CreateStackWindows()
+    {
         foreach (var stack in _viewModel!.Stacks)
             AddStackWindow(stack);
 
@@ -147,20 +169,21 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // Every one of these used to open a window of its own. They now open the island on the
+        // matching section, so shortcuts pinned back when the drawer and shelf had taskbar buttons
+        // still land somewhere sensible.
         switch (panel.ToLowerInvariant())
         {
             case "exit":
                 Shutdown();
                 break;
 
-            // Still honoured: the launcher used to have a taskbar button of its own, so a shortcut
-            // pinned back then relaunches with it.
             case "launch":
-                _drawerWindow?.ShowLauncher();
+                _islandWindow?.ShowSection(IslandSection.Launcher);
                 break;
 
             case "clipboard":
-                _drawerWindow?.ShowClipboard();
+                _islandWindow?.ShowSection(IslandSection.Clipboard);
                 break;
 
             case "settings":
@@ -168,11 +191,11 @@ public partial class App : System.Windows.Application
                 break;
 
             case "shelf":
-                _shelfWindow?.ShowPanel();
+                _islandWindow?.ShowSection(IslandSection.Shelf);
                 break;
 
             default:
-                _drawerWindow?.ShowPanel();
+                _islandWindow?.ShowSection(IslandSection.Quick);
                 break;
         }
     }
@@ -181,7 +204,8 @@ public partial class App : System.Windows.Application
     {
         _clipboardMonitor = new ClipboardMonitor();
         _clipboardMonitor.ClipboardChanged += () => Dispatcher.Invoke(CaptureClipboardText);
-        _clipboardMonitor.HotkeyPressed += () => Dispatcher.Invoke(() => _drawerWindow?.ShowClipboard());
+        _clipboardMonitor.HotkeyPressed += () =>
+            Dispatcher.Invoke(() => _islandWindow?.ShowSection(IslandSection.Clipboard));
         _clipboardMonitor.Start();
     }
 
@@ -209,31 +233,17 @@ public partial class App : System.Windows.Application
         _systemStatsSource.Updated += (_, stats) => Dispatcher.Invoke(() =>
         {
             _viewModel!.UpdateSystemStats(stats.CpuPercent, stats.GpuPercent);
-            _drawerWindow?.UpdateStats(stats.CpuPercent, stats.GpuPercent);
+            _islandWindow?.UpdateStats(stats.CpuPercent, stats.GpuPercent);
         });
         _systemStatsSource.Start();
     }
 
     /// <summary>
-    /// Brings up the media island. Unlike the panels this is torn down and rebuilt when the user
-    /// toggles it, since it owns no taskbar button that has to outlive it.
+    /// Starts watching the system's media session. Separate from the island's own lifetime: the
+    /// island is the app's UI and always there, while this is the one part of it the user can turn
+    /// off, which leaves the panel with everything except a now-playing row.
     /// </summary>
-    private void StartMediaIsland()
-    {
-        if (_islandWindow is not null)
-            return;
-
-        _mediaSource = new MediaSessionSource();
-        _mediaViewModel = new MediaViewModel(_mediaSource);
-        _notesViewModel = new NotesViewModel(new NotesStore());
-
-        // Media notifications arrive on the thread pool, like the system stats above.
-        _mediaSource.Changed += (_, snapshot) => Dispatcher.Invoke(() => ApplyMediaSnapshot(snapshot));
-        _mediaSource.Start();
-
-        _islandWindow = new IslandWindow(_mediaViewModel, _notesViewModel);
-        _islandWindow.Show();
-    }
+    private void StartMediaMonitoring() => _mediaSource?.Start();
 
     /// <summary>
     /// Applies a snapshot, holding back the one that empties the island.
@@ -272,18 +282,16 @@ public partial class App : System.Windows.Application
         _mediaViewModel?.Apply(null);
     }
 
-    private void StopMediaIsland()
+    /// <summary>
+    /// Stops watching for media and empties the now-playing row. The island stays: everything else
+    /// in it is unrelated to whether anything is playing.
+    /// </summary>
+    private void StopMediaMonitoring()
     {
         _mediaClearTimer?.Stop();
-        _mediaClearTimer = null;
 
-        _islandWindow?.CloseForExit();
-        _islandWindow = null;
-
-        _mediaSource?.Dispose();
-        _mediaSource = null;
-        _mediaViewModel = null;
-        _notesViewModel = null;
+        _mediaSource?.Stop();
+        _mediaViewModel?.Apply(null);
     }
 
     private void OnStacksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -350,10 +358,12 @@ public partial class App : System.Windows.Application
         _settingsWindow.MediaIslandToggled += show =>
         {
             if (show)
-                StartMediaIsland();
+                StartMediaMonitoring();
             else
-                StopMediaIsland();
+                StopMediaMonitoring();
         };
+        _settingsWindow.MediaIslandAppearanceChanged += settings =>
+            _islandWindow?.ApplyAppearance(settings);
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
@@ -366,14 +376,15 @@ public partial class App : System.Windows.Application
 
         _clipboardMonitor?.Dispose();
         _systemStatsSource?.Dispose();
-        StopMediaIsland();
+
+        _mediaClearTimer?.Stop();
+        _islandWindow?.CloseForExit();
+        _mediaSource?.Dispose();
+        _audioSource?.Dispose();
 
         foreach (var window in _stackWindows.Values)
             window.CloseForExit();
         _stackWindows.Clear();
-
-        _drawerWindow?.CloseForExit();
-        _shelfWindow?.CloseForExit();
 
         _singleInstance?.Dispose();
         base.OnExit(e);

@@ -5,12 +5,17 @@ using System.Windows.Shapes;
 namespace Dock.App.Views;
 
 /// <summary>
-/// The media island's silhouette: a rounded slab hanging from the top of the screen whose top
-/// corners curve back <em>outwards</em> to meet the edge, rather than meeting it at a right angle.
+/// The media island's silhouette, in either of its two forms.
 ///
-/// That outward flare is the whole reason this is not a Border with a CornerRadius. A rounded
-/// rectangle stuck to the top of the screen reads as a window someone pushed off the top; the
-/// concave fillets make the same shape read as part of the screen edge, which is what a notch is.
+/// As a notch it is a rounded slab hanging from the top of the screen whose top corners curve back
+/// <em>outwards</em> to meet the edge, rather than meeting it at a right angle. That outward flare
+/// is the whole reason this is not a Border with a CornerRadius. A rounded rectangle stuck to the
+/// top of the screen reads as a window someone pushed off the top; the concave fillets make the
+/// same shape read as part of the screen edge, which is what a notch is.
+///
+/// As a pill it is that same slab detached: dropped clear of the edge by <see cref="TopGap"/> and
+/// rounded on all four corners, so it reads as floating over the desktop rather than growing out
+/// of it. The two share a footprint on purpose -- switching between them moves nothing else.
 ///
 /// The pill's own size is animated, so the geometry is rebuilt whenever it changes -- cheap, since
 /// it is eight segments.
@@ -21,6 +26,12 @@ public sealed class NotchShape : Shape
     public static readonly DependencyProperty PillHeightProperty = Register(nameof(PillHeight), 34d);
     public static readonly DependencyProperty BottomRadiusProperty = Register(nameof(BottomRadius), 17d);
     public static readonly DependencyProperty FilletProperty = Register(nameof(Fillet), 14d);
+    public static readonly DependencyProperty TopGapProperty = Register(nameof(TopGap), 0d);
+
+    public static readonly DependencyProperty DetachedProperty =
+        DependencyProperty.Register(nameof(Detached), typeof(bool), typeof(NotchShape),
+            new FrameworkPropertyMetadata(false,
+                FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     /// <summary>Width of the slab itself, excluding the two fillets flanking it.</summary>
     public double PillWidth
@@ -49,7 +60,43 @@ public sealed class NotchShape : Shape
         set => SetValue(FilletProperty, value);
     }
 
-    protected override Geometry DefiningGeometry => Build();
+    /// <summary>Draw as a free-floating pill instead of a notch fused to the screen edge.</summary>
+    public bool Detached
+    {
+        get => (bool)GetValue(DetachedProperty);
+        set => SetValue(DetachedProperty, value);
+    }
+
+    /// <summary>
+    /// How far below the top of the control the shape starts. Zero for a notch, which has to meet
+    /// the edge; the pill's breathing room from it otherwise.
+    /// </summary>
+    public double TopGap
+    {
+        get => (double)GetValue(TopGapProperty);
+        set => SetValue(TopGapProperty, value);
+    }
+
+    protected override Geometry DefiningGeometry => Detached ? BuildPill() : Build();
+
+    /// <summary>
+    /// The detached form. Closed and stroked all the way round, unlike the notch: with nothing
+    /// against the screen edge to hide it, an open top would show as a missing outline.
+    /// </summary>
+    private Geometry BuildPill()
+    {
+        var width = Math.Max(0, PillWidth);
+        var height = Math.Max(0, PillHeight);
+        var radius = Math.Max(0, Math.Min(BottomRadius, Math.Min(width / 2, height / 2)));
+
+        // No fillets to leave room for, so the shape is exactly as wide as the pill -- which is
+        // also what keeps it lined up with the content host beside it under the same alignment.
+        var geometry = new RectangleGeometry(
+            new Rect(0, Math.Max(0, TopGap), width, height), radius, radius);
+
+        geometry.Freeze();
+        return geometry;
+    }
 
     private Geometry Build()
     {

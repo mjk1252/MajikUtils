@@ -2,8 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:Dock.App.Views"
-        Title="MajikUtils Media"
-        Width="560" Height="420"
+        xmlns:panels="clr-namespace:Dock.App.Views.Panels"
+        Title="MajikUtils Island"
+        Width="760" Height="700"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -11,7 +12,12 @@
         ShowActivated="False"
         Topmost="True"
         ResizeMode="NoResize"
-        WindowStartupLocation="Manual">
+        WindowStartupLocation="Manual"
+        AllowDrop="True"
+        DragEnter="OnDragEnter"
+        DragOver="OnDragEnter"
+        DragLeave="OnDragLeave"
+        Drop="OnDrop">
     <Window.Resources>
         <!-- Glyphs come from the shell's own icon font, with the Windows 10 name as a fallback. -->
         <FontFamily x:Key="GlyphFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
@@ -70,6 +76,64 @@
             <Setter Property="Foreground" Value="#88FFFFFF"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- The tab strip's buttons. Icon-only and small: this row sits under a media panel, not
+             beside it, so anything with a label would read as the island's main content. -->
+        <Style x:Key="IslandTab" TargetType="ToggleButton">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#88FFFFFF"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Plate" Background="Transparent" CornerRadius="7">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Plate" Property="Background" Value="#18FFFFFF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Plate" Property="Background" Value="#26FFFFFF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The gear: same silhouette as a tab, but it opens a window rather than a section, so it
+             is a Button and never stays lit. -->
+        <Style x:Key="IslandTabButton" TargetType="Button">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#88FFFFFF"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Plate" Background="Transparent" CornerRadius="7">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Plate" Property="Background" Value="#18FFFFFF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- Caret and selection are the only chrome a stock TextBox brings that still belongs here;
@@ -185,138 +249,271 @@
                                    Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"/>
                     </Grid>
 
-                    <!-- Expanded: the same track with its controls. Laid out at the expanded size from
-                         the start and revealed by opacity, so the pill's growth does not reflow it. -->
+                    <!-- Expanded: what is playing, whichever section is open, and the strip of tabs
+                         that switches between them. Laid out at the expanded size from the start and
+                         revealed by opacity, so the pill's growth does not reflow it. -->
                     <Grid x:Name="ExpandedLayer" Opacity="0" IsHitTestVisible="False"
-                          Width="440" Margin="20,16,20,16"
+                          Width="440" Margin="20,16,20,14"
                           HorizontalAlignment="Center" VerticalAlignment="Top">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <Border Width="84" Height="84" CornerRadius="8" Margin="0,0,16,0"
-                                VerticalAlignment="Top" Background="#22FFFFFF"
-                                Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
-                            <Border.OpacityMask>
-                                <VisualBrush>
-                                    <VisualBrush.Visual>
-                                        <Border Width="84" Height="84" CornerRadius="8" Background="White"/>
-                                    </VisualBrush.Visual>
-                                </VisualBrush>
-                            </Border.OpacityMask>
-                            <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
-                                   Stretch="UniformToFill"
-                                   RenderOptions.BitmapScalingMode="HighQuality"/>
-                        </Border>
-
-                        <Grid Grid.Column="1"
+                        <!-- Collapses whole when nothing is playing, so a section opened from the
+                             tab strip is not pushed down past a row of blanks. -->
+                        <Grid x:Name="MediaHeader"
                               Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="{Binding Title}" Foreground="White"
-                                       FontSize="14" FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <Border Width="84" Height="84" CornerRadius="8" Margin="0,0,16,0"
+                                    VerticalAlignment="Top" Background="#22FFFFFF">
+                                <Border.OpacityMask>
+                                    <VisualBrush>
+                                        <VisualBrush.Visual>
+                                            <Border Width="84" Height="84" CornerRadius="8" Background="White"/>
+                                        </VisualBrush.Visual>
+                                    </VisualBrush>
+                                </Border.OpacityMask>
+                                <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
+                                       Stretch="UniformToFill"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                            </Border>
 
-                            <TextBlock Grid.Row="1" Text="{Binding Artist}" Foreground="#99FFFFFF"
-                                       FontSize="11.5" Margin="0,2,0,0"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="2" Margin="0,12,0,0"
-                                  Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVisibility}}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Title}" Foreground="White"
+                                           FontSize="14" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"/>
 
-                                <TextBlock Text="{Binding PositionText}" Style="{StaticResource TimeText}"
-                                           Margin="0,0,8,0"/>
-                                <ProgressBar Grid.Column="1" Style="{StaticResource IslandProgress}"
-                                             Value="{Binding Progress, Mode=OneWay}"/>
-                                <TextBlock Grid.Column="2" Text="{Binding DurationText}"
-                                           Style="{StaticResource TimeText}" Margin="8,0,0,0"/>
+                                <TextBlock Grid.Row="1" Text="{Binding Artist}" Foreground="#99FFFFFF"
+                                           FontSize="11.5" Margin="0,2,0,0"
+                                           TextTrimming="CharacterEllipsis"/>
+
+                                <Grid Grid.Row="2" Margin="0,12,0,0"
+                                      Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="{Binding PositionText}" Style="{StaticResource TimeText}"
+                                               Margin="0,0,8,0"/>
+                                    <ProgressBar Grid.Column="1" Style="{StaticResource IslandProgress}"
+                                                 Value="{Binding Progress, Mode=OneWay}"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding DurationText}"
+                                               Style="{StaticResource TimeText}" Margin="8,0,0,0"/>
+                                </Grid>
+
+                                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0"
+                                            HorizontalAlignment="Center">
+                                    <Button Style="{StaticResource TransportButton}" Content="&#xE892;"
+                                            FontSize="13"
+                                            Command="{Binding SkipPreviousCommand}"
+                                            IsEnabled="{Binding CanSkipPrevious}"/>
+
+                                    <Button Style="{StaticResource TransportButton}" FontSize="15"
+                                            Margin="6,0" Command="{Binding PlayPauseCommand}">
+                                        <Grid>
+                                            <TextBlock Text="&#xE769;"
+                                                       Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVisibility}}"/>
+                                            <TextBlock Text="&#xE768;"
+                                                       Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"/>
+                                        </Grid>
+                                    </Button>
+
+                                    <Button Style="{StaticResource TransportButton}" Content="&#xE893;"
+                                            FontSize="13"
+                                            Command="{Binding SkipNextCommand}"
+                                            IsEnabled="{Binding CanSkipNext}"/>
+                                </StackPanel>
                             </Grid>
-
-                            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0"
-                                        HorizontalAlignment="Center">
-                                <Button Style="{StaticResource TransportButton}" Content="&#xE892;"
-                                        FontSize="13"
-                                        Command="{Binding SkipPreviousCommand}"
-                                        IsEnabled="{Binding CanSkipPrevious}"/>
-
-                                <Button Style="{StaticResource TransportButton}" FontSize="15"
-                                        Margin="6,0" Command="{Binding PlayPauseCommand}">
-                                    <Grid>
-                                        <TextBlock Text="&#xE769;"
-                                                   Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVisibility}}"/>
-                                        <TextBlock Text="&#xE768;"
-                                                   Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"/>
-                                    </Grid>
-                                </Button>
-
-                                <Button Style="{StaticResource TransportButton}" Content="&#xE893;"
-                                        FontSize="13"
-                                        Command="{Binding SkipNextCommand}"
-                                        IsEnabled="{Binding CanSkipNext}"/>
-                            </StackPanel>
                         </Grid>
 
-                        <!-- Its own DataContext: a NotesViewModel set from code-behind, since the
-                             rest of this layer is bound to the media view model instead. -->
-                        <Grid x:Name="NotesPanel" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,14,0,0">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                        <!-- One host, every section kept alive inside it: switching tabs hides and
+                             shows rather than rebuilding, so a search box keeps its text and a list
+                             its scroll position across a switch. -->
+                        <Grid x:Name="SectionHost" Grid.Row="1" Margin="0,12,0,0">
+                            <!-- The default, and what a hover shows: the scratchpad. -->
+                            <Grid x:Name="QuickView">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
 
-                            <Border Height="1" Background="#33FFFFFF"/>
+                                <Border Height="1" Background="#33FFFFFF"
+                                        Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
 
-                            <TextBlock Grid.Row="1" Text="NOTES" Style="{StaticResource SectionHeaderText}"
-                                       Margin="0,10,0,4"/>
+                                <!-- Its own DataContext: a TodosViewModel set from code-behind, since
+                                     the rest of this layer is bound to the media view model. -->
+                                <Grid x:Name="TodosPanel" Grid.Row="1" Margin="0,10,0,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
 
-                            <!-- The stock TextBox has no watermark of its own: this is a second
-                                 TextBlock sitting behind it, hidden the moment there is real text. -->
-                            <Grid Grid.Row="2">
-                                <TextBlock Text="Add a note, press Enter..." Foreground="#55FFFFFF"
-                                           FontSize="11.5" IsHitTestVisible="False"
-                                           Visibility="{Binding DraftText.Length, Converter={StaticResource CountToVisibility}, ConverterParameter=invert}"/>
+                                    <Grid>
+                                        <TextBlock Text="TODO" Style="{StaticResource SectionHeaderText}"/>
+                                        <TextBlock Text="Clear done" Foreground="#99FFFFFF" FontSize="10"
+                                                   HorizontalAlignment="Right" Cursor="Hand"
+                                                   MouseLeftButtonUp="OnClearDoneClick"
+                                                   Visibility="{Binding Todos.Count, Converter={StaticResource CountToVisibility}}"/>
+                                    </Grid>
 
-                                <TextBox x:Name="NoteInput" Style="{StaticResource NoteInput}"
-                                         Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <Grid Grid.Row="1" Margin="0,4,0,0">
+                                        <TextBlock Text="Add a task, press Enter..." Foreground="#55FFFFFF"
+                                                   FontSize="11.5" IsHitTestVisible="False"
+                                                   Visibility="{Binding DraftText.Length, Converter={StaticResource CountToVisibility}, ConverterParameter=invert}"/>
+
+                                        <TextBox x:Name="TodoInput" Style="{StaticResource NoteInput}"
+                                                 Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </Grid>
+
+                                    <ItemsControl Grid.Row="2" Margin="0,6,0,0" ItemsSource="{Binding Todos}"
+                                                  Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,2,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <CheckBox IsChecked="{Binding IsDone}" Focusable="False"
+                                                              VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                                                    <TextBlock Grid.Column="1" Text="{Binding Text}"
+                                                               Foreground="#DDFFFFFF" FontSize="11.5"
+                                                               VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                        <Setter Property="Foreground" Value="#66FFFFFF"/>
+                                                                        <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+
+                                                    <TextBlock Grid.Column="2" Text="&#xE711;"
+                                                               FontFamily="{StaticResource GlyphFont}" FontSize="10"
+                                                               Foreground="#66FFFFFF" Cursor="Hand"
+                                                               VerticalAlignment="Center" Margin="10,0,0,0"
+                                                               ToolTip="Remove"
+                                                               MouseLeftButtonUp="OnRemoveTodoClick"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+
+                                <!-- Its own DataContext: a NotesViewModel, same reasoning. -->
+                                <Grid x:Name="NotesPanel" Grid.Row="2" Margin="0,14,0,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Text="NOTES" Style="{StaticResource SectionHeaderText}"/>
+
+                                    <!-- The stock TextBox has no watermark of its own: this is a second
+                                         TextBlock sitting behind it, hidden the moment there is real text. -->
+                                    <Grid Grid.Row="1" Margin="0,4,0,0">
+                                        <TextBlock Text="Add a note, press Enter..." Foreground="#55FFFFFF"
+                                                   FontSize="11.5" IsHitTestVisible="False"
+                                                   Visibility="{Binding DraftText.Length, Converter={StaticResource CountToVisibility}, ConverterParameter=invert}"/>
+
+                                        <TextBox x:Name="NoteInput" Style="{StaticResource NoteInput}"
+                                                 Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </Grid>
+
+                                    <ItemsControl Grid.Row="2" Margin="0,6,0,0" ItemsSource="{Binding Notes}"
+                                                  Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,3,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Text="{Binding Text}" Foreground="#DDFFFFFF"
+                                                               FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource TimeText}"
+                                                               Margin="10,0,0,0"
+                                                               Text="{Binding CreatedAt, StringFormat={}{0:h:mm tt}}"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
                             </Grid>
 
-                            <ItemsControl Grid.Row="3" Margin="0,8,0,0" ItemsSource="{Binding Notes}"
-                                          Focusable="False">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,3,0,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
+                            <!-- The former taskbar panels, re-hosted. Their DataContext is the dock
+                                 view model, set once from code-behind on this host's children. -->
+                            <panels:ShelfPanel x:Name="ShelfView" Visibility="Collapsed"/>
+                            <panels:ClipboardPanel x:Name="ClipboardView" Visibility="Collapsed"/>
+                            <panels:LauncherPanel x:Name="LauncherView" Visibility="Collapsed"/>
+                            <panels:RecentPanel x:Name="RecentView" Visibility="Collapsed"/>
+                            <panels:StacksPanel x:Name="StacksView" Visibility="Collapsed"/>
+                        </Grid>
 
-                                            <TextBlock Text="{Binding Text}" Foreground="#DDFFFFFF"
-                                                       FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                        <!-- The tab strip, and the app's only remaining chrome: everything that used
+                             to be a taskbar button of its own is reached from here. -->
+                        <Grid x:Name="TabStrip" Grid.Row="2" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                                            <TextBlock Grid.Column="1" Style="{StaticResource TimeText}"
-                                                       Margin="10,0,0,0"
-                                                       Text="{Binding CreatedAt, StringFormat={}{0:h:mm tt}}"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <TextBlock x:Name="StatsText" Foreground="#66FFFFFF" FontSize="10"
+                                       VerticalAlignment="Center"/>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <ToggleButton x:Name="ShelfTab" Style="{StaticResource IslandTab}"
+                                              Content="&#xE8B7;" ToolTip="Shelf"
+                                              Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
+                                <ToggleButton x:Name="ClipboardTab" Style="{StaticResource IslandTab}"
+                                              Content="&#xE8C8;" ToolTip="Clipboard history"
+                                              Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
+                                <ToggleButton x:Name="LauncherTab" Style="{StaticResource IslandTab}"
+                                              Content="&#xE721;" ToolTip="Search apps"
+                                              Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
+                                <ToggleButton x:Name="RecentTab" Style="{StaticResource IslandTab}"
+                                              Content="&#xE81C;" ToolTip="Recent files"
+                                              Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
+                                <ToggleButton x:Name="StacksTab" Style="{StaticResource IslandTab}"
+                                              Content="&#xE838;" ToolTip="Folder stacks"
+                                              Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
+                                <ToggleButton x:Name="NotesTab" Style="{StaticResource IslandTab}"
+                                              Content="&#xE70B;" ToolTip="Notes and todo"
+                                              Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
+
+                                <Border Width="1" Height="16" Background="#33FFFFFF" Margin="6,0"/>
+
+                                <Button x:Name="SettingsButton" Style="{StaticResource IslandTabButton}"
+                                        Content="&#xE713;" ToolTip="Settings"
+                                        Click="OnSettingsClick"/>
+                            </StackPanel>
                         </Grid>
                     </Grid>
                 </Grid>

@@ -226,6 +226,34 @@ internal static class NativeMethods
         public uint dwFlags;
     }
 
+    /// <summary>
+    /// MONITORINFO plus the adapter's device name (<c>\\.\DISPLAY1</c>), which is the only stable
+    /// handle on a particular screen: HMONITORs are recycled across display changes, and indices
+    /// shift the moment a monitor is unplugged.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct MONITORINFOEX
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
+    internal const uint MONITORINFOF_PRIMARY = 1;
+
+    internal delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
+
+    [DllImport("user32.dll")]
+    internal static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip,
+        MonitorEnumProc callback, IntPtr data);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetMonitorInfoW")]
+    internal static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFOEX info);
+
     [DllImport("user32.dll")]
     internal static extern IntPtr MonitorFromPoint(POINT point, uint flags);
 

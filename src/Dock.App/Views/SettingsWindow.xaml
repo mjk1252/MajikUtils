@@ -10,18 +10,60 @@
         <TextBlock Text="MajikUtils Settings" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,8"/>
 
         <TextBlock Foreground="#99FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
-                   Text="MajikUtils lives on the taskbar: a Drawer, a Shelf, and one button per folder stack. Right-click any of them and choose Pin to taskbar to keep it there."/>
+                   Text="MajikUtils lives in the island at the top of your screen: point at it for the shelf, clipboard, app search, recent files, notes and todo. Folder stacks keep their own taskbar buttons -- right-click one and choose Pin to taskbar to keep it there."/>
 
         <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start MajikUtils automatically when Windows starts"
                   Foreground="White" Margin="0,0,0,16"
                   Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
 
-        <CheckBox x:Name="MediaIslandCheckBox" Content="Show the media island at the top of the screen"
+        <CheckBox x:Name="MediaIslandCheckBox" Content="Show what's playing in the island"
                   Foreground="White" Margin="0,0,0,4"
                   Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
 
-        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,16"
-                   Text="Shows whatever is playing, and opens playback controls when you point at it. With nothing playing it stays hidden until you touch the top edge of the screen."/>
+        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
+                   Text="Shows the current track on the collapsed island and playback controls when you point at it. Turning this off leaves the island with everything else -- it stays hidden until you touch the top edge of the screen."/>
+
+        <Grid Margin="24,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid.Resources>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="#99FFFFFF"/>
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                    <Setter Property="Margin" Value="0,0,10,0"/>
+                </Style>
+                <Style TargetType="ComboBox">
+                    <Setter Property="Margin" Value="0,0,0,6"/>
+                </Style>
+            </Grid.Resources>
+
+            <TextBlock Text="Shape"/>
+            <ComboBox x:Name="IslandShapeCombo" Grid.Column="1" SelectionChanged="OnComboChanged">
+                <ComboBoxItem Content="Notch (joined to the screen edge)"/>
+                <ComboBoxItem Content="Pill (floating below the edge)"/>
+            </ComboBox>
+
+            <TextBlock Grid.Row="1" Text="Position"/>
+            <ComboBox x:Name="IslandAlignmentCombo" Grid.Row="1" Grid.Column="1"
+                      SelectionChanged="OnComboChanged">
+                <ComboBoxItem Content="Top left"/>
+                <ComboBoxItem Content="Top centre"/>
+                <ComboBoxItem Content="Top right"/>
+            </ComboBox>
+
+            <TextBlock Grid.Row="2" Text="Monitor"/>
+            <ComboBox x:Name="IslandMonitorCombo" Grid.Row="2" Grid.Column="1"
+                      DisplayMemberPath="Label" SelectionChanged="OnComboChanged"/>
+        </Grid>
 
         <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
                    Text="Clipboard history is captured in the background. Press Ctrl+Alt+Shift+V anywhere to open the drawer on its Clipboard tab."/>

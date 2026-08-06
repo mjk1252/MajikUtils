@@ -24,16 +24,16 @@ public static class ForegroundWindow
     }
 
     /// <summary>
-    /// True when the foreground window covers the whole primary monitor -- a game, a full-screen
-    /// video, a presentation.
+    /// True when the foreground window covers the whole of the named monitor -- a game, a
+    /// full-screen video, a presentation. An empty name means the primary.
     ///
-    /// A topmost overlay pinned to the top of the primary screen would otherwise draw straight over
-    /// them, so the media island uses this to take itself off-screen. Measured by rectangle rather
+    /// A topmost overlay pinned to the top of that screen would otherwise draw straight over them,
+    /// so the media island uses this to take itself off-screen. Measured by rectangle rather
     /// than by any window style, because full-screen is not one thing: exclusive full-screen,
     /// borderless windows and full-screen browser tabs all reach it differently and only agree on
     /// the result.
     /// </summary>
-    public static bool IsFullScreenOnPrimary()
+    public static bool IsFullScreenOn(string? deviceName)
     {
         var hwnd = NativeMethods.GetForegroundWindow();
 
@@ -42,11 +42,11 @@ public static class ForegroundWindow
         if (hwnd == IntPtr.Zero || hwnd == NativeMethods.GetShellWindow())
             return false;
 
-        var primary = MonitorPlacement.PrimaryMonitor;
-        if (NativeMethods.MonitorFromWindow(hwnd, NativeMethods.MONITOR_DEFAULTTONEAREST) != primary)
+        var target = MonitorPlacement.Resolve(deviceName);
+        if (NativeMethods.MonitorFromWindow(hwnd, NativeMethods.MONITOR_DEFAULTTONEAREST) != target)
             return false;
 
-        if (!MonitorPlacement.TryGetBounds(primary, out var screen) ||
+        if (!MonitorPlacement.TryGetBounds(target, out var screen) ||
             !NativeMethods.GetWindowRect(hwnd, out var window))
         {
             return false;
