@@ -10,6 +10,13 @@ public sealed class AppSettings
     /// </summary>
     public bool ShowMediaIsland { get; set; } = true;
 
+    /// <summary>
+    /// Whether the island shows which application is holding the microphone or the camera.
+    /// Defaults on, and stays on for settings files written before it existed -- an absent property
+    /// keeps the initialiser.
+    /// </summary>
+    public bool ShowPrivacyIndicator { get; set; } = true;
+
     /// <summary>Whether the island is drawn as a notch fused to the screen edge, or a free pill.</summary>
     public IslandShape IslandShape { get; set; } = IslandShape.Notch;
 

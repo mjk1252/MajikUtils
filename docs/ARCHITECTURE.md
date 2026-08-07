@@ -115,6 +115,22 @@ physical-pixel `MonitorPlacement` path as the stack windows, for the same DPI re
 is stored by adapter device name, the only identifier stable across sessions, and an unplugged
 screen falls back to the primary.
 
+**Island activities.** The collapsed pill is a `ContentControl` over whichever activity currently
+holds it, not a fixed now-playing row. `IslandActivityHost` (in `Dock.Core`, and the one piece of
+this with real logic in it, so it is unit-tested) arbitrates: highest `IslandPriority` wins, ties
+broken by whichever most recently became active, and a `Linger` window keeps a source that flaps --
+a player restarting between albums, a camera renegotiating a stream -- from tearing the island down
+and rebuilding it a moment later. `Retire` is what finally clears an activity's display state,
+which is deliberately *not* the moment it stops claiming a slot: the gap between two tracks has to
+keep showing the track.
+
+There are two slots. `Primary` takes the pill; `Secondary` splits off into a bubble beside it,
+drawn from the same `NotchShape` so the two silhouettes always agree about the screen edge. That is
+what lets the camera indicator say its piece without taking a playing track off the island -- it
+ranks `Background`, below music, because "the camera is on" is a dot's worth of information. See
+[`ISLAND-ACTIVITIES.md`](ISLAND-ACTIVITIES.md) for the geometry, which the hit region and the
+silhouette have to agree on exactly.
+
 `ForegroundWindow.IsFullScreenOn` takes the island off screen when a game or a full-screen
 video owns that monitor. It compares rectangles rather than window styles: exclusive full-screen,
 borderless windows and full-screen browser tabs all get there differently and only agree on the
@@ -136,7 +152,8 @@ button whose window is long gone.
 ## State
 
 - `%LOCALAPPDATA%\MajikUtils\settings.json` — start-with-Windows, whether now-playing shows in the
-  island, its shape/alignment/monitor, per-panel window placement.
+  island, whether the camera indicator does, its shape/alignment/monitor, per-panel window
+  placement.
 - `%LOCALAPPDATA%\MajikUtils\shelf.json`, `stacks.json` — shelf items and stack folders.
 - `%LOCALAPPDATA%\MajikUtils\notes.json`, `todos.json` — the island's scratchpad.
 - `%LOCALAPPDATA%\MajikUtils\icons\*.ico` — generated artwork for the pinned taskbar buttons.

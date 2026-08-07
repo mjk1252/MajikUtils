@@ -56,6 +56,13 @@ public interface IIslandActivity : INotifyPropertyChanged
 /// </summary>
 public enum IslandPriority
 {
+    /// <summary>
+    /// Worth showing, but never worth the whole pill. Something at this rank sits *beside* whatever
+    /// holds the pill, compacted down to a dot -- and takes the pill itself only when nothing else
+    /// wants it.
+    /// </summary>
+    Background = -100,
+
     /// <summary>The resting state -- what the pill shows when nothing else is happening.</summary>
     Ambient = 0,
 

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -44,6 +45,16 @@ public sealed partial class IslandActivityHost : ObservableObject
     /// the media session's own <c>HasSession</c>.
     /// </summary>
     [ObservableProperty] private bool _hasActivity;
+
+    /// <summary>
+    /// Everything currently showing, in the order the slots were handed out -- so
+    /// <see cref="Primary"/> is the head of this and <see cref="Secondary"/> the next.
+    ///
+    /// Wider than the two slots on purpose: the collapsed pill can only hold two, but the expanded
+    /// panel has room to list every one of them, and an activity that never reaches a slot still
+    /// has something to say once the island is open.
+    /// </summary>
+    public ObservableCollection<IIslandActivity> Showing { get; } = [];
 
     /// <summary>
     /// Adds an activity for the life of the application. There is no matching removal: activities
@@ -141,11 +152,42 @@ public sealed partial class IslandActivityHost : ObservableObject
             .Where(s => s.IsShowing)
             .OrderByDescending(s => s.Activity.Priority)
             .ThenByDescending(s => s.ActivatedAt)
+            .Select(s => s.Activity)
             .ToList();
 
-        Primary = showing.Count > 0 ? showing[0].Activity : null;
-        Secondary = showing.Count > 1 ? showing[1].Activity : null;
+        Sync(showing);
+
+        Primary = showing.Count > 0 ? showing[0] : null;
+        Secondary = showing.Count > 1 ? showing[1] : null;
         HasActivity = Primary is not null;
+    }
+
+    /// <summary>
+    /// Brings <see cref="Showing"/> in line with the new order, touching it only where it actually
+    /// differs. Clearing and refilling would be far simpler and would also make every row the
+    /// expanded panel is drawing blink on any change to any activity -- including the ones that did
+    /// not move.
+    /// </summary>
+    private void Sync(List<IIslandActivity> wanted)
+    {
+        if (Showing.SequenceEqual(wanted))
+            return;
+
+        for (var i = Showing.Count - 1; i >= 0; i--)
+        {
+            if (!wanted.Contains(Showing[i]))
+                Showing.RemoveAt(i);
+        }
+
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            var index = Showing.IndexOf(wanted[i]);
+
+            if (index < 0)
+                Showing.Insert(i, wanted[i]);
+            else if (index != i)
+                Showing.Move(index, i);
+        }
     }
 
     /// <summary>

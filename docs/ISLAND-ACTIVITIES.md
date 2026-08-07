@@ -265,30 +265,38 @@ disappearing into its own corners.
 
 The bubble is a third child of the `Pill` grid, so `PillSlide` and the `Pill` opacity animation
 carry it in and out with everything else — no second slide animation, and no chance of the two
-forms parking at different heights.
+forms parking at different heights. It is a sibling of the *silhouette*, not a child of
+`PillContent`, because that host clips and the bubble is outside the pill by definition.
 
-Horizontal position is a `TranslateTransform` set from code in a `PlaceBubble()` helper beside the
-existing placement logic, not a `Margin`. A margin on a centre-aligned element shifts it by half
-its value, which is exactly the sort of thing that reads correctly and is wrong by 50%.
+Horizontal position is a `TranslateTransform` set from code in `PlaceBubble()`, not a `Margin`. A
+margin on a centre-aligned element shifts it by half its value, which is exactly the sort of thing
+that reads correctly and is wrong by 50%.
 
-The offset from the pill's centre is:
-
-```
-CollapsedWidth / 2  +  gap  +  BubbleWidth / 2
-```
-
-where in notch form `gap` must also clear both flares — the pill's fillet hangs `FilletWidth` past
-its right edge and the bubble's hangs `BubbleFillet` past its left, so the two silhouettes collide
-at any gap that ignores them:
+Work in whole footprints rather than in pill widths plus fillets — the flares hang off both shapes
+and any gap that ignores them lets the two silhouettes collide:
 
 ```
-gap = BubbleGap                                   (pill form)
-gap = FilletWidth + BubbleGap + BubbleFillet      (notch form)
+CollapsedFootprint = CollapsedWidth + (notch ? FilletWidth * 2 : 0)
+BubbleFootprint    = BubbleSize     + (notch ? BubbleFillet * 2 : 0)
 ```
+
+**The bubble is anchored to the same edge as the island, not always centred.** This is the part
+that is easy to get wrong: the pill's *width* animates from 260 to 660 on expand, so a bubble
+centred inside the `Pill` grid rides that animation and drifts outward as it fades. Centre
+alignment happens to be safe (the pill's centre is the window's centre and does not move), but at
+either end of the edge the drift is plainly visible. So:
+
+| Alignment | `Bubble.HorizontalAlignment` | `BubbleSlide.X` |
+| --- | --- | --- |
+| Center | `Center` | `(CollapsedFootprint + BubbleFootprint) / 2 + BubbleGap` |
+| Left | `Left` | `CollapsedFootprint + BubbleGap` |
+| Right | `Right` | `-(CollapsedFootprint + BubbleGap)` |
+
+Anchoring to the pinned edge measures from something that stays still.
 
 **The bubble mirrors to the *left* of the pill when `IslandAlignment.Right`.** A right-anchored
-pill sits `EdgeMargin` from the side of the screen and there is simply no room; the sign of the
-offset flips. Left and Center both put it on the right, as Apple does.
+pill sits `EdgeMargin` from the side of the screen and there is simply no room. Left and Center
+both put it on the right, as Apple does.
 
 ### It is a collapsed-state form only
 
@@ -311,7 +319,37 @@ step with the shape animations already running. A bubble that faded in place wou
 notification; one that grows out of the pill reads as the island splitting, which is what is
 actually happening.
 
-A change of *identity* in the secondary slot crossfades the content and leaves the shape alone.
+A change of *identity* in the secondary slot would want a crossfade of the content with the shape
+left alone. **Not built, deliberately**: with media at `Ambient` and the camera at `Background`,
+`Secondary` can only ever be the camera or null — the two-non-null transition the crossfade exists
+for cannot happen. It is worth adding the day a third activity makes it reachable, and not before.
+
+### The arithmetic lives in Dock.Core
+
+None of the above is UI. Footprints, offsets and the hit region are pure functions of the shape,
+the alignment and the state, and they were the one part of this with no automated coverage at all —
+the drift bug above was caught by launching the app, flipping a setting and squinting at a
+screenshot, which is not a thing anyone will do again.
+
+So `Dock.Core/Models/IslandGeometry.cs` holds the constants and the maths, with `IslandRect` and
+`IslandScreen` standing in for `System.Windows.Rect` (WPF, unreferencable from here). `IslandWindow`
+imports it with `using static`, so the names read the same at the call sites as they always did, and
+converts to a real `Rect` at the boundary.
+
+`IslandGeometryTests` then asserts every shape × alignment combination on two monitors — one at
+100% starting at the origin, one offset and at 150%, so nothing can quietly assume a DIP is a pixel.
+Three of those tests are worth calling out:
+
+- **The bubble clears the pill by exactly `BubbleGap`.** Both silhouettes carry their own flares,
+  and a gap measured without them lets the shapes touch in notch form.
+- **`BubbleOffset` and `BubbleRect` agree.** The view uses the translate; every other test proves
+  things about the rectangle. Without a test tying the two together they could drift apart in
+  silence and the whole suite would stay green.
+- **The expanded hit region still covers where the bubble was.** See below — this is the invariant
+  that cannot be checked by looking at it.
+
+Verified by mutation, not by assumption: reintroducing the original centring bug fails 5 tests,
+dropping the bubble's fillets or widening the hit region symmetrically fails 13.
 
 ### Hit testing
 
@@ -321,22 +359,31 @@ island away halfway across — the same reasoning the existing code applies to `
 vertically.
 
 The trap: the combined footprint is **no longer symmetric about the pill**, because the bubble
-hangs off one side only. The `Center` case in `ActiveHitRect` currently centres `footprint` in the
-work area, and centring the *combined* width would shift the pill itself half a bubble off-centre.
-The bubble's extent has to widen the rect on one side without moving the pill's own placement.
+hangs off one side only. The `Center` case centres `footprint` in the work area, and centring the
+*combined* width would shift the pill itself half a bubble off-centre. The bubble's extent has to
+widen the rect on one side without moving the pill's own placement.
 
 Vertically nothing changes: same top edge, same height, so `reach` is untouched.
 
-## The microphone and camera indicator
+**The invariant that cannot be eyeballed.** Resting the pointer on the bubble expands the island,
+and expanding hides the bubble. If the expanded region did not still cover where the bubble had
+been, the pointer would fall out of it, the island would collapse, the bubble would reappear under
+the pointer, and the whole thing would strobe. It happens to hold for every current combination —
+the expanded panel is far wider than the collapsed pill plus a bubble — but "happens to hold" is
+not a guarantee, and any future change to `SectionWidth`, `EdgeMargin` or the bubble's size could
+quietly break it at one alignment only. It is asserted rather than reasoned about.
 
-macOS puts a dot in the notch when something is listening or watching. Windows has the data and
-surfaces it nowhere useful — and the island is already sitting where Apple puts the dot.
+## The camera indicator
+
+macOS puts a dot in the notch when the camera is on. Windows has the data and surfaces it as an
+anonymous tray glyph — and the island is already sitting where Apple puts the dot.
 
 ### Where the data is
 
-`HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone`
-and `...\webcam`. Direct subkeys are packaged apps, keyed by package family name; Win32 apps are
-under a `NonPackaged` subkey, keyed by full exe path with `#` substituted for `\`.
+`HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\webcam` —
+still called that in the registry long after the shell stopped saying it anywhere a person can see.
+Direct subkeys are packaged apps, keyed by package family name; Win32 apps are under a
+`NonPackaged` subkey, keyed by full exe path with `#` substituted for `\`.
 
 Each carries `LastUsedTimeStart` and `LastUsedTimeStop` as QWORD FILETIMEs. **In use right now is
 `LastUsedTimeStop == 0`** with a non-zero start. That is the whole detection.
@@ -358,15 +405,64 @@ Two honest limits, worth putting in the code as comments:
 
 | File | What |
 | --- | --- |
-| `Dock.Core/Models/DeviceUsage.cs` | `record DeviceUsage(DeviceKind Kind, string AppPath, string DisplayName)`, `enum DeviceKind { Microphone, Camera }` |
+| `Dock.Core/Models/DeviceUsage.cs` | `record DeviceUsage(string AppPath, string DisplayName)` |
 | `Dock.Core/Services/IDeviceUsageSource.cs` | `event EventHandler<IReadOnlyList<DeviceUsage>>? Changed` + `Start`/`Stop`, matching `ISystemStatsSource` |
 | `Dock.Interop/Shell/DeviceUsageMonitor.cs` | the registry read and watch |
-| `Dock.Interop/Native/AudioInterop.cs` | extend with `IAudioEndpointVolume` on the default *capture* endpoint, for mute |
 | `Dock.Core/ViewModels/PrivacyViewModel.cs` | the activity |
 
-`PrivacyViewModel` is `Priority => Status` (so it takes the pill from music during a call),
-`Linger => 2s` (conferencing apps flap hard), `IsActive => MicInUse || CameraInUse`, plus
+`PrivacyViewModel` is `Priority => Background`, `Linger => 2s`, `IsActive => CameraInUse`, plus
 `Apps` for the expanded list and a `Summary` string.
+
+### It ranks below music, and compacts to a dot
+
+Running it settled this. At `Status` the indicator took the whole pill: a playing track was
+replaced outright by "WindowsCamera · camera". That trades something the user chose for something
+they did not ask for, and "the camera is on" is worth knowing at a glance without being worth
+reading a sentence about.
+
+So there is a rank below `Ambient`:
+
+```csharp
+Background = -100,   // worth showing, never worth the whole pill
+```
+
+Music keeps the pill and the camera compacts to a green dot beside it — which is what macOS does
+with the same information. With nothing playing the indicator takes the pill on its own and names
+the application, because then the room is free.
+
+This pulled `CompactActivityTemplateSelector` and the `Compact.*` templates forward out of Phase C,
+since a second slot that renders nowhere is no better than no second slot. The compact form
+currently draws *inside* the collapsed pill, in a second column beside the primary's content; Phase
+C moves that same `ContentControl` out into the detached bubble and is left with only the geometry.
+
+### The camera only — the microphone is deliberately not read
+
+The spec originally covered both. Reading the real key on a real machine settled it against the
+microphone, and the evidence is worth keeping.
+
+A sample of one desktop had **two applications holding the microphone at rest**: an audio routing
+service that takes it at boot and never lets go, and a chat client that holds it for as long as it
+is running rather than for the length of a call. The webcam key on the same machine had **nothing
+live at all** — every entry was a browser that had touched it weeks earlier.
+
+That is the whole argument. `LastUsedTimeStop == 0` honestly means *"this application has the
+device open"*. For the microphone that is true nearly always, and a light that never goes off
+carries no information — it would have sat permanently on the island, and (at `Status`) taken the
+pill from the music for good. For the camera it is true exactly when someone is on video, which is
+a real event and worth interrupting for.
+
+So the microphone comes out entirely: no mic key, no amber dot, no endpoint mute. `DeviceUsage`
+loses its `DeviceKind` — with one device, a discriminator discriminates nothing — and the monitor
+drops from two watched keys to one, which collapses its per-key watch list into a single thread and
+a single event.
+
+Cut along with it: `IMicrophoneControl`, `MicrophoneControl`, `IAudioEndpointVolume` and the
+capture-endpoint constants in `AudioInterop`, and the `IslandPriority.Background` rank that existed
+only to keep a permanently-lit indicator away from the pill.
+
+**What is given up:** there is now no signal at all that something is listening. On Windows that
+signal was never really available — only the fact that an application had the device open, which
+is not the same question.
 
 Display names: `FileVersionInfo.FileDescription` off the exe path, falling back to the filename.
 Icons reuse `ShellIconProvider.GetIconPng(path, 32)`. Packaged apps have only a family name to
@@ -375,17 +471,18 @@ mostly recognisable.
 
 ### How it looks
 
-Collapsed: a `DataTemplate` for `PrivacyViewModel` — an amber dot (`#FF9F0A`) for the microphone,
-green (`#30D158`) for the camera, both when both, the app's icon, and its name. Deliberately the
-same colours macOS uses; the convention is worth more than originality here.
+Collapsed: a `DataTemplate` for `PrivacyViewModel` — a green dot (`#30D158`), the app's icon, and
+its name. Deliberately the same green macOS uses; the convention is worth more than originality
+here.
 
-Expanded: one more `Auto` row at the top of `ExpandedLayer`, collapsed when the activity is
-inactive, listing each app and device with a **Mute microphone** button. No tab — the tab strip is
-for sections the user navigates to, and this is a condition, not a place.
+Expanded: one more `Auto` row at the top of `ExpandedLayer`, collapsed when the camera is idle,
+listing each app using it. No tab — the tab strip is for sections the user navigates to, and this
+is a condition, not a place.
 
-Mute is `IAudioEndpointVolume.SetMute` on `GetDefaultAudioEndpoint(eCapture, eCommunications)`:
-the endpoint-level mute, which is what the Windows 11 taskbar microphone button toggles, so apps
-that track mute state stay in sync with it.
+Adding the row means `ExpandedLayer` gains a fourth `RowDefinition` and everything below it shifts
+down one: `MediaHeader` to row 1, `SectionHost` to 2, `TabStrip` to 3. The row also has to be wired
+into `ResizeForContentChange` via `Apps.CollectionChanged`, or the island keeps the height it
+opened at and clips the tab strip the moment a camera comes on.
 
 ### Setting
 
@@ -411,24 +508,25 @@ the full-screen hide. Phase A is a refactor; if anything looks different, it is 
 **Phase B — the indicator.**
 
 7. `DeviceUsage`, `IDeviceUsageSource`, `DeviceUsageMonitor`
-8. Capture-endpoint mute in `AudioInterop`
-9. `PrivacyViewModel` + its template and the expanded row
-10. Setting, and registration in `App`
+8. `PrivacyViewModel` + its template and the expanded row
+9. Setting, and registration in `App`
 
 At the end of B there are two activities and `Secondary` is populated, but nothing renders it: a
-call in progress simply takes the pill and the music waits. That is a coherent place to stop.
+camera call takes the pill and the music waits its turn. That is a coherent place to stop, and it
+is what the bubble in Phase C fixes.
 
-**Phase C — the bubble.**
+**Phase C — the bubble.** `CompactActivityTemplateSelector` and the `Compact.*` templates already
+landed in B, drawing inside the pill's second column. What is left is moving them out:
 
-11. `CompactActivityTemplateSelector`, and `Compact.*` templates for media and privacy
-12. `BubbleShape` + `BubbleContent` in the `Pill` grid, `PlaceBubble()`, the mirror for
+10. `BubbleShape` + `BubbleContentHost` in the `Pill` grid, `PlaceBubble()`, the mirror for
     right-alignment
-13. Scale-in animation, and the crossfade on identity change
-14. `ActiveHitRect` — the asymmetric footprint
+11. Scale-in animation (`BubbleSeedScale` → 1, origin on the edge facing the pill)
+12. `ActiveHitRect` — the asymmetric footprint
 
 Phase C is worth doing last and not sooner: it is the only part that cannot be tested without two
 activities to arbitrate between, and its whole risk surface is geometry that the hit rect and the
-silhouette have to agree on.
+silhouette have to agree on. Verify all four combinations on screen — notch and pill form, centre
+and end alignment — because each one changes the arithmetic.
 
 Then `docs/ARCHITECTURE.md` gains an "Island activities" section under *The island*, and
 `docs/PHASES.md` a Phase 10.
@@ -445,6 +543,89 @@ some of the pressure off: a cramped second activity has somewhere to go that is 
 **A third activity.** Two slots is Apple's cap and a good one. If a third ever has to be visible,
 the answer is almost certainly a count on the bubble rather than a second bubble.
 
-**Everything else that wants to be an activity.** Timers, a charging state, file-transfer
-progress, build status. The point of Phase A is that each of those is then a view model, two
-templates and a registration, with no change to the window.
+**Notification mirroring.** Still the highest-value thing not here, and still blocked on
+`UserNotificationListener` needing package identity. A sparse package keeps the Inno installer and
+unlocks it, but it is a day of packaging rather than an afternoon of C#.
+
+**Battery and charging.** Written off for now: the machine this was built on is a desktop, so it
+would have been dead code with nowhere to test it.
+
+## The activities
+
+Phase D added eight more, and the shape of the work is the point: only three new view models were
+needed, because most activities are the same thing wearing different labels.
+
+| View model | Rank | What uses it |
+| --- | --- | --- |
+| `MediaViewModel` | Ambient | the system media session |
+| `PrivacyViewModel` | Background | camera in use |
+| `TimerActivity` | Background | the countdown |
+| `ConditionActivity` | Background | do-not-disturb, restart pending |
+| `AnnouncementActivity` | Transient | clipboard, volume, downloads, screenshots, drives, network, Bluetooth |
+
+`AnnouncementActivity` is the one that collapses the list. Seven sources push into a *single*
+shared instance rather than each being an activity of its own, because seven activities at the same
+rank would spend their lives queueing for two slots — and because the honest behaviour of an
+on-screen display is that the newest thing replaces whatever was there. It also has
+`Linger => Zero`: the activity *is* the grace period, so holding it for another second and a half
+after it expires would be counting the same thing twice.
+
+`ConditionActivity` is one class with two instances, since all that separates "Do not disturb" from
+"Restart pending" is a label and a glyph.
+
+### Where each reading comes from
+
+| Source | Mechanism | Note |
+| --- | --- | --- |
+| `SystemEventSource` | `FileSystemWatcher` ×2, `DriveInfo` poll, `NetworkChange`, `DisplaySettingsChanged` | five mechanisms, one event |
+| `SystemConditionSource` | `SHQueryUserNotificationState`, `RebootRequired` key, `DriveInfo` | polled every 5s |
+| `VolumeSource` | `IAudioEndpointVolumeCallback` | pushed, not polled |
+| `AudioDeviceSource` | `IMMNotificationClient` + `IPropertyStore` | the default output moving |
+| `BatterySource` | `GetSystemPowerStatus` + `PowerModeChanged` | registered only if a battery exists |
+| `BluetoothSource` | WinRT `DeviceWatcher` | AQS filtered to connected |
+| `DeviceUsageMonitor` | `RegNotifyChangeKeyValue` | camera |
+| `WifiInfo` | `WlanQueryInterface` | names the network on connect |
+
+Six traps worth keeping written down, each of which cost time:
+
+- **`PROPVARIANT` is 24 bytes on x64, not 16.** An 8-byte header, then a union 16 wide because its
+  largest members are a length plus a pointer. Declaring only the two fields that get read implies
+  16, and the property store then writes eight bytes past the buffer. That does not fail — it
+  corrupts whatever was next and surfaces later as an `AccessViolationException` in an unrelated
+  frame. `[StructLayout(LayoutKind.Explicit, Size = 24)]` is the fix, and the lesson generalises:
+  **declare the real size of any struct COM writes into, not just the parts you read.**
+- **`IMMNotificationClient` fires once per role.** One output switch raises three notifications, so
+  a single change announces three times unless it is filtered to render/`eConsole`.
+- **Battery is asked about before it is registered.** `IsPresent` is on the interface rather than
+  implied by the event, so a desktop carries no battery activity and starts no watcher for one.
+
+- **Removable drives are polled on purpose.** Volume arrival is a `WM_DEVICECHANGE` *broadcast*,
+  and broadcasts never reach a message-only window — which is what a background watcher wants to
+  be. Diffing `DriveInfo.GetDrives()` every two seconds gets the same answer with none of that.
+- **`AUDIO_VOLUME_NOTIFICATION_DATA` starts with a 16-byte GUID**, so `bMuted` is at offset 16 and
+  `fMasterVolume` at 20. Getting these wrong yields plausible-looking nonsense rather than an
+  error.
+- **A `DeviceWatcher` reports everything already connected before it reports anything new.** Those
+  are not events. Announcing them would put a card on the island for every paired headset at every
+  startup, so announcements begin only after `EnumerationCompleted`.
+- **Downloads and Screenshots must be resolved with `SHGetKnownFolderPath`.** Downloads has no
+  `Environment.SpecialFolder` member and Screenshots is a known folder in its own right rather than
+  a fixed subfolder of Pictures. Both can be relocated to another drive from their Properties, and
+  building either path out of the profile directory is wrong the moment anybody does. It fails
+  *silently*, too: the watcher points at a folder that is not there, `TryWatch` returns null, and
+  downloads simply never announce. The machine this was built on had Downloads on `E:\`, so the
+  first version of this shipped broken on its own author's desktop.
+
+### What is still not covered
+
+The shell's Downloads folder is not the only place downloads land. A browser configured to save
+somewhere else entirely — Chrome and Firefox both keep their own download directory setting,
+independent of the known folder — will not be seen. Watching those would mean reading each
+browser's preferences, which is a per-application integration this deliberately avoids.
+
+### Glyphs must be escaped, not pasted
+
+Every glyph is a Segoe Fluent Icons private-use codepoint, written as a `\uE916` escape in C# and
+as `&#xE916;` in XAML. Pasting the literal character works right up until some tool in the chain
+silently eats it, at which point the label renders with a blank where the icon should be and
+nothing anywhere reports an error. That happened during Phase D and cost a debugging session.

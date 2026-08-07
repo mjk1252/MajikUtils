@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.ComponentModel;
 using Dock.Core.ViewModels;
 
@@ -255,6 +256,102 @@ public class IslandActivityHostTests
 
         Assert.Same(first, host.Primary);
         Assert.Same(second, host.Secondary);
+    }
+
+    [Fact]
+    public void BackgroundActivity_YieldsThePillToAmbientAndTakesTheSecondSlot()
+    {
+        var host = Started();
+        var privacy = new FakeActivity("privacy", IslandPriority.Background) { IsActive = true };
+        var media = new FakeActivity("media") { IsActive = true };
+        host.Register(privacy);
+        host.Register(media);
+
+        // The camera coming on must not take the pill off a playing track -- it compacts to a dot
+        // beside it instead.
+        Assert.Same(media, host.Primary);
+        Assert.Same(privacy, host.Secondary);
+    }
+
+    [Fact]
+    public void BackgroundActivity_TakesThePillWhenNothingElseWantsIt()
+    {
+        var host = Started();
+        var privacy = new FakeActivity("privacy", IslandPriority.Background) { IsActive = true };
+        host.Register(privacy);
+
+        // With nothing playing there is nothing to take the pill from, so it says its piece in full.
+        Assert.Same(privacy, host.Primary);
+        Assert.Null(host.Secondary);
+        Assert.True(host.HasActivity);
+    }
+
+    [Fact]
+    public void Showing_ListsEverythingInSlotOrder()
+    {
+        var host = Started();
+        var ambient = new FakeActivity("ambient") { IsActive = true };
+        var status = new FakeActivity("status", IslandPriority.Status) { IsActive = true };
+        var transient = new FakeActivity("transient", IslandPriority.Transient) { IsActive = true };
+        host.Register(ambient);
+        host.Register(status);
+        host.Register(transient);
+
+        // Wider than the two slots: the pill holds two, the expanded panel can list them all.
+        Assert.Equal([transient, status, ambient], host.Showing);
+        Assert.Same(host.Showing[0], host.Primary);
+        Assert.Same(host.Showing[1], host.Secondary);
+    }
+
+    [Fact]
+    public void Showing_LeavesUntouchedRowsAlone()
+    {
+        var host = Started();
+        var ambient = new FakeActivity("ambient") { IsActive = true };
+        var status = new FakeActivity("status", IslandPriority.Status);
+        host.Register(ambient);
+        host.Register(status);
+
+        var changes = new List<NotifyCollectionChangedAction>();
+        host.Showing.CollectionChanged += (_, e) => changes.Add(e.Action);
+
+        status.IsActive = true;
+
+        // One insert, not a clear and refill: rebuilding wholesale would blink every row the
+        // expanded panel is drawing, including the ones that did not move.
+        Assert.Equal([NotifyCollectionChangedAction.Add], changes);
+    }
+
+    [Fact]
+    public void Showing_ReordersRatherThanRebuilding()
+    {
+        var host = Started();
+        var first = new FakeActivity("first") { IsActive = true };
+        var second = new FakeActivity("second") { IsActive = true };
+        host.Register(first);
+        host.Register(second);
+
+        var changes = new List<NotifyCollectionChangedAction>();
+        host.Showing.CollectionChanged += (_, e) => changes.Add(e.Action);
+
+        first.Priority = IslandPriority.Alert;
+
+        Assert.Equal([NotifyCollectionChangedAction.Move], changes);
+        Assert.Equal([first, second], host.Showing);
+    }
+
+    [Fact]
+    public void Showing_DropsAnActivityOnlyWhenItsLingerExpires()
+    {
+        var host = Started();
+        var activity = new FakeActivity("a") { IsActive = true };
+        host.Register(activity);
+
+        activity.IsActive = false;
+        Assert.Single(host.Showing);
+
+        host.Tick(Start + TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Showing);
     }
 
     [Fact]

@@ -23,5 +23,19 @@ The history is kept here because the feature list carried over intact.
       carries *Exit MajikUtils*, which is what makes quitting reachable now that the tray icon is gone.
 - [ ] **Phase 9 (stretch)** — A "Recent" jump-list category on the drawer, and a Frequent/Recent
       category per stack, using `AppendKnownCategory` / `AppendCategory`.
+- [x] **Phase 10** — Island activities. The collapsed pill became a host for several competing
+      activities rather than the now-playing row: an arbiter in `Dock.Core` picks a primary and a
+      runner-up, media is one implementation, and a camera-in-use indicator is the second. Two
+      slots, so the runner-up splits off into a bubble beside the pill instead of displacing what
+      is in it. See [`ISLAND-ACTIVITIES.md`](ISLAND-ACTIVITIES.md).
+- [x] **Phase 10.1** — Eight more activities on that frame: a countdown timer, the volume readout,
+      clipboard copies, downloads, screenshots, removable drives, network changes, Bluetooth
+      connections, do-not-disturb and a pending restart. Only three new view models were needed --
+      most of them are announcements wearing different labels -- and the expanded panel became a
+      generic list of activity rows rather than one hardcoded row per feature.
+- [x] **Phase 10.2** — More watchers: the default audio output moving (which on a machine with
+      virtual mixers is a question Windows answers nowhere), the wireless network by name, monitors
+      connecting and disconnecting, low disk space, and battery. Battery registers only where there
+      is one, so it costs a desktop nothing and lights up on a laptop.
 
 Each phase should build, run, and be visibly testable before moving to the next. Commit at the end of every phase.

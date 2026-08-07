@@ -12,6 +12,7 @@
         <conv:NameToInitialConverter x:Key="NameToInitial"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:CountToVisibilityConverter x:Key="CountToVisibility"/>
+        <conv:ProgressToArcConverter x:Key="ProgressToArc"/>
 
         <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#F21C1C1C"/>
         <SolidColorBrush x:Key="PanelBorderBrush" Color="#26FFFFFF"/>

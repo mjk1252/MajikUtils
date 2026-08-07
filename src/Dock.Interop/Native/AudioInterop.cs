@@ -66,8 +66,8 @@ internal static class AudioInterop
         [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
         [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
         [PreserveSig] int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
-        [PreserveSig] int RegisterEndpointNotificationCallback(IntPtr client);
-        [PreserveSig] int UnregisterEndpointNotificationCallback(IntPtr client);
+        [PreserveSig] int RegisterEndpointNotificationCallback(IMMNotificationClient client);
+        [PreserveSig] int UnregisterEndpointNotificationCallback(IMMNotificationClient client);
     }
 
     [ComImport]
@@ -77,7 +77,7 @@ internal static class AudioInterop
     {
         [PreserveSig] int Activate(ref Guid iid, uint clsCtx, IntPtr activationParams,
             [MarshalAs(UnmanagedType.IUnknown)] out object instance);
-        [PreserveSig] int OpenPropertyStore(uint access, out IntPtr store);
+        [PreserveSig] int OpenPropertyStore(uint access, out IPropertyStore store);
         [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
         [PreserveSig] int GetState(out uint state);
     }
@@ -112,6 +112,133 @@ internal static class AudioInterop
         [PreserveSig] int ReleaseBuffer(uint frames);
         [PreserveSig] int GetNextPacketSize(out uint frames);
     }
+
+    internal static readonly Guid IID_IAudioEndpointVolume = new("5CDF2C82-841E-4546-9722-0CF74078229A");
+
+    /// <summary>
+    /// The endpoint's own volume and mute -- what the hardware keys and the taskbar slider move,
+    /// as opposed to any one application's level.
+    ///
+    /// Only GetMasterVolumeLevelScalar and GetMute are ever called, but every member before them
+    /// still has to be declared: this is a raw vtable, and a missing entry shifts every slot after
+    /// it onto the wrong function.
+    /// </summary>
+    [ComImport]
+    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioEndpointVolume
+    {
+        [PreserveSig] int RegisterControlChangeNotify(IAudioEndpointVolumeCallback notify);
+        [PreserveSig] int UnregisterControlChangeNotify(IAudioEndpointVolumeCallback notify);
+        [PreserveSig] int GetChannelCount(out uint count);
+        [PreserveSig] int SetMasterVolumeLevel(float levelDb, ref Guid eventContext);
+        [PreserveSig] int SetMasterVolumeLevelScalar(float level, ref Guid eventContext);
+        [PreserveSig] int GetMasterVolumeLevel(out float levelDb);
+        [PreserveSig] int GetMasterVolumeLevelScalar(out float level);
+        [PreserveSig] int SetChannelVolumeLevel(uint channel, float levelDb, ref Guid eventContext);
+        [PreserveSig] int SetChannelVolumeLevelScalar(uint channel, float level, ref Guid eventContext);
+        [PreserveSig] int GetChannelVolumeLevel(uint channel, out float levelDb);
+        [PreserveSig] int GetChannelVolumeLevelScalar(uint channel, out float level);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid eventContext);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+    }
+
+    /// <summary>
+    /// Told whenever the endpoint's volume moves, by whatever moved it -- a hardware key, the
+    /// taskbar slider, another application. Implemented on our side and handed to
+    /// <see cref="IAudioEndpointVolume.RegisterControlChangeNotify"/>.
+    /// </summary>
+    [ComImport]
+    [Guid("657804FA-D6AD-4496-8A60-352752AF4F89")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioEndpointVolumeCallback
+    {
+        [PreserveSig] int OnNotify(IntPtr notificationData);
+    }
+
+    /// <summary>
+    /// Offsets into AUDIO_VOLUME_NOTIFICATION_DATA, which begins with a 16-byte GUID event context,
+    /// then the mute flag, then the master level. Walked as a pointer rather than marshalled as a
+    /// struct because it ends in a variable-length per-channel array that nothing here reads.
+    /// </summary>
+    internal const int NotifyMuteOffset = 16;
+    internal const int NotifyMasterVolumeOffset = 20;
+
+    /// <summary>
+    /// Told when the endpoints themselves change: one appearing, one going away, or the default
+    /// moving to a different device. Implemented on our side and handed to
+    /// <see cref="IMMDeviceEnumerator.RegisterEndpointNotificationCallback"/>.
+    /// </summary>
+    [ComImport]
+    [Guid("7991EEC9-7E89-4D85-8390-6C703CEC60C0")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IMMNotificationClient
+    {
+        [PreserveSig] int OnDeviceStateChanged([MarshalAs(UnmanagedType.LPWStr)] string deviceId, uint newState);
+        [PreserveSig] int OnDeviceAdded([MarshalAs(UnmanagedType.LPWStr)] string deviceId);
+        [PreserveSig] int OnDeviceRemoved([MarshalAs(UnmanagedType.LPWStr)] string deviceId);
+
+        [PreserveSig] int OnDefaultDeviceChanged(
+            int flow, int role, [MarshalAs(UnmanagedType.LPWStr)] string defaultDeviceId);
+
+        [PreserveSig] int OnPropertyValueChanged(
+            [MarshalAs(UnmanagedType.LPWStr)] string deviceId, PROPERTYKEY key);
+    }
+
+    /// <summary>
+    /// The shell's property bag, which is where an endpoint keeps the name a person would
+    /// recognise. The device itself only knows its id, which is a GUID pair nobody wants read out.
+    /// </summary>
+    [ComImport]
+    [Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IPropertyStore
+    {
+        [PreserveSig] int GetCount(out uint count);
+        [PreserveSig] int GetAt(uint index, out PROPERTYKEY key);
+        [PreserveSig] int GetValue(ref PROPERTYKEY key, out PROPVARIANT value);
+        [PreserveSig] int SetValue(ref PROPERTYKEY key, ref PROPVARIANT value);
+        [PreserveSig] int Commit();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PROPERTYKEY
+    {
+        public Guid FormatId;
+        public int PropertyId;
+    }
+
+    /// <summary>
+    /// Only ever read as a string here, so the union is declared as far as the pointer and no
+    /// further -- but the <em>size</em> still has to be the real one.
+    ///
+    /// On 64-bit that is 24 bytes: an 8-byte header, then a union 16 wide, because its largest
+    /// members (BLOB, and the counted arrays) are a length plus a pointer. Declaring only the two
+    /// fields would imply 16, and the property store would then write eight bytes past the end of
+    /// the buffer -- which does not fail, it corrupts whatever was next, and surfaces later as an
+    /// access violation somewhere unrelated.
+    /// </summary>
+    [StructLayout(LayoutKind.Explicit, Size = 24)]
+    internal struct PROPVARIANT
+    {
+        [FieldOffset(0)] public ushort VarType;
+        [FieldOffset(8)] public IntPtr Pointer;
+    }
+
+    /// <summary>VT_LPWSTR -- the only variant type this reads.</summary>
+    internal const ushort VtLpwstr = 31;
+
+    /// <summary>PKEY_Device_FriendlyName: "Speakers (Realtek Audio)" and the like.</summary>
+    internal static PROPERTYKEY PKEY_Device_FriendlyName = new()
+    {
+        FormatId = new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"),
+        PropertyId = 14
+    };
+
+    internal const uint StgmRead = 0;
+
+    [DllImport("ole32.dll")]
+    internal static extern int PropVariantClear(ref PROPVARIANT value);
 
     [DllImport("ole32.dll")]
     internal static extern void CoTaskMemFree(IntPtr ptr);

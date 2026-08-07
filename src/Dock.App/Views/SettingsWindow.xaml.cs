@@ -23,6 +23,12 @@ public partial class SettingsWindow : Window
     /// </summary>
     public event Action<AppSettings>? MediaIslandAppearanceChanged;
 
+    /// <summary>
+    /// Raised when the microphone and camera indicator is switched on or off, for the same reason
+    /// as the media toggle: it starts and stops a live watch on the registry.
+    /// </summary>
+    public event Action<bool>? PrivacyIndicatorToggled;
+
     public SettingsWindow(SettingsStore settingsStore)
     {
         _settingsStore = settingsStore;
@@ -31,6 +37,7 @@ public partial class SettingsWindow : Window
         var settings = _settingsStore.Load();
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
         MediaIslandCheckBox.IsChecked = settings.ShowMediaIsland;
+        PrivacyIndicatorCheckBox.IsChecked = settings.ShowPrivacyIndicator;
 
         IslandShapeCombo.SelectedIndex = (int)settings.IslandShape;
         IslandAlignmentCombo.SelectedIndex = (int)settings.IslandAlignment;
@@ -87,6 +94,10 @@ public partial class SettingsWindow : Window
         var islandChanged = settings.ShowMediaIsland != showIsland;
         settings.ShowMediaIsland = showIsland;
 
+        var showPrivacy = PrivacyIndicatorCheckBox.IsChecked == true;
+        var privacyChanged = settings.ShowPrivacyIndicator != showPrivacy;
+        settings.ShowPrivacyIndicator = showPrivacy;
+
         settings.IslandShape = (IslandShape)Math.Max(0, IslandShapeCombo.SelectedIndex);
         settings.IslandAlignment = (IslandAlignment)Math.Max(0, IslandAlignmentCombo.SelectedIndex);
         settings.IslandMonitor = IslandMonitorCombo.SelectedItem is MonitorInfo monitor
@@ -99,6 +110,9 @@ public partial class SettingsWindow : Window
 
         if (islandChanged)
             MediaIslandToggled?.Invoke(showIsland);
+
+        if (privacyChanged)
+            PrivacyIndicatorToggled?.Invoke(showPrivacy);
 
         MediaIslandAppearanceChanged?.Invoke(settings);
     }

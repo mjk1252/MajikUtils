@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -11,6 +12,10 @@ using Dock.Core.Services;
 using Dock.Core.ViewModels;
 using Dock.Interop.Windowing;
 using Microsoft.Win32;
+
+// The island's measurements live in Dock.Core so they can be asserted without a window. Imported
+// statically so the names read the same here as they always did.
+using static Dock.Core.Models.IslandGeometry;
 
 namespace Dock.App.Views;
 
@@ -41,11 +46,6 @@ public enum IslandSection
 /// </summary>
 public partial class IslandWindow : Window
 {
-    // Both sizes are DIPs of the pill inside the window. The window itself is fixed at the larger
-    // footprint and never resizes -- see the comment in the XAML.
-    private const double CollapsedWidth = 260;
-    private const double CollapsedHeight = 34;
-
     /// <summary>Width of the hover panel: what is playing, plus the scratchpad.</summary>
     private const double QuickWidth = 480;
 
@@ -77,34 +77,8 @@ public partial class IslandWindow : Window
     private const double CollapsedRadius = CollapsedHeight / 2;
     private const double ExpandedRadius = 22;
 
-    /// <summary>
-    /// Height of the invisible strip along the top edge that summons the pill when nothing is
-    /// playing. Thin on purpose: it is a place to throw the pointer at, not a region to avoid.
-    /// </summary>
-    private const double PeekHeight = 3;
-
-    /// <summary>
-    /// Slack around the pill once it is showing. Without it the pill sits exactly on the boundary
-    /// that decides its own state, and a pixel of pointer jitter flickers it.
-    /// </summary>
-    private const double HoverSlack = 8;
-
-    /// <summary>
-    /// Drop of the pill form below the screen edge. Enough to read as detached at a glance -- any
-    /// less and it looks like a notch that failed to reach the edge -- without opening a gap the
-    /// pointer can fall through on the way down to it.
-    /// </summary>
-    private const double PillTopGap = 8;
-
-    /// <summary>Inset from the screen's side when the island is parked at one end of the edge.</summary>
-    private const double EdgeMargin = 16;
-
-    /// <summary>
-    /// Mirrors the notch silhouette's Fillet in the XAML. The flares sit outside the pill on both
-    /// sides, so the notch form covers this much more screen than the pill it draws -- which the
-    /// hover region has to account for.
-    /// </summary>
-    private const double FilletWidth = 14;
+    /// <summary>How small the bubble starts before it grows out of the pill.</summary>
+    private const double BubbleSeedScale = 0.3;
 
     /// <summary>Horizontal padding between the pill's edge and the panel inside it, per side.</summary>
     private const double ContentInset = 20;
@@ -114,6 +88,7 @@ public partial class IslandWindow : Window
 
     private readonly MediaViewModel _media;
     private readonly IslandActivityHost _activities;
+    private readonly TimerActivity _timer;
     private readonly NotesViewModel _notes;
     private readonly TodosViewModel _todos;
 
@@ -157,6 +132,7 @@ public partial class IslandWindow : Window
     private double _expandedHeight = FallbackExpandedHeight;
     private bool _shown;
     private bool _expanded;
+    private bool _bubbleShown;
 
     /// <summary>
     /// Whether the island is being held open. A hover panel goes away when the pointer does, which
@@ -180,6 +156,8 @@ public partial class IslandWindow : Window
     public IslandWindow(
         MediaViewModel media,
         IslandActivityHost activities,
+        PrivacyViewModel privacy,
+        TimerActivity timer,
         NotesViewModel notes,
         TodosViewModel todos,
         DockViewModel dock,
@@ -189,6 +167,7 @@ public partial class IslandWindow : Window
     {
         _media = media;
         _activities = activities;
+        _timer = timer;
         _notes = notes;
         _todos = todos;
         AudioSource = audio;
@@ -199,6 +178,9 @@ public partial class IslandWindow : Window
         // the collapsed pill is shared ground, and it asks the host whose turn it is.
         DataContext = media;
         CollapsedLayer.DataContext = activities;
+        Bubble.DataContext = activities;
+        ActivityRows.DataContext = activities;
+        TimerPanel.DataContext = timer;
         NotesPanel.DataContext = notes;
         TodosPanel.DataContext = todos;
 
@@ -231,14 +213,50 @@ public partial class IslandWindow : Window
         NoteInput.PreviewMouseLeftButtonDown += (_, _) => FocusInput(NoteInput);
         TodoInput.PreviewMouseLeftButtonDown += (_, _) => FocusInput(TodoInput);
 
-        // Anything that grows the open panel -- a new note, a todo, a dropped file -- has to be
-        // caught up with, or the pill keeps clipping the list at the height it opened at.
-        _notes.Notes.CollectionChanged += (_, _) => ResizeForContentChange();
-        _todos.Todos.CollectionChanged += (_, _) => ResizeForContentChange();
-        dock.ShelfItems.CollectionChanged += (_, _) => ResizeForContentChange();
+        // Anything that can grow the open panel has to be caught up with, and that is every list
+        // in it -- not just the ones edited by hand.
+        //
+        // Several of these fill in *after* the section opens: Recent enumerates the shell folder
+        // off-thread, winget shells out, and the launcher refilters as you type. The pill measures
+        // itself the moment the section is shown, so without this it sizes to an empty list and
+        // then clips the rows that arrive a moment later -- taking the tab strip off the bottom of
+        // the pill with them, where it cannot be clicked at all.
+        foreach (var collection in new INotifyCollectionChanged[]
+                 {
+                     _notes.Notes, _todos.Todos,
+                     dock.ShelfItems, dock.RecentFiles, dock.ClipboardHistory,
+                     dock.LauncherResults, dock.WingetResults, dock.Stacks,
+                     privacy.Apps
+                 })
+        {
+            collection.CollectionChanged += (_, _) => ResizeForContentChange();
+        }
+
+        // Activity rows appear and disappear above everything else in the panel, so the island has
+        // to catch up with them too.
+        activities.Showing.CollectionChanged += (_, _) => ResizeForContentChange();
+
+        // The now-playing block is the hover panel's, so it comes and goes with the section as well
+        // as with the session.
+        _media.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is not nameof(MediaViewModel.HasSession))
+                return;
+
+            UpdateMediaHeader();
+            ResizeForContentChange();
+        };
 
         _hoverTimer.Tick += (_, _) => UpdateFromPointer();
         _progressTimer.Tick += (_, _) => _media.Tick();
+
+        // A second activity arriving or leaving is the only thing that brings the bubble out or
+        // puts it away while the pill itself is doing nothing.
+        _activities.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(IslandActivityHost.Secondary))
+                UpdateBubble();
+        };
     }
 
     private FrameworkElement[] SectionViews => [ShelfView, ClipboardView, LauncherView, RecentView, StacksView];
@@ -296,6 +314,8 @@ public partial class IslandWindow : Window
             _ => default
         };
 
+        PlaceBubble();
+
         // Whatever is hidden has to be parked above the edge by its full height, gap included, or a
         // detached pill leaves its bottom rim showing.
         if (!_shown)
@@ -308,6 +328,59 @@ public partial class IslandWindow : Window
         }
 
         Reposition();
+    }
+
+    /// <summary>
+    /// Puts the bubble beside the pill, on whichever side there is room for it. The arithmetic is
+    /// <see cref="IslandGeometry.BubbleOffset"/>'s; this only applies it to the elements.
+    ///
+    /// The alignment set here has to match the one the offset was measured against -- edge-to-edge
+    /// at either end of the screen, centre-to-centre in the middle -- which is why both come out of
+    /// the same switch on <see cref="_alignment"/>.
+    /// </summary>
+    private void PlaceBubble()
+    {
+        var detached = _shape == IslandShape.Pill;
+
+        BubbleShape.Detached = detached;
+        BubbleShape.TopGap = detached ? PillTopGap : 0;
+        BubbleContentHost.Margin = new Thickness(0, detached ? PillTopGap : 0, 0, 0);
+
+        Bubble.HorizontalAlignment = _alignment switch
+        {
+            IslandAlignment.Left => HorizontalAlignment.Left,
+            IslandAlignment.Right => HorizontalAlignment.Right,
+            _ => HorizontalAlignment.Center
+        };
+
+        BubbleSlide.X = BubbleOffset(_shape, _alignment);
+
+        // Grows out of the edge facing the pill, so it reads as the island splitting rather than as
+        // a notification appearing beside it.
+        Bubble.RenderTransformOrigin =
+            BubbleMirrored(_alignment) ? new Point(1, 0.5) : new Point(0, 0.5);
+    }
+
+    /// <summary>
+    /// Shows the bubble whenever there is a second activity and the pill is collapsed.
+    ///
+    /// Collapsed-state only, and that falls out of the structure rather than being a rule anybody
+    /// enforces: the expanded panel is not "the primary activity's panel", it is the now-playing
+    /// row plus the section host plus the tab strip, and there is no second panel for a second
+    /// activity to expand into. Everything it has to say is already on screen once the island is
+    /// open.
+    /// </summary>
+    private void UpdateBubble()
+    {
+        var wanted = _shown && !_expanded && _activities.Secondary is not null;
+        if (wanted == _bubbleShown)
+            return;
+
+        _bubbleShown = wanted;
+
+        Animate(Bubble, OpacityProperty, wanted ? 1 : 0, ShapeDuration);
+        Animate(BubbleScale, ScaleTransform.ScaleXProperty, wanted ? 1 : BubbleSeedScale, ShapeDuration);
+        Animate(BubbleScale, ScaleTransform.ScaleYProperty, wanted ? 1 : BubbleSeedScale, ShapeDuration);
     }
 
     /// <summary>How far above its resting place the pill sits while hidden.</summary>
@@ -394,39 +467,14 @@ public partial class IslandWindow : Window
     /// </summary>
     private Rect ActiveHitRect()
     {
-        var (width, height, slack) = (_expanded, _shown) switch
-        {
-            (true, _) => (ContentWidth, _expandedHeight, HoverSlack),
-            (_, true) => (CollapsedWidth, CollapsedHeight, HoverSlack),
-            _ => (CollapsedWidth, PeekHeight, 0d)
-        };
+        var rect = HitRect(_shape, _alignment, Screen,
+            new IslandHitState(_shown, _expanded, _bubbleShown, ContentWidth, _expandedHeight));
 
-        // The notch's flares hang off both sides of the pill they frame, so its footprint on screen
-        // is wider than the pill itself; the pill form has no such overhang.
-        var footprint = width + (_shape == IslandShape.Notch ? FilletWidth * 2 : 0);
-
-        var scaledWidth = footprint * _work.Scale;
-        var scaledMargin = EdgeMargin * _work.Scale;
-        var scaledSlack = slack * _work.Scale;
-
-        var left = _alignment switch
-        {
-            IslandAlignment.Left => _work.Left + scaledMargin,
-            IslandAlignment.Right => _work.Right - scaledMargin - scaledWidth,
-            _ => _work.Left + (_work.Width - scaledWidth) / 2
-        };
-
-        // Measured from the screen edge down regardless of the gap above a detached pill: that gap
-        // is a strip the pointer has to cross to reach the pill, and treating it as outside the
-        // region would put the island away halfway there.
-        var reach = height + (_shape == IslandShape.Pill ? PillTopGap : 0);
-
-        return new Rect(
-            left - scaledSlack,
-            _work.Top,
-            scaledWidth + scaledSlack * 2,
-            reach * _work.Scale + scaledSlack);
+        return new Rect(rect.Left, rect.Top, rect.Width, rect.Height);
     }
+
+    /// <summary>The chosen monitor, in the plain shape the geometry takes.</summary>
+    private IslandScreen Screen => new(_work.Left, _work.Top, _work.Width, _work.Scale);
 
     private void SetShown(bool shown)
     {
@@ -488,7 +536,11 @@ public partial class IslandWindow : Window
     /// whether anything is playing, and the template they sit in exists only while media holds the
     /// pill, so an activity taking it away stops them without this having to know.
     /// </summary>
-    private void UpdateCollapsedShowing() => IsCollapsedShowing = _shown && !_expanded;
+    private void UpdateCollapsedShowing()
+    {
+        IsCollapsedShowing = _shown && !_expanded;
+        UpdateBubble();
+    }
 
     /// <summary>
     /// Holds the island open, or lets it go. Pinning also lifts WS_EX_NOACTIVATE: a window that can
@@ -543,6 +595,7 @@ public partial class IslandWindow : Window
         SectionHost.MinHeight = section == IslandSection.Quick ? 0 : SectionMinHeight;
 
         SyncTabs(section);
+        UpdateMediaHeader();
 
         if (section == IslandSection.Recent)
             RecentView.Refresh();
@@ -571,6 +624,25 @@ public partial class IslandWindow : Window
                 Keyboard.Focus(TodoInput);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Decides which of the two now-playing forms the open panel gets.
+    ///
+    /// The full block -- artwork, timeline, transport -- belongs to the hover panel, which is the
+    /// one that is *about* what is playing. Handing it to every section spends a third of the
+    /// panel on furniture nobody opened the Shelf to use.
+    ///
+    /// The sections get the strip instead: the same information, none of the controls. It is not
+    /// dropped altogether because the collapsed pill is off screen while the panel is open, so
+    /// without it opening a section loses the track entirely.
+    /// </summary>
+    private void UpdateMediaHeader()
+    {
+        var quick = _section == IslandSection.Quick;
+
+        MediaHeader.Visibility = quick && _media.HasSession ? Visibility.Visible : Visibility.Collapsed;
+        MediaStrip.Visibility = !quick && _media.HasSession ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Lights the tab for the open section, and only that one.</summary>
@@ -652,6 +724,20 @@ public partial class IslandWindow : Window
         menu.PlacementTarget = (UIElement)sender;
         menu.IsOpen = true;
     }
+
+    /// <summary>
+    /// Starts a countdown of the length on the button. Pinned first, because reaching for one of
+    /// these means the user is working in the panel rather than glancing at it.
+    /// </summary>
+    private void OnTimerClick(object sender, RoutedEventArgs e)
+    {
+        SetPinned(true);
+
+        if (sender is FrameworkElement { Tag: string minutes } && double.TryParse(minutes, out var value))
+            _timer.Start(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(value));
+    }
+
+    private void OnTimerCancelClick(object sender, RoutedEventArgs e) => _timer.Cancel();
 
     private void OnClearDoneClick(object sender, MouseButtonEventArgs e) =>
         _todos.ClearDoneCommand.Execute(null);

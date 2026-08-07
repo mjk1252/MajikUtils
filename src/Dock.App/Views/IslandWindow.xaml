@@ -206,6 +206,214 @@
                                       Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
             </Grid>
         </DataTemplate>
+
+        <!-- The same green macOS uses for its own camera dot. The convention is worth more here
+             than originality: a green dot at the top of the screen already means "the camera is
+             on" to a great many people. -->
+        <SolidColorBrush x:Key="CameraInUseBrush" Color="#30D158"/>
+
+        <!-- A small labelled action inside a panel, as opposed to the icon-only tabs below. -->
+        <Style x:Key="ChipButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#CCFFFFFF"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Plate" Background="#16FFFFFF" CornerRadius="9"
+                                Padding="9,3" BorderThickness="1"
+                                BorderBrush="{StaticResource PanelBorderBrush}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Plate" Property="Background" Value="#2EFFFFFF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Announcements and conditions in the pill: a glyph, a headline, and the particulars if
+             there are any. One template covers every source that has this shape. -->
+        <DataTemplate DataType="{x:Type vm:AnnouncementActivity}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
+                           FontSize="12" Foreground="White" VerticalAlignment="Center"
+                           Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding Label}" Foreground="White" FontSize="11.5"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Detail}" Foreground="#88FFFFFF" FontSize="11"
+                           VerticalAlignment="Center" Margin="8,0,0,0" MaxWidth="120"
+                           TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:ConditionActivity}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
+                           FontSize="12" Foreground="#CCFFFFFF" VerticalAlignment="Center"
+                           Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding Label}" Foreground="#CCFFFFFF" FontSize="11.5"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:TimerActivity}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#xE916;" FontFamily="{StaticResource GlyphFont}"
+                           FontSize="12" Foreground="White" VerticalAlignment="Center"
+                           Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding RemainingText}" Foreground="White" FontSize="11.5"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- The compact forms: what an activity looks like sitting *beside* the pill rather than
+             in it. Keyed by convention and resolved by CompactActivityTemplateSelector. -->
+        <DataTemplate x:Key="Compact.PrivacyViewModel">
+            <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                     Fill="{StaticResource CameraInUseBrush}"
+                     ToolTip="{Binding Summary}"/>
+        </DataTemplate>
+
+        <!-- Media beside the pill is the artwork and nothing else. It only lands here once
+             something outranks it, such as a timer or an announcement, and at that point the cover
+             is both the most recognisable thing about a track and the only part of it that
+             survives being shrunk to a circle. -->
+        <DataTemplate x:Key="Compact.MediaViewModel">
+            <Border Width="22" Height="22" CornerRadius="11" Background="#22FFFFFF">
+                <Border.OpacityMask>
+                    <VisualBrush>
+                        <VisualBrush.Visual>
+                            <Border Width="22" Height="22" CornerRadius="11" Background="White"/>
+                        </VisualBrush.Visual>
+                    </VisualBrush>
+                </Border.OpacityMask>
+                <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
+                       Stretch="UniformToFill"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
+            </Border>
+        </DataTemplate>
+
+        <!-- A timer is the one activity with a live value worth drawing small, so its compact form
+             is a ring rather than a dot: it says how far along at a glance without a single word. -->
+        <DataTemplate x:Key="Compact.TimerActivity">
+            <Grid Width="26" Height="26">
+                <Ellipse Width="26" Height="26" Stroke="#33FFFFFF" StrokeThickness="2.5"/>
+                <Path Data="{Binding Progress, Converter={StaticResource ProgressToArc}}"
+                      Stroke="#FF9F0A" StrokeThickness="2.5"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="Compact.AnnouncementActivity">
+            <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
+                       FontSize="13" Foreground="White"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="Compact.ConditionActivity">
+            <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
+                       FontSize="12" Foreground="#AAFFFFFF"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       ToolTip="{Binding Label}"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CompactActivityFallback">
+            <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="#88FFFFFF"/>
+        </DataTemplate>
+
+        <views:CompactActivityTemplateSelector x:Key="CompactActivity"
+                                               Fallback="{StaticResource CompactActivityFallback}"/>
+
+        <!-- Deliberately empty, and deliberately not null: see the selector. -->
+        <DataTemplate x:Key="ExpandedActivityEmpty"/>
+
+        <views:ExpandedActivityTemplateSelector x:Key="ExpandedActivity"
+                                                Empty="{StaticResource ExpandedActivityEmpty}"/>
+
+        <DataTemplate x:Key="Expanded.TimerActivity">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10" VerticalAlignment="Center">
+                <TextBlock Text="&#xE916;" FontFamily="{StaticResource GlyphFont}" FontSize="13"
+                           Foreground="#FF9F0A" VerticalAlignment="Center" Margin="4,0,10,0"/>
+                <TextBlock Text="{Binding RemainingText}" Foreground="White" FontSize="14"
+                           VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <Button Content="Stop" Style="{StaticResource ChipButton}"
+                        Command="{Binding CancelCommand}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="Expanded.ConditionActivity">
+            <StackPanel Orientation="Horizontal" Margin="4,0,0,8" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
+                           FontSize="12" Foreground="#AAFFFFFF"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding Label}" Foreground="#CCFFFFFF" FontSize="11.5"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- An activity's row in the expanded panel. Media has none by design: its expanded form is
+             the artwork and transport block below, not a row up here. -->
+        <DataTemplate x:Key="Expanded.PrivacyViewModel">
+            <StackPanel Margin="0,0,0,10">
+                <TextBlock Text="CAMERA IN USE" Style="{StaticResource SectionHeaderText}"/>
+
+                <ItemsControl ItemsSource="{Binding Apps}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="4,0,0,4">
+                                <Ellipse Width="7" Height="7" Margin="0,0,8,0"
+                                         VerticalAlignment="Center"
+                                         Fill="{StaticResource CameraInUseBrush}"/>
+
+                                <!-- Collapsed rather than left empty when there is no icon: a
+                                     packaged app is named by package family and has no path to
+                                     extract one from, and an empty box reads as a failed load. -->
+                                <Border Width="16" Height="16" CornerRadius="3"
+                                        Margin="0,0,8,0" VerticalAlignment="Center"
+                                        Visibility="{Binding IconPng,
+                                            Converter={StaticResource NullToVisibility},
+                                            ConverterParameter=invert}">
+                                    <Image Source="{Binding IconPng,
+                                               Converter={StaticResource PngToImage}}"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+
+                                <TextBlock Text="{Binding Name}" Foreground="White"
+                                           FontSize="11.5" VerticalAlignment="Center"
+                                           MaxWidth="280" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- What the collapsed pill shows when something is using the camera. -->
+        <DataTemplate DataType="{x:Type vm:PrivacyViewModel}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,7,0"
+                         Fill="{StaticResource CameraInUseBrush}"/>
+
+                <Border Width="16" Height="16" CornerRadius="3" Margin="0,0,7,0"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding Icon, Converter={StaticResource NullToVisibility},
+                            ConverterParameter=invert}">
+                    <Image Source="{Binding Icon, Converter={StaticResource PngToImage}}"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Border>
+
+                <TextBlock Text="{Binding Summary}" Foreground="White" FontSize="11.5"
+                           VerticalAlignment="Center" MaxWidth="180"
+                           TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <!-- The window itself stays the full expanded footprint and never resizes: only the pill
@@ -234,6 +442,46 @@
                     <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.55" Color="Black"/>
                 </views:NotchShape.Effect>
             </views:NotchShape>
+
+            <!-- The runner-up activity, split off into a form of its own beside the pill.
+
+                 A sibling of the silhouette rather than a child of the content host, because that
+                 host clips: the bubble is outside the pill, which is the entire point of it. Being
+                 inside the Pill grid still gets it the drop-in slide and the show/hide fade for
+                 free, so there is only ever one of each animation to keep in step.
+
+                 Placed from code (PlaceBubble) rather than by a margin: which side it sits on and
+                 how far out depend on the island's shape and which end of the edge it is parked
+                 at, and a margin on a centre-aligned element shifts it by half its value. -->
+            <Grid x:Name="Bubble" HorizontalAlignment="Center" VerticalAlignment="Top"
+                  Opacity="0" RenderTransformOrigin="0,0.5">
+                <Grid.RenderTransform>
+                    <TransformGroup>
+                        <!-- Grows out of the edge facing the pill, so it reads as the island
+                             splitting rather than as a notification appearing next to it. -->
+                        <ScaleTransform x:Name="BubbleScale" ScaleX="0.3" ScaleY="0.3"/>
+                        <TranslateTransform x:Name="BubbleSlide"/>
+                    </TransformGroup>
+                </Grid.RenderTransform>
+
+                <views:NotchShape x:Name="BubbleShape"
+                                  PillWidth="34" PillHeight="34" BottomRadius="17" Fillet="8"
+                                  HorizontalAlignment="Center" VerticalAlignment="Top"
+                                  Fill="#F2101010"
+                                  Stroke="{StaticResource PanelBorderBrush}" StrokeThickness="1">
+                    <views:NotchShape.Effect>
+                        <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.55" Color="Black"/>
+                    </views:NotchShape.Effect>
+                </views:NotchShape>
+
+                <Border x:Name="BubbleContentHost" Width="34" Height="34"
+                        HorizontalAlignment="Center" VerticalAlignment="Top"
+                        Background="Transparent">
+                    <ContentControl Content="{Binding Secondary}"
+                                    ContentTemplateSelector="{StaticResource CompactActivity}"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+            </Grid>
 
             <Border x:Name="PillContent"
                     HorizontalAlignment="Center" VerticalAlignment="Top"
@@ -270,12 +518,24 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Collapses whole when nothing is playing, so a section opened from the
-                             tab strip is not pushed down past a row of blanks. -->
-                        <Grid x:Name="MediaHeader"
-                              Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
+                        <!-- One row per showing activity that has something to say up here. Rows
+                             rather than tabs: the tab strip is for sections a person navigates to,
+                             and these are conditions, not places.
+
+                             Generic on purpose. Every activity added from here on is a view model,
+                             two templates and a registration: no surgery on this window, and no
+                             renumbering the rows below every time. -->
+                        <ItemsControl x:Name="ActivityRows"
+                                      ItemsSource="{Binding Showing}"
+                                      ItemTemplateSelector="{StaticResource ExpandedActivity}"/>
+
+                        <!-- Shown only on the hover panel, and only with something playing. Driven
+                             from code (UpdateMediaHeader) rather than bound, because it answers to
+                             the open section as well as to the session. -->
+                        <Grid x:Name="MediaHeader" Grid.Row="1" Visibility="Collapsed">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
@@ -355,10 +615,53 @@
                         <!-- One host, every section kept alive inside it: switching tabs hides and
                              shows rather than rebuilding, so a search box keeps its text and a list
                              its scroll position across a switch. -->
-                        <Grid x:Name="SectionHost" Grid.Row="1" Margin="0,12,0,0">
+                        <!-- What is playing, for the sections that are not about it. The same
+                             information as the block above and none of its furniture: no timeline,
+                             no transport, no 84px of artwork. Thirty pixels instead of a hundred
+                             and thirty, so a list still gets the panel.
+
+                             It earns its place because the collapsed pill is not on screen while
+                             the panel is open: without this, opening the Shelf loses the track
+                             entirely. -->
+                        <Grid x:Name="MediaStrip" Grid.Row="1" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <Border Width="20" Height="20" CornerRadius="4" Margin="0,0,9,0"
+                                        Background="#22FFFFFF" VerticalAlignment="Center">
+                                    <Border.OpacityMask>
+                                        <VisualBrush>
+                                            <VisualBrush.Visual>
+                                                <Border Width="20" Height="20" CornerRadius="4"
+                                                        Background="White"/>
+                                            </VisualBrush.Visual>
+                                        </VisualBrush>
+                                    </Border.OpacityMask>
+                                    <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
+                                           Stretch="UniformToFill"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+
+                                <TextBlock Text="{Binding Title}" Foreground="White" FontSize="11.5"
+                                           VerticalAlignment="Center" MaxWidth="330"
+                                           TextTrimming="CharacterEllipsis"/>
+
+                                <TextBlock Text="{Binding Artist}" Foreground="#88FFFFFF" FontSize="11"
+                                           VerticalAlignment="Center" Margin="8,0,0,0" MaxWidth="150"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+
+                            <Border Grid.Row="1" Height="1" Background="#22FFFFFF"/>
+                        </Grid>
+
+                        <Grid x:Name="SectionHost" Grid.Row="2" Margin="0,12,0,0">
                             <!-- The default, and what a hover shows: the scratchpad. -->
                             <Grid x:Name="QuickView">
                                 <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
@@ -367,9 +670,39 @@
                                 <Border Height="1" Background="#33FFFFFF"
                                         Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
 
-                                <!-- Its own DataContext: a TodosViewModel set from code-behind, since
-                                     the rest of this layer is bound to the media view model. -->
-                                <Grid x:Name="TodosPanel" Grid.Row="1" Margin="0,10,0,0">
+                                <!-- Timer. Sits with the scratchpad because that is the part of the
+                                     island you already come to in order to note something down and
+                                     get on with it. Fixed lengths rather than a text box: picking
+                                     a duration is a two-second decision and typing "25" then Enter
+                                     is slower than pressing 25.
+
+                                     Its own DataContext, a TimerActivity set from code-behind,
+                                     since the rest of this layer is bound to the media view model. -->
+                                <StackPanel x:Name="TimerPanel" Grid.Row="1" Orientation="Horizontal"
+                                            Margin="0,10,0,0">
+                                    <TextBlock Text="TIMER" Style="{StaticResource SectionHeaderText}"
+                                               VerticalAlignment="Center" Margin="4,0,10,0"/>
+
+                                    <Button Content="5m" Style="{StaticResource ChipButton}"
+                                            Click="OnTimerClick" Tag="5"/>
+                                    <Button Content="10m" Style="{StaticResource ChipButton}"
+                                            Click="OnTimerClick" Tag="10"/>
+                                    <Button Content="25m" Style="{StaticResource ChipButton}"
+                                            Click="OnTimerClick" Tag="25"/>
+
+                                    <Button Content="Stop" Style="{StaticResource ChipButton}"
+                                            Click="OnTimerCancelClick"
+                                            Visibility="{Binding IsActive,
+                                                Converter={StaticResource BoolToVisibility}}"/>
+
+                                    <TextBlock Text="{Binding RemainingText}" Foreground="White"
+                                               FontSize="11.5" VerticalAlignment="Center"
+                                               Margin="8,0,0,0"
+                                               Visibility="{Binding IsActive,
+                                                   Converter={StaticResource BoolToVisibility}}"/>
+                                </StackPanel>
+
+                                <Grid x:Name="TodosPanel" Grid.Row="2" Margin="0,10,0,0">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
@@ -436,7 +769,7 @@
                                 </Grid>
 
                                 <!-- Its own DataContext: a NotesViewModel, same reasoning. -->
-                                <Grid x:Name="NotesPanel" Grid.Row="2" Margin="0,14,0,0">
+                                <Grid x:Name="NotesPanel" Grid.Row="3" Margin="0,14,0,0">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
@@ -490,7 +823,7 @@
 
                         <!-- The tab strip, and the app's only remaining chrome: everything that used
                              to be a taskbar button of its own is reached from here. -->
-                        <Grid x:Name="TabStrip" Grid.Row="2" Margin="0,12,0,0">
+                        <Grid x:Name="TabStrip" Grid.Row="3" Margin="0,12,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>

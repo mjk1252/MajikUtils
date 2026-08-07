@@ -22,6 +22,23 @@ public partial class App : System.Windows.Application
     private MediaSessionSource? _mediaSource;
     private MediaViewModel? _mediaViewModel;
     private IslandActivityHost? _activities;
+    private PrivacyViewModel? _privacyViewModel;
+    private DeviceUsageMonitor? _deviceUsageMonitor;
+    private DebugActivity? _debugActivity;
+    private DispatcherTimer? _debugTimer;
+
+    private AnnouncementActivity? _announcements;
+    private TimerActivity? _timer;
+    private ConditionActivity? _doNotDisturb;
+    private ConditionActivity? _restartPending;
+    private SystemEventSource? _systemEvents;
+    private BluetoothSource? _bluetooth;
+    private SystemConditionSource? _conditions;
+    private VolumeSource? _volume;
+    private BatterySource? _battery;
+    private AudioDeviceSource? _audioDevices;
+    private ConditionActivity? _lowBattery;
+    private ConditionActivity? _lowDisk;
 
     /// <summary>
     /// Drives the activity host's clock, which is the only thing that retires an activity whose
@@ -79,6 +96,17 @@ public partial class App : System.Windows.Application
         if (_settingsStore.Load().ShowMediaIsland)
             StartMediaMonitoring();
 
+        if (_settingsStore.Load().ShowPrivacyIndicator)
+            StartDeviceUsageMonitoring();
+
+        StartSystemEvents();
+        StartSystemConditions();
+        StartVolumeWatch();
+        StartBatteryWatch();
+
+        if (e.Args.Any(a => string.Equals(a, "--debug-activity", StringComparison.OrdinalIgnoreCase)))
+            StartDebugActivity();
+
         _singleInstance.StartListening(panel => Dispatcher.Invoke(() => ShowPanel(panel)));
 
         StartupRegistration.SetEnabled(_settingsStore.Load().StartWithWindows);
@@ -116,11 +144,46 @@ public partial class App : System.Windows.Application
         // Whose turn it is on the collapsed pill. Media is the only activity so far and so always
         // wins, but the arbitration and the grace period that used to live here are its business
         // now rather than this class's.
+        _privacyViewModel = new PrivacyViewModel(_iconProvider!);
+        _announcements = new AnnouncementActivity();
+        _timer = new TimerActivity();
+
+        // Two instances of one class: what separates these is a label and a glyph.
+        _doNotDisturb = new ConditionActivity
+        {
+            Key = "dnd", Label = "Do not disturb", Glyph = "\uE7ED"
+        };
+
+        _restartPending = new ConditionActivity
+        {
+            Key = "restart", Label = "Restart pending", Glyph = "\uE777"
+        };
+
+        _lowDisk = new ConditionActivity { Key = "disk", Glyph = "\uEDA2" };
+
+        // Its label carries the percentage, so unlike the others it is written as readings arrive.
+        _lowBattery = new ConditionActivity { Key = "battery", Glyph = "\uE850" };
+
         _activities = new IslandActivityHost();
         _activities.Tick(DateTimeOffset.UtcNow);
         _activities.Register(_mediaViewModel);
+        _activities.Register(_privacyViewModel);
+        _activities.Register(_announcements);
+        _activities.Register(_timer);
+        _activities.Register(_doNotDisturb);
+        _activities.Register(_restartPending);
+        _activities.Register(_lowDisk);
 
-        _activityTimer.Tick += (_, _) => _activities.Tick(DateTimeOffset.UtcNow);
+        // One clock for everything that measures time on the island: the host's linger windows, an
+        // announcement's two and a half seconds, and the timer's countdown.
+        _activityTimer.Tick += (_, _) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            _announcements.Tick(now);
+            _timer.Tick(now);
+            _activities.Tick(now);
+        };
+
         _activityTimer.Start();
 
         // Media notifications arrive on the thread pool, like the system stats below.
@@ -131,8 +194,8 @@ public partial class App : System.Windows.Application
         _audioSource = new AudioLoopbackSource();
 
         _islandWindow = new IslandWindow(
-            _mediaViewModel, _activities, _notesViewModel, _todosViewModel, _viewModel!, wingetService,
-            _audioSource, _settingsStore!.Load());
+            _mediaViewModel, _activities, _privacyViewModel, _timer, _notesViewModel, _todosViewModel,
+            _viewModel!, wingetService, _audioSource, _settingsStore!.Load());
 
         _islandWindow.SettingsRequested += ShowSettingsWindow;
         _islandWindow.ExitRequested += Shutdown;
@@ -233,7 +296,14 @@ public partial class App : System.Windows.Application
             {
                 var text = System.Windows.Clipboard.GetText();
                 if (!string.IsNullOrWhiteSpace(text))
+                {
                     _viewModel!.AddClipboardEntry(text);
+
+                    // Nearly free: this monitor was already firing on every copy to build the
+                    // history, and nothing was showing that it had.
+                    _announcements?.Announce(DateTimeOffset.UtcNow, "Copied", "\uE8C8",
+                        Summarise(text));
+                }
             }
         }
         catch (System.Runtime.InteropServices.COMException)
@@ -241,6 +311,18 @@ public partial class App : System.Windows.Application
             // Clipboard is transiently locked by whichever app just wrote to it -- that write is
             // exactly what triggered this notification, so nothing to capture is actually lost.
         }
+    }
+
+    /// <summary>
+    /// A few words of whatever was copied, on one line. Newlines out, because a clipboard entry is
+    /// as often a paragraph as a word and the pill is one line tall.
+    /// </summary>
+    private static string Summarise(string text)
+    {
+        var flattened = string.Join(' ', text.Split(
+            ['\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+        return flattened.Length <= 32 ? flattened : flattened[..31] + "…";
     }
 
     private void StartSystemStats()
@@ -273,6 +355,179 @@ public partial class App : System.Windows.Application
         _mediaSource?.Stop();
         _mediaViewModel?.Apply(null);
         _mediaViewModel?.Retire();
+    }
+
+    /// <summary>
+    /// Starts watching which applications are using the camera. Created lazily rather than at
+    /// startup: someone who has turned the indicator off should have no registry watch running on
+    /// their machine at all.
+    /// </summary>
+    private void StartDeviceUsageMonitoring()
+    {
+        if (_deviceUsageMonitor is not null)
+            return;
+
+        _deviceUsageMonitor = new DeviceUsageMonitor();
+
+        // Raised from the registry watcher's own thread, like the media and stats sources.
+        _deviceUsageMonitor.Changed += (_, usages) =>
+            Dispatcher.Invoke(() => _privacyViewModel?.Apply(usages));
+
+        _deviceUsageMonitor.Start();
+    }
+
+    /// <summary>
+    /// Stops the watch and takes the indicator off the island. Retired outright for the same reason
+    /// media is: the grace period is for a camera that was released, not for a feature switched off.
+    /// </summary>
+    private void StopDeviceUsageMonitoring()
+    {
+        _deviceUsageMonitor?.Dispose();
+        _deviceUsageMonitor = null;
+
+        _privacyViewModel?.Apply([]);
+        _privacyViewModel?.Retire();
+    }
+
+    /// <summary>
+    /// Everything momentary, funnelled into the one announcement. Downloads, screenshots, drives
+    /// and the network all come from one watcher; Bluetooth needs a WinRT one of its own but says
+    /// the same kind of thing when it fires.
+    /// </summary>
+    private void StartSystemEvents()
+    {
+        _systemEvents = new SystemEventSource();
+        _systemEvents.Occurred += OnSystemEvent;
+        _systemEvents.Start();
+
+        _bluetooth = new BluetoothSource();
+        _bluetooth.Occurred += OnSystemEvent;
+        _bluetooth.Start();
+    }
+
+    // Raised from watcher threads and WinRT callbacks, like every other source here.
+    private void OnSystemEvent(object? sender, SystemEvent occurrence) =>
+        Dispatcher.Invoke(() => _announcements?.Announce(
+            DateTimeOffset.UtcNow, occurrence.Label, occurrence.Glyph, occurrence.Detail));
+
+    private void StartSystemConditions()
+    {
+        _conditions = new SystemConditionSource();
+        _conditions.Changed += (_, conditions) => Dispatcher.Invoke(() =>
+        {
+            _doNotDisturb!.IsActive = conditions.DoNotDisturb;
+            _restartPending!.IsActive = conditions.RestartPending;
+
+            if (conditions.FullDrive is { } drive)
+                _lowDisk!.Label = $"{drive.Name} {drive.PercentFree}% free";
+
+            _lowDisk!.IsActive = conditions.FullDrive is not null;
+        });
+
+        _conditions.Start();
+    }
+
+    /// <summary>
+    /// The volume readout. Announced rather than given an activity of its own: it is on screen for
+    /// two seconds and then gone, which is exactly what an announcement is.
+    /// </summary>
+    private void StartVolumeWatch()
+    {
+        _volume = new VolumeSource();
+        _volume.Changed += (_, reading) => Dispatcher.Invoke(() =>
+            _announcements?.Announce(
+                DateTimeOffset.UtcNow,
+                reading.IsMuted ? "Muted" : $"Volume {reading.Level * 100:0}%",
+                reading.IsMuted ? "" : ""));
+
+        _volume.Start();
+
+        _audioDevices = new AudioDeviceSource();
+        _audioDevices.DefaultOutputChanged += (_, name) => Dispatcher.Invoke(() =>
+            _announcements?.Announce(DateTimeOffset.UtcNow, "Output", "", name));
+
+        _audioDevices.Start();
+    }
+
+    /// <summary>
+    /// Power, on the machines that have any. Asked before anything is registered: a desktop has
+    /// nothing to report ever, and an activity that can never light up should not be on the island
+    /// at all, let alone a watcher behind it.
+    /// </summary>
+    private void StartBatteryWatch()
+    {
+        _battery = new BatterySource();
+
+        if (!_battery.IsPresent)
+        {
+            _battery.Dispose();
+            _battery = null;
+            return;
+        }
+
+        _activities!.Register(_lowBattery!);
+
+        var charging = (bool?)null;
+
+        _battery.Changed += (_, status) => Dispatcher.Invoke(() =>
+        {
+            // The charger going in or out is the moment worth interrupting for. A percentage
+            // drifting down on its own is not, so only the transition announces -- and never on the
+            // very first reading, which would announce the state the machine was already in.
+            if (charging is { } was && was != status.IsCharging)
+            {
+                _announcements?.Announce(
+                    DateTimeOffset.UtcNow,
+                    status.IsCharging ? "Charging" : "On battery",
+                    status.IsCharging ? "" : "",
+                    Describe(status));
+            }
+
+            charging = status.IsCharging;
+
+            // Running out is a standing condition, so it takes the dot rather than the pill.
+            _lowBattery!.Label = $"Battery {status.PercentRemaining ?? 0}%";
+            _lowBattery.IsActive = !status.IsCharging
+                && status.PercentRemaining is { } percent && percent <= LowBatteryPercent;
+        });
+
+        _battery.Start();
+    }
+
+    /// <summary>Where a battery stops being background information and starts being a problem.</summary>
+    private const int LowBatteryPercent = 20;
+
+    private static string Describe(BatteryStatus status)
+    {
+        if (status.PercentRemaining is not { } percent)
+            return string.Empty;
+
+        // The estimate is missing for the first minute after unplugging, and wrong for a while
+        // after that, so it is shown only once Windows is willing to commit to one.
+        return status is { IsCharging: false, Remaining: { } left } && left > TimeSpan.FromMinutes(1)
+            ? $"{percent}% · {Format(left)} left"
+            : $"{percent}%";
+    }
+
+    private static string Format(TimeSpan value) =>
+        value.TotalHours >= 1 ? $"{(int)value.TotalHours}h {value.Minutes}m" : $"{value.Minutes}m";
+
+    /// <summary>
+    /// Registers a stand-in activity that switches itself on and off, for watching the bubble
+    /// arrive and leave without needing a camera pointed at anybody.
+    ///
+    /// It cycles rather than sitting there because the interesting part is the transition: the
+    /// bubble growing out of the pill, and the pill taking its place back afterwards.
+    /// </summary>
+    private void StartDebugActivity()
+    {
+        _debugActivity = new DebugActivity { Key = "debug", Label = "Debug activity" };
+        _activities!.Register(_debugActivity);
+        _debugActivity.IsActive = true;
+
+        _debugTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _debugTimer.Tick += (_, _) => _debugActivity.IsActive = !_debugActivity.IsActive;
+        _debugTimer.Start();
     }
 
     private void OnStacksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -343,6 +598,13 @@ public partial class App : System.Windows.Application
             else
                 StopMediaMonitoring();
         };
+        _settingsWindow.PrivacyIndicatorToggled += show =>
+        {
+            if (show)
+                StartDeviceUsageMonitoring();
+            else
+                StopDeviceUsageMonitoring();
+        };
         _settingsWindow.MediaIslandAppearanceChanged += settings =>
             _islandWindow?.ApplyAppearance(settings);
         _settingsWindow.Show();
@@ -357,8 +619,16 @@ public partial class App : System.Windows.Application
 
         _clipboardMonitor?.Dispose();
         _systemStatsSource?.Dispose();
+        _deviceUsageMonitor?.Dispose();
+        _systemEvents?.Dispose();
+        _bluetooth?.Dispose();
+        _conditions?.Dispose();
+        _volume?.Dispose();
+        _battery?.Dispose();
+        _audioDevices?.Dispose();
 
         _activityTimer.Stop();
+        _debugTimer?.Stop();
         _islandWindow?.CloseForExit();
         _mediaSource?.Dispose();
         _audioSource?.Dispose();
