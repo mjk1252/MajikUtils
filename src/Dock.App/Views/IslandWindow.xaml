@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:Dock.App.Views"
         xmlns:panels="clr-namespace:Dock.App.Views.Panels"
+        xmlns:vm="clr-namespace:Dock.Core.ViewModels;assembly=Dock.Core"
         Title="MajikUtils Island"
         Width="760" Height="700"
         WindowStyle="None"
@@ -147,6 +148,64 @@
             <Setter Property="Padding" Value="0"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
+
+        <!-- What the collapsed pill shows when media holds it. One of a set: the pill is a
+             ContentControl over whichever activity is primary, and each activity's collapsed form
+             is a template like this one, picked by the type of the view model.
+
+             A grid rather than a row of stacked children, and fixed to the pill's own width: art,
+             artist and bars take what they need and the title gets the rest, so a long title trims
+             instead of pushing the bars out past the clip.
+
+             HasSession rather than the activity's IsActive: between two tracks the session is gone
+             but the island is still holding the last one up, and this has to keep drawing it. -->
+        <DataTemplate DataType="{x:Type vm:MediaViewModel}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Width="22" Height="22" CornerRadius="4" Margin="0,0,9,0"
+                        Background="#22FFFFFF"
+                        Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
+                    <Border.OpacityMask>
+                        <VisualBrush>
+                            <VisualBrush.Visual>
+                                <Border Width="22" Height="22" CornerRadius="4" Background="White"/>
+                            </VisualBrush.Visual>
+                        </VisualBrush>
+                    </Border.OpacityMask>
+                    <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
+                           Stretch="UniformToFill"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Border>
+
+                <TextBlock Grid.Column="1" Text="{Binding Title}" Foreground="White" FontSize="11.5"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
+
+                <TextBlock Grid.Column="2" Text="{Binding Artist}" Foreground="#88FFFFFF" FontSize="11"
+                           VerticalAlignment="Center" MaxWidth="84" Margin="8,0,0,0"
+                           TextTrimming="CharacterEllipsis"
+                           Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
+
+                <!-- The window supplies "on screen and collapsed"; the control ANDs that with the
+                     track actually playing. Both reached by RelativeSource because a template has
+                     no other way back to the window that hosts it. -->
+                <views:NowPlayingBars Grid.Column="3" Margin="10,0,0,0"
+                                      IsPlaying="{Binding IsPlaying}"
+                                      Artwork="{Binding Artwork}"
+                                      IsRunning="{Binding IsCollapsedShowing,
+                                          RelativeSource={RelativeSource AncestorType=views:IslandWindow}}"
+                                      AudioSource="{Binding AudioSource,
+                                          RelativeSource={RelativeSource AncestorType=views:IslandWindow}}"
+                                      Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <!-- The window itself stays the full expanded footprint and never resizes: only the pill
@@ -182,71 +241,23 @@
                     Background="Transparent"
                     ClipToBounds="True">
                 <Grid>
-                    <!-- Collapsed: what is playing, at a glance.
-
-                         A grid rather than a row of stacked children, and fixed to the pill's own
-                         width: art, artist and bars take what they need and the title gets the rest,
-                         so a long title trims instead of pushing the bars out past the clip. -->
+                    <!-- Collapsed: whichever activity currently holds the pill, at a glance. Its
+                         DataContext is the activity host, set in the constructor; the form each
+                         activity takes here is a DataTemplate up in Window.Resources. -->
                     <Grid x:Name="CollapsedLayer" Width="236" Height="22"
                           HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <Border Width="22" Height="22" CornerRadius="4" Margin="0,0,9,0"
-                                Background="#22FFFFFF"
-                                Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
-                            <Border.OpacityMask>
-                                <VisualBrush>
-                                    <VisualBrush.Visual>
-                                        <Border Width="22" Height="22" CornerRadius="4" Background="White"/>
-                                    </VisualBrush.Visual>
-                                </VisualBrush>
-                            </Border.OpacityMask>
-                            <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
-                                   Stretch="UniformToFill"
-                                   RenderOptions.BitmapScalingMode="HighQuality"/>
-                        </Border>
-
-                        <TextBlock Grid.Column="1" Text="{Binding Title}" Foreground="White" FontSize="11.5"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
-
-                        <TextBlock Grid.Column="2" Text="{Binding Artist}" Foreground="#88FFFFFF" FontSize="11"
-                                   VerticalAlignment="Center" MaxWidth="84" Margin="8,0,0,0"
-                                   TextTrimming="CharacterEllipsis"
-                                   Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
-
-                        <!-- Now-playing bars. Heights are animated from code-behind rather than by a
-                             storyboard so they run only while they can actually be seen: playing, on
-                             screen, and not covered by the expanded panel. Their colour comes from
-                             the artwork, and is set there too.
-
-                             Centred rather than sat on a baseline, so a growing bar opens out from
-                             the middle in both directions instead of sprouting upwards. -->
-                        <StackPanel x:Name="Equalizer" Grid.Column="3" Orientation="Horizontal" Height="14"
-                                    Margin="10,0,0,0" VerticalAlignment="Center"
-                                    Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
-                            <Rectangle x:Name="Bar1" Width="2.5" Height="3" RadiusX="1.25" RadiusY="1.25"
-                                       Fill="#DDFFFFFF" VerticalAlignment="Center" Margin="0,0,2.5,0"/>
-                            <Rectangle x:Name="Bar2" Width="2.5" Height="3" RadiusX="1.25" RadiusY="1.25"
-                                       Fill="#DDFFFFFF" VerticalAlignment="Center" Margin="0,0,2.5,0"/>
-                            <Rectangle x:Name="Bar3" Width="2.5" Height="3" RadiusX="1.25" RadiusY="1.25"
-                                       Fill="#DDFFFFFF" VerticalAlignment="Center" Margin="0,0,2.5,0"/>
-                            <Rectangle x:Name="Bar4" Width="2.5" Height="3" RadiusX="1.25" RadiusY="1.25"
-                                       Fill="#DDFFFFFF" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        <ContentControl Content="{Binding Primary}"/>
 
                         <!-- The idle peek: hovering the top edge with nothing playing still gets an
-                             answer, rather than the island appearing to be broken. -->
-                        <TextBlock Grid.ColumnSpan="4" Text="Nothing playing"
+                             answer, rather than the island appearing to be broken.
+
+                             The island's empty state rather than media's, which is why it sits out
+                             here beside the ContentControl instead of inside a template: with no
+                             activity there is no template being drawn to put it in. -->
+                        <TextBlock Text="Nothing playing"
                                    Foreground="#77FFFFFF" FontSize="11.5"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"/>
+                                   Visibility="{Binding Primary, Converter={StaticResource NullToVisibility}}"/>
                     </Grid>
 
                     <!-- Expanded: what is playing, whichever section is open, and the strip of tabs

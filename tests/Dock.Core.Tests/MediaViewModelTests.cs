@@ -7,17 +7,52 @@ namespace Dock.Core.Tests;
 public class MediaViewModelTests
 {
     [Fact]
-    public void Apply_Null_ClearsEverything()
+    public void Apply_Null_DropsTheClaimButHoldsTheTrackUp()
     {
         var viewModel = new MediaViewModel(new FakeSource());
-        viewModel.Apply(Snapshot(isPlaying: true));
+        viewModel.Apply(Snapshot(isPlaying: true, artwork: [1, 2, 3]));
 
         viewModel.Apply(null);
 
+        // The island is still showing this: losing the session is usually the gap between two
+        // tracks, and blanking here would put "Nothing playing" on the pill for the whole of it.
+        Assert.False(viewModel.IsActive);
+        Assert.True(viewModel.HasSession);
+        Assert.Equal("Title", viewModel.Title);
+        Assert.NotNull(viewModel.Artwork);
+
+        // Playback is the one thing that has demonstrably stopped, so the bars flatten.
+        Assert.False(viewModel.IsPlaying);
+    }
+
+    [Fact]
+    public void Retire_ClearsEverything()
+    {
+        var viewModel = new MediaViewModel(new FakeSource());
+        viewModel.Apply(Snapshot(isPlaying: true, artwork: [1, 2, 3]));
+        viewModel.Apply(null);
+
+        viewModel.Retire();
+
         Assert.False(viewModel.HasSession);
+        Assert.False(viewModel.IsActive);
         Assert.Equal(string.Empty, viewModel.Title);
         Assert.Null(viewModel.Artwork);
         Assert.False(viewModel.IsPlaying);
+    }
+
+    [Fact]
+    public void Apply_AfterLosingTheSession_ClaimsAgainWithoutRetiring()
+    {
+        var viewModel = new MediaViewModel(new FakeSource());
+        viewModel.Apply(Snapshot(isPlaying: true));
+        viewModel.Apply(null);
+
+        viewModel.Apply(Snapshot(isPlaying: true));
+
+        Assert.True(viewModel.IsActive);
+        Assert.True(viewModel.HasSession);
+        Assert.True(viewModel.IsPlaying);
     }
 
     [Fact]

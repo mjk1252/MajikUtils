@@ -5,7 +5,6 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using Dock.Core.Models;
 using Dock.Core.Services;
@@ -112,35 +111,9 @@ public partial class IslandWindow : Window
 
     private static readonly Duration ShowDuration = TimeSpan.FromMilliseconds(220);
     private static readonly Duration ShapeDuration = TimeSpan.FromMilliseconds(200);
-    private static readonly Duration AccentDuration = TimeSpan.FromMilliseconds(320);
-
-    /// <summary>
-    /// The fallback equalizer, used only when this machine will not hand over its audio: how tall
-    /// each bar reaches, how long a full rise takes, and how far into that rise it starts. The
-    /// periods are deliberately not multiples of each other and the phases are staggered -- four
-    /// bars sharing a beat read as a single blinking block, where four drifting against each other
-    /// read as sound.
-    /// </summary>
-    private static readonly (double Peak, int PeriodMs, int PhaseMs)[] BarBeats =
-    [
-        (13, 480, 0),
-        (9, 620, 160),
-        (14, 540, 80),
-        (10, 700, 240)
-    ];
-
-    /// <summary>Where the bars sit when the music is paused -- a flat line, not a frozen waveform.</summary>
-    private const double BarRestingHeight = 3;
-
-    /// <summary>How tall a band at full scale draws.</summary>
-    private const double BarPeakHeight = 14;
-
-    // Rises faster than it falls, which is what makes a bar read as hit-and-decay rather than as a
-    // needle. Applied per published frame, of which there are roughly forty-five a second.
-    private const double BarAttack = 0.55;
-    private const double BarRelease = 0.16;
 
     private readonly MediaViewModel _media;
+    private readonly IslandActivityHost _activities;
     private readonly NotesViewModel _notes;
     private readonly TodosViewModel _todos;
 
@@ -156,32 +129,34 @@ public partial class IslandWindow : Window
     /// <summary>Runs only while the expanded panel is on screen -- it is the only thing showing a clock.</summary>
     private readonly DispatcherTimer _progressTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
-    private readonly Rectangle[] _bars;
+    /// <summary>
+    /// Handed to the equalizer inside the collapsed template, which has no other way to reach it --
+    /// a DataTemplate's DataContext is the activity, not this window.
+    /// </summary>
+    public IAudioLevelSource AudioSource { get; }
 
     /// <summary>
-    /// One diagonal gradient per bar, together forming a single sweep across the whole equalizer:
-    /// bar <c>i</c> carries the slice of the artwork's two-colour ramp that falls where it sits.
-    /// One brush shared by all four would restart the gradient inside each 2.5px bar instead.
+    /// Whether the pill is on screen in its collapsed form. Half of what decides the equalizer
+    /// runs; the bars supply the other half from the track itself.
+    ///
+    /// A dependency property because the only route to it is a RelativeSource binding out of the
+    /// collapsed template, and that has to be notified when this changes.
     /// </summary>
-    private readonly LinearGradientBrush[] _barBrushes;
+    public static readonly DependencyProperty IsCollapsedShowingProperty =
+        DependencyProperty.Register(nameof(IsCollapsedShowing), typeof(bool), typeof(IslandWindow),
+            new PropertyMetadata(false));
 
-    private readonly IAudioLevelSource _audio;
-
-    /// <summary>Smoothed band levels, 0..1, so a bar eases between published frames.</summary>
-    private readonly double[] _barLevels;
-
-    /// <summary>
-    /// Whether real audio is driving the bars. False on a machine whose loopback endpoint would not
-    /// open, where the fixed animation takes over.
-    /// </summary>
-    private bool _audioDriven;
+    public bool IsCollapsedShowing
+    {
+        get => (bool)GetValue(IsCollapsedShowingProperty);
+        private set => SetValue(IsCollapsedShowingProperty, value);
+    }
 
     private IntPtr _hwnd;
     private WorkArea _work;
     private double _expandedHeight = FallbackExpandedHeight;
     private bool _shown;
     private bool _expanded;
-    private bool _barsRunning;
 
     /// <summary>
     /// Whether the island is being held open. A hover panel goes away when the pointer does, which
@@ -204,6 +179,7 @@ public partial class IslandWindow : Window
 
     public IslandWindow(
         MediaViewModel media,
+        IslandActivityHost activities,
         NotesViewModel notes,
         TodosViewModel todos,
         DockViewModel dock,
@@ -212,13 +188,17 @@ public partial class IslandWindow : Window
         AppSettings settings)
     {
         _media = media;
+        _activities = activities;
         _notes = notes;
         _todos = todos;
-        _audio = audio;
+        AudioSource = audio;
 
         InitializeComponent();
 
+        // The expanded panel is the media panel and speaks to the media view model directly; only
+        // the collapsed pill is shared ground, and it asks the host whose turn it is.
         DataContext = media;
+        CollapsedLayer.DataContext = activities;
         NotesPanel.DataContext = notes;
         TodosPanel.DataContext = todos;
 
@@ -257,28 +237,8 @@ public partial class IslandWindow : Window
         _todos.Todos.CollectionChanged += (_, _) => ResizeForContentChange();
         dock.ShelfItems.CollectionChanged += (_, _) => ResizeForContentChange();
 
-        _bars = [Bar1, Bar2, Bar3, Bar4];
-        _barLevels = new double[_bars.Length];
-        _barBrushes = new LinearGradientBrush[_bars.Length];
-
-        for (var i = 0; i < _bars.Length; i++)
-        {
-            _barBrushes[i] = BuildBarBrush(i, ArtworkAccent.Fallback, ArtworkAccent.FallbackSecondary);
-            _bars[i].Fill = _barBrushes[i];
-        }
-
-        _audio.LevelsChanged += OnAudioLevels;
-
         _hoverTimer.Tick += (_, _) => UpdateFromPointer();
         _progressTimer.Tick += (_, _) => _media.Tick();
-
-        _media.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(MediaViewModel.IsPlaying))
-                UpdateEqualizer();
-            else if (e.PropertyName is nameof(MediaViewModel.Artwork))
-                UpdateBarColour();
-        };
     }
 
     private FrameworkElement[] SectionViews => [ShelfView, ClipboardView, LauncherView, RecentView, StacksView];
@@ -422,7 +382,7 @@ public partial class IslandWindow : Window
 
         // The pointer alone is enough to expand now: the scratchpad and the tab strip live in this
         // panel too, and those have to be reachable even with nothing playing.
-        SetShown(_media.HasSession || hovering);
+        SetShown(_activities.HasActivity || hovering);
         SetExpanded(hovering);
     }
 
@@ -481,7 +441,7 @@ public partial class IslandWindow : Window
         Animate(Pill, OpacityProperty, shown ? 1 : 0, ShowDuration);
         Animate(PillSlide, TranslateTransform.YProperty, shown ? 0 : -HiddenOffset, ShowDuration);
 
-        UpdateEqualizer();
+        UpdateCollapsedShowing();
     }
 
     private void SetExpanded(bool expanded)
@@ -519,8 +479,16 @@ public partial class IslandWindow : Window
             _progressTimer.Stop();
         }
 
-        UpdateEqualizer();
+        UpdateCollapsedShowing();
     }
+
+    /// <summary>
+    /// Publishes whether the collapsed pill is on screen, which is all the window has to say about
+    /// the equalizer now. Whether the bars actually run is the bars' own business -- they know
+    /// whether anything is playing, and the template they sit in exists only while media holds the
+    /// pill, so an activity taking it away stops them without this having to know.
+    /// </summary>
+    private void UpdateCollapsedShowing() => IsCollapsedShowing = _shown && !_expanded;
 
     /// <summary>
     /// Holds the island open, or lets it go. Pinning also lifts WS_EX_NOACTIVATE: a window that can
@@ -844,137 +812,6 @@ public partial class IslandWindow : Window
         return measured > 0 ? measured : FallbackExpandedHeight;
     }
 
-    /// <summary>
-    /// Runs the now-playing bars, but only while there is something to see: paused music flattens
-    /// them, and a hidden or expanded pill stops them outright rather than leaving an audio capture
-    /// and four animations running behind an invisible layer.
-    /// </summary>
-    private void UpdateEqualizer()
-    {
-        var running = _shown && !_expanded && _media.IsPlaying;
-        if (running == _barsRunning)
-            return;
-
-        _barsRunning = running;
-
-        if (!running)
-        {
-            _audio.Stop();
-            _audioDriven = false;
-            Array.Clear(_barLevels);
-
-            foreach (var bar in _bars)
-            {
-                // Handing null to BeginAnimation is what releases the property back to its local
-                // value; without it the last animated height sticks and the bar cannot be set.
-                bar.BeginAnimation(HeightProperty, null);
-                bar.Height = BarRestingHeight;
-            }
-
-            return;
-        }
-
-        // Real levels if this machine will give them up, the old fixed animation if not. Started
-        // here rather than at launch so nothing is captured while the bars are off screen.
-        _audioDriven = _audio.Start();
-
-        if (_audioDriven)
-        {
-            foreach (var bar in _bars)
-            {
-                bar.BeginAnimation(HeightProperty, null);
-                bar.Height = BarRestingHeight;
-            }
-
-            return;
-        }
-
-        for (var i = 0; i < _bars.Length; i++)
-        {
-            var (peak, periodMs, phaseMs) = BarBeats[i];
-            _bars[i].BeginAnimation(HeightProperty, new DoubleAnimation(BarRestingHeight, peak,
-                TimeSpan.FromMilliseconds(periodMs))
-            {
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-
-                // Negative, so each bar starts partway through its own rise instead of every bar
-                // waiting at the floor for its turn.
-                BeginTime = TimeSpan.FromMilliseconds(-phaseMs),
-                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-            });
-        }
-    }
-
-    /// <summary>
-    /// A frame of band levels, straight off the capture thread. Smoothed on the way in: the
-    /// analysis window is short enough that raw values jitter, and a bar that follows every one of
-    /// them reads as noise rather than as the beat it is actually tracking.
-    /// </summary>
-    private void OnAudioLevels(object? sender, double[] levels) =>
-        Dispatcher.BeginInvoke(() =>
-        {
-            if (!_barsRunning || !_audioDriven)
-                return;
-
-            for (var i = 0; i < _bars.Length && i < levels.Length; i++)
-            {
-                var target = levels[i];
-                var rate = target > _barLevels[i] ? BarAttack : BarRelease;
-                _barLevels[i] += (target - _barLevels[i]) * rate;
-
-                _bars[i].Height = BarRestingHeight + _barLevels[i] * (BarPeakHeight - BarRestingHeight);
-            }
-        }, DispatcherPriority.Render);
-
-    /// <summary>
-    /// Repaints the bars in the artwork's two most prominent colours, as one diagonal gradient
-    /// running across the group. Crossfaded rather than swapped: the artwork itself cuts between
-    /// tracks, but coloured bars snapping to an unrelated hue in the corner of the eye reads as a
-    /// glitch.
-    /// </summary>
-    private void UpdateBarColour()
-    {
-        var (primary, secondary) = ArtworkAccent.PairFromPng(_media.Artwork);
-
-        for (var i = 0; i < _barBrushes.Length; i++)
-        {
-            Fade(_barBrushes[i].GradientStops[0], Blend(primary, secondary, StopOffset(i)));
-            Fade(_barBrushes[i].GradientStops[1], Blend(primary, secondary, StopOffset(i + 1)));
-        }
-    }
-
-    private static void Fade(GradientStop stop, Color to) =>
-        stop.BeginAnimation(GradientStop.ColorProperty, new ColorAnimation(to, AccentDuration)
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        });
-
-    /// <summary>
-    /// The gradient for one bar: the slice of the primary-to-secondary ramp that belongs where this
-    /// bar sits, drawn corner to corner so the sweep runs diagonally rather than straight down.
-    /// </summary>
-    private LinearGradientBrush BuildBarBrush(int index, Color primary, Color secondary) =>
-        new(new GradientStopCollection
-        {
-            new(Blend(primary, secondary, StopOffset(index)), 0),
-            new(Blend(primary, secondary, StopOffset(index + 1)), 1)
-        })
-        {
-            StartPoint = new Point(0, 0),
-            EndPoint = new Point(1, 1)
-        };
-
-    /// <summary>Where a bar's edge falls along the group-wide ramp, 0 at the first bar's left edge.</summary>
-    private double StopOffset(int barEdge) => (double)barEdge / _bars.Length;
-
-    private static Color Blend(Color from, Color to, double amount) =>
-        Color.FromArgb(
-            (byte)Math.Round(from.A + (to.A - from.A) * amount),
-            (byte)Math.Round(from.R + (to.R - from.R) * amount),
-            (byte)Math.Round(from.G + (to.G - from.G) * amount),
-            (byte)Math.Round(from.B + (to.B - from.B) * amount));
-
     private static void Animate(IAnimatable target, DependencyProperty property, double to, Duration duration) =>
         target.BeginAnimation(property, new DoubleAnimation(to, duration)
         {
@@ -987,9 +824,8 @@ public partial class IslandWindow : Window
         _hoverTimer.Stop();
         _progressTimer.Stop();
 
-        _audio.LevelsChanged -= OnAudioLevels;
-        _audio.Stop();
-
+        // The equalizer unhooks and stops its own capture when its template is torn down, which
+        // closing the window does.
         Close();
     }
 }

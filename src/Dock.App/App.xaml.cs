@@ -2,7 +2,6 @@ using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Threading;
 using Dock.App.Views;
-using Dock.Core.Models;
 using Dock.Core.Services;
 using Dock.Core.ViewModels;
 using Dock.Interop.Audio;
@@ -22,11 +21,18 @@ public partial class App : System.Windows.Application
     private SystemStatsSource? _systemStatsSource;
     private MediaSessionSource? _mediaSource;
     private MediaViewModel? _mediaViewModel;
+    private IslandActivityHost? _activities;
+
+    /// <summary>
+    /// Drives the activity host's clock, which is the only thing that retires an activity whose
+    /// linger has run out. Four times a second: the windows it is expiring are seconds long, and
+    /// the work per tick is a walk of a list with two things in it.
+    /// </summary>
+    private readonly DispatcherTimer _activityTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private NotesViewModel? _notesViewModel;
     private TodosViewModel? _todosViewModel;
     private AudioLoopbackSource? _audioSource;
     private IslandWindow? _islandWindow;
-    private DispatcherTimer? _mediaClearTimer;
     private IIconProvider? _iconProvider;
     private IAppLauncher? _launcher;
     private readonly Dictionary<StackItemViewModel, StackFolderWatcher> _stackWatchers = [];
@@ -107,15 +113,25 @@ public partial class App : System.Windows.Application
         _notesViewModel = new NotesViewModel(new NotesStore());
         _todosViewModel = new TodosViewModel(new TodosStore());
 
+        // Whose turn it is on the collapsed pill. Media is the only activity so far and so always
+        // wins, but the arbitration and the grace period that used to live here are its business
+        // now rather than this class's.
+        _activities = new IslandActivityHost();
+        _activities.Tick(DateTimeOffset.UtcNow);
+        _activities.Register(_mediaViewModel);
+
+        _activityTimer.Tick += (_, _) => _activities.Tick(DateTimeOffset.UtcNow);
+        _activityTimer.Start();
+
         // Media notifications arrive on the thread pool, like the system stats below.
-        _mediaSource.Changed += (_, snapshot) => Dispatcher.Invoke(() => ApplyMediaSnapshot(snapshot));
+        _mediaSource.Changed += (_, snapshot) => Dispatcher.Invoke(() => _mediaViewModel.Apply(snapshot));
 
         // The equalizer bars read the speakers directly. Created here and owned for the whole run;
         // the island starts and stops the capture as the bars come and go.
         _audioSource = new AudioLoopbackSource();
 
         _islandWindow = new IslandWindow(
-            _mediaViewModel, _notesViewModel, _todosViewModel, _viewModel!, wingetService,
+            _mediaViewModel, _activities, _notesViewModel, _todosViewModel, _viewModel!, wingetService,
             _audioSource, _settingsStore!.Load());
 
         _islandWindow.SettingsRequested += ShowSettingsWindow;
@@ -246,52 +262,17 @@ public partial class App : System.Windows.Application
     private void StartMediaMonitoring() => _mediaSource?.Start();
 
     /// <summary>
-    /// Applies a snapshot, holding back the one that empties the island.
-    ///
-    /// Losing the session is routine and usually momentary -- closing one tab of several, a player
-    /// restarting its session between albums -- and the island is a strip of screen the user may
-    /// be pointing at when it happens. Anything arriving inside the grace period cancels the
-    /// clear, so only a session that stays gone actually puts it away.
-    /// </summary>
-    private void ApplyMediaSnapshot(MediaSnapshot? snapshot)
-    {
-        _mediaClearTimer?.Stop();
-
-        if (snapshot is not null)
-        {
-            _mediaViewModel?.Apply(snapshot);
-            return;
-        }
-
-        // Nothing to hold back if it is already empty.
-        if (_mediaViewModel is not { HasSession: true })
-        {
-            _mediaViewModel?.Apply(null);
-            return;
-        }
-
-        _mediaClearTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
-        _mediaClearTimer.Tick -= OnMediaClearElapsed;
-        _mediaClearTimer.Tick += OnMediaClearElapsed;
-        _mediaClearTimer.Start();
-    }
-
-    private void OnMediaClearElapsed(object? sender, EventArgs e)
-    {
-        _mediaClearTimer?.Stop();
-        _mediaViewModel?.Apply(null);
-    }
-
-    /// <summary>
     /// Stops watching for media and empties the now-playing row. The island stays: everything else
     /// in it is unrelated to whether anything is playing.
+    ///
+    /// Retired outright rather than left to linger -- the grace period is for a session that went
+    /// on its own, and this one was switched off deliberately.
     /// </summary>
     private void StopMediaMonitoring()
     {
-        _mediaClearTimer?.Stop();
-
         _mediaSource?.Stop();
         _mediaViewModel?.Apply(null);
+        _mediaViewModel?.Retire();
     }
 
     private void OnStacksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -377,7 +358,7 @@ public partial class App : System.Windows.Application
         _clipboardMonitor?.Dispose();
         _systemStatsSource?.Dispose();
 
-        _mediaClearTimer?.Stop();
+        _activityTimer.Stop();
         _islandWindow?.CloseForExit();
         _mediaSource?.Dispose();
         _audioSource?.Dispose();

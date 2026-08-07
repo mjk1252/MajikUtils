@@ -8,14 +8,42 @@ namespace Dock.Core.ViewModels;
 /// <summary>
 /// The media island's contents. Holds the latest <see cref="MediaSnapshot"/> and exposes it as the
 /// handful of display-ready values the island binds to.
+///
+/// The island's resting activity: it claims the pill whenever something is playing, and yields it
+/// to anything of higher rank without either side knowing about the other.
 /// </summary>
-public partial class MediaViewModel : ObservableObject
+public partial class MediaViewModel : ObservableObject, IIslandActivity
 {
+    /// <summary>
+    /// How long a lost session keeps the pill. Losing one is routine and usually momentary --
+    /// closing one tab of several, a player restarting its session between albums -- and without
+    /// this the island would blink away and back between two tracks.
+    /// </summary>
+    private static readonly TimeSpan SessionLinger = TimeSpan.FromMilliseconds(1500);
+
     private readonly IMediaSessionSource _source;
     private MediaSnapshot? _snapshot;
 
-    /// <summary>False when nothing is playing -- which is what decides whether the island shows itself.</summary>
+    /// <summary>
+    /// Whether there is a track worth drawing. Display state, not the slot claim: it stays true
+    /// across the gap between two songs, so the pill keeps showing the track that just finished
+    /// rather than blanking to "Nothing playing" for a second and a half. Cleared by
+    /// <see cref="Retire"/>, once the island has actually let go of this activity.
+    /// </summary>
     [ObservableProperty] private bool _hasSession;
+
+    /// <summary>
+    /// Whether a session exists *right now*. Unlike <see cref="HasSession"/> this drops the moment
+    /// the player goes, which is what starts the host's linger window running.
+    /// </summary>
+    [ObservableProperty] private bool _isActive;
+
+    public string Key => "media";
+
+    /// <summary>Music is what the island shows when nothing more urgent is happening.</summary>
+    public IslandPriority Priority => IslandPriority.Ambient;
+
+    public TimeSpan Linger => SessionLinger;
 
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _artist = string.Empty;
@@ -40,23 +68,21 @@ public partial class MediaViewModel : ObservableObject
     public void Apply(MediaSnapshot? snapshot)
     {
         _snapshot = snapshot;
-        HasSession = snapshot is not null;
+        IsActive = snapshot is not null;
 
         if (snapshot is null)
         {
-            Title = string.Empty;
-            Artist = string.Empty;
-            Artwork = null;
+            // Everything else is left standing. The session going is usually the gap between two
+            // tracks, and the island holds the last one up across it -- see Retire, which is where
+            // a session that stayed gone actually clears.
+            //
+            // Playback is the exception: it has demonstrably stopped, so the bars flatten now
+            // rather than dancing to a track that ended.
             IsPlaying = false;
-            CanSkipNext = false;
-            CanSkipPrevious = false;
-            HasTimeline = false;
-            Progress = 0;
-            PositionText = string.Empty;
-            DurationText = string.Empty;
             return;
         }
 
+        HasSession = true;
         Title = snapshot.Title;
         Artist = snapshot.Artist;
         IsPlaying = snapshot.IsPlaying;
@@ -69,6 +95,25 @@ public partial class MediaViewModel : ObservableObject
             Artwork = snapshot.Artwork;
 
         Tick();
+    }
+
+    /// <summary>
+    /// Clears the now-playing row. Called by the island once a session that went stayed gone --
+    /// never straight from <see cref="Apply"/>, which is the whole point of the grace period.
+    /// </summary>
+    public void Retire()
+    {
+        HasSession = false;
+        Title = string.Empty;
+        Artist = string.Empty;
+        Artwork = null;
+        IsPlaying = false;
+        CanSkipNext = false;
+        CanSkipPrevious = false;
+        HasTimeline = false;
+        Progress = 0;
+        PositionText = string.Empty;
+        DurationText = string.Empty;
     }
 
     /// <summary>
