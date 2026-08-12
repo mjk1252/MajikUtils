@@ -772,7 +772,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_settingsStore!);
+        _settingsWindow = new SettingsWindow(_settingsStore!, _updates.CurrentVersion);
         _settingsWindow.MediaIslandToggled += show =>
         {
             if (show)

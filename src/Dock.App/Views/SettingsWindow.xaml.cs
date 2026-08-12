@@ -57,10 +57,12 @@ public partial class SettingsWindow : Window
     /// <summary>Raised the instant a new command-palette shortcut is recorded.</summary>
     public event Action<HotkeyBinding>? PaletteHotkeyChanged;
 
-    public SettingsWindow(SettingsStore settingsStore)
+    public SettingsWindow(SettingsStore settingsStore, string version)
     {
         _settingsStore = settingsStore;
         InitializeComponent();
+
+        VersionText.Text = $"v{version}";
 
         var settings = _settingsStore.Load();
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;

@@ -44,6 +44,17 @@ public sealed class UpdateService
     /// <summary>Whether a downloaded update is sitting there waiting for a restart.</summary>
     public bool UpdateReady => _pending is not null;
 
+    /// <summary>
+    /// What Settings shows. An installed copy asks Velopack, which is authoritative for it -- that
+    /// number comes from <c>-Version</c> at pack time, not from this assembly's own metadata, and
+    /// the two are free to drift a patch apart between a code change and the next release. A dev
+    /// build has no Velopack install to ask, so it falls back to the assembly version instead.
+    /// </summary>
+    public string CurrentVersion =>
+        _manager.IsInstalled && _manager.CurrentVersion is { } installed
+            ? installed.ToString()
+            : System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "dev";
+
     /// <summary>Looks for a newer release and downloads it if one exists.</summary>
     public async Task<UpdateCheckResult> CheckAndDownloadAsync()
     {

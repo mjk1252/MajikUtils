@@ -8,7 +8,11 @@
         Topmost="True"
         Background="#1E1E1E">
     <StackPanel Margin="24">
-        <TextBlock Text="MajikUtils Settings" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,8"/>
+        <Grid Margin="0,0,0,8">
+            <TextBlock Text="MajikUtils Settings" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
+            <TextBlock x:Name="VersionText" Foreground="#66FFFFFF" FontSize="11"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+        </Grid>
 
         <TextBlock Foreground="#99FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
                    Text="MajikUtils lives in the island at the top of your screen: point at it for the shelf, clipboard, app search, recent files, notes and todo. Folder stacks keep their own taskbar buttons -- right-click one and choose Pin to taskbar to keep it there."/>

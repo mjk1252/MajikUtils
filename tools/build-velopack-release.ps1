@@ -3,6 +3,7 @@
 Publishes MajikUtils and packs a Velopack release, ready to attach to a GitHub Release.
 
 .DESCRIPTION
+    pwsh tools/build-velopack-release.ps1
     pwsh tools/build-velopack-release.ps1 -Version 1.1.0
 
 Produces publish/MajikUtils (self-contained, ReadyToRun) and a releases/ folder containing
@@ -14,16 +15,30 @@ tools/build-release.ps1, which still builds the Inno Setup installer most people
 a first install. Run both when cutting a release: Inno Setup for new installs, this for updating
 everyone already on a previous version.
 
+-Version defaults to whatever is in src/Dock.App/Dock.App.csproj's <Version> -- the same number
+Settings reads back out of the running app -- so the ordinary release is just bumping that one
+line. Pass -Version explicitly to publish under a different number without touching the csproj.
+installer/MajikUtils.iss's AppVersion is a separate line still, since Inno Setup has no clean way
+to read it from here.
+
 Installs the `vpk` dotnet tool on first run if it is not already on the machine.
 #>
 
 param(
-    [Parameter(Mandatory = $true)]
     [string]$Version
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+
+if (-not $Version) {
+    $csproj = Get-Content (Join-Path $root 'src\Dock.App\Dock.App.csproj') -Raw
+    if ($csproj -notmatch '<Version>([\d.]+)</Version>') {
+        throw 'No -Version given and no <Version> found in Dock.App.csproj'
+    }
+    $Version = $Matches[1]
+    Write-Host "Using version $Version from Dock.App.csproj"
+}
 
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Version must be plain semver (e.g. 1.1.0), got '$Version'"

@@ -18,6 +18,12 @@
     <ApplicationIcon>..\..\assets\MajikUtils.ico</ApplicationIcon>
     <AssemblyName>MajikUtils</AssemblyName>
     <RootNamespace>Dock.App</RootNamespace>
+    <!-- The one place the version lives at build time. Settings reads it back off the assembly
+         for a dev build; an installed copy shows Velopack's own CurrentVersion instead, which is
+         independent of this and set by build-velopack-release.ps1's -Version at pack time (that
+         script defaults -Version to this line). installer/MajikUtils.iss's AppVersion is still
+         bumped separately alongside both. -->
+    <Version>1.1.2</Version>
     <!-- Program.Main has to run before WPF's own generated one would, so Velopack sees a launch
          carrying its install/update/uninstall flags before anything else does. -->
     <StartupObject>Dock.App.Program</StartupObject>
