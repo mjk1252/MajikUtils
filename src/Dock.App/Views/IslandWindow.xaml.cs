@@ -157,6 +157,9 @@ public partial class IslandWindow : Window
     /// <summary>Raised by the gear's "Restart to update" entry, shown once one is downloaded.</summary>
     public event Action? RestartForUpdateRequested;
 
+    /// <summary>Raised by the gear's "Check for updates" entry.</summary>
+    public event Action? CheckForUpdatesRequested;
+
     private bool _updateAvailable;
 
     /// <summary>Whether the gear menu should offer to restart into a downloaded update.</summary>
@@ -765,6 +768,14 @@ public partial class IslandWindow : Window
             var update = new MenuItem { Header = "Restart to update MajikUtils" };
             update.Click += (_, _) => RestartForUpdateRequested?.Invoke();
             menu.Items.Add(update);
+        }
+        else
+        {
+            // Once one is ready, "Restart to update" replaces this -- re-checking at that point
+            // has nothing left to find.
+            var check = new MenuItem { Header = "Check for updates" };
+            check.Click += (_, _) => CheckForUpdatesRequested?.Invoke();
+            menu.Items.Add(check);
         }
 
         var exit = new MenuItem { Header = "Exit MajikUtils" };

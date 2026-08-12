@@ -254,6 +254,7 @@ public partial class App : System.Windows.Application
         _islandWindow.SettingsRequested += ShowSettingsWindow;
         _islandWindow.ExitRequested += Shutdown;
         _islandWindow.RestartForUpdateRequested += _updates.ApplyAndRestart;
+        _islandWindow.CheckForUpdatesRequested += () => _ = CheckForUpdatesManuallyAsync();
         _islandWindow.Show();
     }
 
@@ -331,6 +332,31 @@ public partial class App : System.Windows.Application
         await _updates.CheckAndDownloadAsync();
 
         if (_updates.UpdateReady)
+            _islandWindow?.SetUpdateAvailable(true);
+    }
+
+    /// <summary>
+    /// The gear menu's "Check for updates". Unlike the silent background check, this one owes
+    /// whoever clicked it an answer -- announced the same way a volume change or a copy is, since
+    /// it is exactly that shape: something just happened, say so for a couple of seconds, done.
+    /// </summary>
+    private async Task CheckForUpdatesManuallyAsync()
+    {
+        _announcements?.Announce(DateTimeOffset.UtcNow, "Checking for updates", "");
+
+        var result = await _updates.CheckAndDownloadAsync();
+
+        var (label, glyph) = result switch
+        {
+            UpdateCheckResult.UpdateReady => ("Update ready to install", ""),
+            UpdateCheckResult.UpToDate => ("MajikUtils is up to date", ""),
+            UpdateCheckResult.NotInstalled => ("Auto-update isn't available in this copy", ""),
+            _ => ("Couldn't check for updates", "")
+        };
+
+        _announcements?.Announce(DateTimeOffset.UtcNow, label, glyph);
+
+        if (result == UpdateCheckResult.UpdateReady)
             _islandWindow?.SetUpdateAvailable(true);
     }
 

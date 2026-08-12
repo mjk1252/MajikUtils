@@ -6,12 +6,30 @@ using Velopack.Sources;
 namespace Dock.App;
 
 /// <summary>
+/// What came of a check. The background timer only ever cares about
+/// <see cref="UpdateCheckResult.UpdateReady"/>; a check the user asked for by clicking a button
+/// deserves an answer regardless of which of the four this is -- that split is why this is a
+/// return value rather than the silent no-op <see cref="UpdateService"/> used to be.
+/// </summary>
+public enum UpdateCheckResult
+{
+    UpToDate,
+    UpdateReady,
+
+    /// <summary>A dev build run straight from bin/Debug, with no Velopack install behind it.</summary>
+    NotInstalled,
+
+    /// <summary>No network, GitHub unreachable, or the download was interrupted.</summary>
+    CheckFailed
+}
+
+/// <summary>
 /// Checks GitHub Releases for a newer build and downloads it in the background.
 ///
-/// Never surfaces a failure: a machine offline, GitHub unreachable, no release ever published --
-/// all read the same as "nothing to update", the same degrade-quietly rule every interop source in
-/// this app already follows. The one thing worth telling anyone is the opposite case, once a
-/// download actually finishes -- see <see cref="UpdateReady"/>.
+/// The background timer in <c>App</c> only acts on the good outcome, same as before; a check run
+/// from the gear menu's "Check for updates" surfaces whichever <see cref="UpdateCheckResult"/> it
+/// gets, because someone who just clicked something is owed an answer even when that answer is
+/// "no, and I don't know why."
 /// </summary>
 public sealed class UpdateService
 {
@@ -26,29 +44,28 @@ public sealed class UpdateService
     /// <summary>Whether a downloaded update is sitting there waiting for a restart.</summary>
     public bool UpdateReady => _pending is not null;
 
-    /// <summary>
-    /// Looks for a newer release and downloads it if one exists. A no-op outside an installed
-    /// copy -- a build run straight from bin/Debug has no Velopack install backing it to update,
-    /// which is exactly the case <see cref="UpdateManager.IsInstalled"/> exists to catch.
-    /// </summary>
-    public async Task CheckAndDownloadAsync()
+    /// <summary>Looks for a newer release and downloads it if one exists.</summary>
+    public async Task<UpdateCheckResult> CheckAndDownloadAsync()
     {
-        if (UpdateReady || !_manager.IsInstalled)
-            return;
+        if (UpdateReady)
+            return UpdateCheckResult.UpdateReady;
+
+        if (!_manager.IsInstalled)
+            return UpdateCheckResult.NotInstalled;
 
         try
         {
             var update = await _manager.CheckForUpdatesAsync();
             if (update is null)
-                return;
+                return UpdateCheckResult.UpToDate;
 
             await _manager.DownloadUpdatesAsync(update);
             _pending = update;
+            return UpdateCheckResult.UpdateReady;
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
         {
-            // No network, GitHub unreachable, or the download was interrupted. Worth trying again
-            // on the next check, not worth interrupting anyone about now.
+            return UpdateCheckResult.CheckFailed;
         }
     }
 
