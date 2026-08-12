@@ -242,4 +242,87 @@ internal static class AudioInterop
 
     [DllImport("ole32.dll")]
     internal static extern void CoTaskMemFree(IntPtr ptr);
+
+    // --- Per-application sessions (the volume mixer) -------------------------------------------
+    //
+    // The same endpoint as the equalizer and the master volume, activated for a different service:
+    // rather than the mix Windows is sending to the speakers, this is the list of individual
+    // programs contributing to it, each with its own volume and mute the way the shell's own mixer
+    // flyout shows them.
+
+    internal static readonly Guid IID_IAudioSessionManager2 = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+    internal static readonly Guid IID_IAudioSessionControl2 = new("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D");
+    internal static readonly Guid IID_ISimpleAudioVolume = new("87CE5498-68D6-44E5-9215-6DA47EF883D8");
+
+    /// <summary>A session that has ended, whose control object is on its way out.</summary>
+    internal const int AudioSessionStateExpired = 2;
+
+    /// <summary>
+    /// Only as far as <c>GetSessionEnumerator</c> -- the notification registration past it is never
+    /// called, so nothing needs it declared. <c>IAudioSessionManager2</c> extends
+    /// <c>IAudioSessionManager</c>, whose two methods come first in the real vtable and have to be
+    /// held here even unused, for the same reason as everywhere else in this file: a raw vtable, a
+    /// missing entry, the wrong function called.
+    /// </summary>
+    [ComImport]
+    [Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioSessionManager2
+    {
+        [PreserveSig] int GetAudioSessionControl(IntPtr audioSessionGuid, uint streamFlags,
+            [MarshalAs(UnmanagedType.IUnknown)] out object session);
+        [PreserveSig] int GetSimpleAudioVolume(IntPtr audioSessionGuid, uint streamFlags,
+            [MarshalAs(UnmanagedType.IUnknown)] out object simpleVolume);
+        [PreserveSig] int GetSessionEnumerator(out IAudioSessionEnumerator sessionEnumerator);
+    }
+
+    [ComImport]
+    [Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioSessionEnumerator
+    {
+        [PreserveSig] int GetCount(out int count);
+        [PreserveSig] int GetSession(int index, out IAudioSessionControl2 session);
+    }
+
+    /// <summary>
+    /// Declared only as far as <c>GetProcessId</c>: everything this needs (whether the session has
+    /// expired, and which process owns it) is at or before that slot. <c>IsSystemSoundsSession</c>
+    /// sits right after it but is skippable -- the system-sounds session reports process id 0,
+    /// which is a simpler and equally reliable filter.
+    /// </summary>
+    [ComImport]
+    [Guid("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioSessionControl2
+    {
+        [PreserveSig] int GetState(out int state);
+        [PreserveSig] int GetDisplayName(out IntPtr name);
+        [PreserveSig] int SetDisplayName(IntPtr name, IntPtr eventContext);
+        [PreserveSig] int GetIconPath(out IntPtr path);
+        [PreserveSig] int SetIconPath(IntPtr path, IntPtr eventContext);
+        [PreserveSig] int GetGroupingParam(out Guid groupingParam);
+        [PreserveSig] int SetGroupingParam(ref Guid groupingParam, IntPtr eventContext);
+        [PreserveSig] int RegisterAudioSessionNotification(IntPtr notification);
+        [PreserveSig] int UnregisterAudioSessionNotification(IntPtr notification);
+        [PreserveSig] int GetSessionIdentifier(out IntPtr identifier);
+        [PreserveSig] int GetSessionInstanceIdentifier(out IntPtr identifier);
+        [PreserveSig] int GetProcessId(out uint processId);
+    }
+
+    /// <summary>
+    /// A session control object also answers to this interface -- QueryInterface rather than a
+    /// separate lookup, which is what casting an <see cref="IAudioSessionControl2"/> RCW to this
+    /// type does under the hood for classic (non-WinRT) COM.
+    /// </summary>
+    [ComImport]
+    [Guid("87CE5498-68D6-44E5-9215-6DA47EF883D8")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface ISimpleAudioVolume
+    {
+        [PreserveSig] int SetMasterVolume(float level, ref Guid eventContext);
+        [PreserveSig] int GetMasterVolume(out float level);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid eventContext);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+    }
 }

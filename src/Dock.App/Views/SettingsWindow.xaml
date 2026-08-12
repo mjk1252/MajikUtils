@@ -5,6 +5,7 @@
         Width="360" SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
+        Topmost="True"
         Background="#1E1E1E">
     <StackPanel Margin="24">
         <TextBlock Text="MajikUtils Settings" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,8"/>
@@ -29,6 +30,27 @@
 
         <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
                    Text="Puts a green dot on the island naming whichever app has the camera on. The microphone is deliberately left out: apps hold it open the whole time they are running, so that light would never go off. Windows reports this itself, so an app reaching the camera another way may not appear."/>
+
+        <CheckBox x:Name="AnnouncementsCheckBox" Content="Show copies, downloads and other events"
+                  Foreground="White" Margin="0,0,0,4"
+                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
+                   Text="A copy, a download, a screenshot, a drive or the network changing -- each gets a couple of seconds on the island as it happens. Turning this off leaves clipboard history itself running; only the on-screen announcement stops."/>
+
+        <CheckBox x:Name="ConditionsCheckBox" Content="Show do-not-disturb, restarts and low battery"
+                  Foreground="White" Margin="0,0,0,4"
+                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
+                   Text="A dot beside whatever is playing while any of these hold: Focus is on, a restart is waiting, a drive is nearly full, or the battery is low."/>
+
+        <CheckBox x:Name="VolumeMixerCheckBox" Content="Let an app making sound claim the island"
+                  Foreground="White" Margin="0,0,0,4"
+                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
+                   Text="The Mixer tab always works. This only governs whether the island itself notices something making sound and shows a dot for it -- turn it off and the mixer is still one click away, it just never interrupts on its own."/>
 
         <Grid Margin="24,0,0,16">
             <Grid.ColumnDefinitions>
@@ -72,8 +94,40 @@
                       DisplayMemberPath="Label" SelectionChanged="OnComboChanged"/>
         </Grid>
 
-        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
-                   Text="Clipboard history is captured in the background. Press Ctrl+Alt+Shift+V anywhere to open the drawer on its Clipboard tab."/>
+        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
+                   Text="Clipboard history is captured in the background regardless. Click a shortcut below, then press the keys you want -- it takes effect immediately."/>
+
+        <Grid Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid.Resources>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="#99FFFFFF"/>
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                    <Setter Property="Margin" Value="0,0,10,8"/>
+                </Style>
+                <Style TargetType="Button">
+                    <Setter Property="HorizontalAlignment" Value="Left"/>
+                    <Setter Property="Padding" Value="10,3"/>
+                    <Setter Property="Margin" Value="0,0,0,8"/>
+                    <Setter Property="MinWidth" Value="160"/>
+                </Style>
+            </Grid.Resources>
+
+            <TextBlock Text="Open Clipboard"/>
+            <Button x:Name="ClipboardHotkeyButton" Grid.Column="1" Click="OnRecordHotkeyClick"/>
+
+            <TextBlock Grid.Row="1" Text="Command palette"/>
+            <Button x:Name="PaletteHotkeyButton" Grid.Row="1" Grid.Column="1" Click="OnRecordHotkeyClick"/>
+        </Grid>
 
         <Button Content="Close" Width="80" HorizontalAlignment="Right" Padding="0,4" Click="OnCloseClick"/>
     </StackPanel>

@@ -28,7 +28,8 @@ public enum IslandSection
     Clipboard,
     Launcher,
     Recent,
-    Stacks
+    Stacks,
+    Mixer
 }
 
 /// <summary>
@@ -153,6 +154,14 @@ public partial class IslandWindow : Window
     /// <summary>Raised by the gear's Exit entry -- the app's only remaining quit affordance.</summary>
     public event Action? ExitRequested;
 
+    /// <summary>Raised by the gear's "Restart to update" entry, shown once one is downloaded.</summary>
+    public event Action? RestartForUpdateRequested;
+
+    private bool _updateAvailable;
+
+    /// <summary>Whether the gear menu should offer to restart into a downloaded update.</summary>
+    public void SetUpdateAvailable(bool available) => _updateAvailable = available;
+
     public IslandWindow(
         MediaViewModel media,
         IslandActivityHost activities,
@@ -163,6 +172,7 @@ public partial class IslandWindow : Window
         DockViewModel dock,
         IWingetService wingetService,
         IAudioLevelSource audio,
+        VolumeMixerActivity mixer,
         AppSettings settings)
     {
         _media = media;
@@ -185,9 +195,12 @@ public partial class IslandWindow : Window
         TodosPanel.DataContext = todos;
 
         // The re-hosted panels and the stats readout all speak to the dock view model; the rest of
-        // this window speaks to the media one.
+        // this window speaks to the media one. The mixer is the exception among the exceptions --
+        // its own activity, not the dock, the same way the timer and notes panels read from theirs.
         foreach (var section in SectionViews)
             section.DataContext = dock;
+
+        MixerView.DataContext = mixer;
 
         TabStrip.DataContext = dock;
         LauncherView.WingetService = wingetService;
@@ -226,7 +239,7 @@ public partial class IslandWindow : Window
                      _notes.Notes, _todos.Todos,
                      dock.ShelfItems, dock.RecentFiles, dock.ClipboardHistory,
                      dock.LauncherResults, dock.WingetResults, dock.Stacks,
-                     privacy.Apps
+                     privacy.Apps, mixer.Sessions, _media.Lyrics
                  })
         {
             collection.CollectionChanged += (_, _) => ResizeForContentChange();
@@ -240,11 +253,23 @@ public partial class IslandWindow : Window
         // as with the session.
         _media.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is not nameof(MediaViewModel.HasSession))
-                return;
+            switch (e.PropertyName)
+            {
+                case nameof(MediaViewModel.HasSession):
+                    UpdateMediaHeader();
+                    ResizeForContentChange();
+                    break;
 
-            UpdateMediaHeader();
-            ResizeForContentChange();
+                // Lyrics arrive after the header is already showing (the lookup is a network call),
+                // so the panel that opened at "no lyrics yet" height has to grow once they land.
+                case nameof(MediaViewModel.HasLyrics):
+                    ResizeForContentChange();
+                    break;
+
+                case nameof(MediaViewModel.CurrentLyricIndex):
+                    ScrollToCurrentLyric();
+                    break;
+            }
         };
 
         _hoverTimer.Tick += (_, _) => UpdateFromPointer();
@@ -261,7 +286,8 @@ public partial class IslandWindow : Window
 
     private FrameworkElement[] SectionViews => [ShelfView, ClipboardView, LauncherView, RecentView, StacksView];
 
-    private ToggleButton[] Tabs => [ShelfTab, ClipboardTab, LauncherTab, RecentTab, StacksTab, NotesTab];
+    private ToggleButton[] Tabs =>
+        [ShelfTab, ClipboardTab, LauncherTab, RecentTab, StacksTab, MixerTab, NotesTab];
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -587,6 +613,7 @@ public partial class IslandWindow : Window
         LauncherView.Visibility = VisibilityFor(section, IslandSection.Launcher);
         RecentView.Visibility = VisibilityFor(section, IslandSection.Recent);
         StacksView.Visibility = VisibilityFor(section, IslandSection.Stacks);
+        MixerView.Visibility = VisibilityFor(section, IslandSection.Mixer);
 
         // Sections size to their contents and scroll past a ceiling, rather than always opening at
         // full height: a shelf holding three files should not leave the island mostly empty, and a
@@ -645,6 +672,20 @@ public partial class IslandWindow : Window
         MediaStrip.Visibility = !quick && _media.HasSession ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>
+    /// Keeps the highlighted line inside the lyrics list's fixed viewport. A plain
+    /// <c>ItemsControl</c> has no notion of "current" to scroll to, which is the one reason this
+    /// list is a <c>ListBox</c> rather than the <c>ItemsControl</c> everything else here uses --
+    /// <c>ScrollIntoView</c> is the whole of what that buys.
+    /// </summary>
+    private void ScrollToCurrentLyric()
+    {
+        if (_media.CurrentLyricIndex < 0 || _media.CurrentLyricIndex >= _media.Lyrics.Count)
+            return;
+
+        LyricsList.ScrollIntoView(_media.Lyrics[_media.CurrentLyricIndex]);
+    }
+
     /// <summary>Lights the tab for the open section, and only that one.</summary>
     private void SyncTabs(IslandSection section)
     {
@@ -655,6 +696,7 @@ public partial class IslandWindow : Window
             IslandSection.Launcher => LauncherTab,
             IslandSection.Recent => RecentTab,
             IslandSection.Stacks => StacksTab,
+            IslandSection.Mixer => MixerTab,
             _ => _pinned ? NotesTab : null
         };
 
@@ -693,6 +735,7 @@ public partial class IslandWindow : Window
             ReferenceEquals(tab, LauncherTab) ? IslandSection.Launcher :
             ReferenceEquals(tab, RecentTab) ? IslandSection.Recent :
             ReferenceEquals(tab, StacksTab) ? IslandSection.Stacks :
+            ReferenceEquals(tab, MixerTab) ? IslandSection.Mixer :
             IslandSection.Quick);
     }
 
@@ -716,6 +759,13 @@ public partial class IslandWindow : Window
         var settings = new MenuItem { Header = "Settings..." };
         settings.Click += (_, _) => SettingsRequested?.Invoke();
         menu.Items.Add(settings);
+
+        if (_updateAvailable)
+        {
+            var update = new MenuItem { Header = "Restart to update MajikUtils" };
+            update.Click += (_, _) => RestartForUpdateRequested?.Invoke();
+            menu.Items.Add(update);
+        }
 
         var exit = new MenuItem { Header = "Exit MajikUtils" };
         exit.Click += (_, _) => ExitRequested?.Invoke();

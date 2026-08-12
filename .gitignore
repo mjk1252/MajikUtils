@@ -488,4 +488,5 @@ $RECYCLE.BIN/
 
 # Installer output and Claude Code session state
 dist/
+releases/
 .claude/

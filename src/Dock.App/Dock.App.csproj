@@ -18,18 +18,32 @@
     <ApplicationIcon>..\..\assets\MajikUtils.ico</ApplicationIcon>
     <AssemblyName>MajikUtils</AssemblyName>
     <RootNamespace>Dock.App</RootNamespace>
+    <!-- Program.Main has to run before WPF's own generated one would, so Velopack sees a launch
+         carrying its install/update/uninstall flags before anything else does. -->
+    <StartupObject>Dock.App.Program</StartupObject>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- App.xaml stops being an ApplicationDefinition (which is what generates the competing
+         Main WPF's SDK would otherwise emit) and becomes a plain Page; Program.cs calls
+         InitializeComponent on it by hand instead. -->
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Copied rather than embedded so the shipped icons can be swapped in place, and so the
          shell can point a pinned button's RelaunchIconResource at a real file on disk. -->
-    <Content Include="..\..\assets\icons\**\*.*" LinkBase="assets\icons"
-             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\icons\**\*.*" LinkBase="assets\icons" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Dock.Core\Dock.Core.csproj" />
     <ProjectReference Include="..\Dock.Interop\Dock.Interop.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
 </Project>

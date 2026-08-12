@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Core.Models;
@@ -60,6 +61,21 @@ public partial class MediaViewModel : ObservableObject, IIslandActivity
     [ObservableProperty] private string _positionText = string.Empty;
     [ObservableProperty] private string _durationText = string.Empty;
 
+    /// <summary>
+    /// Time-synced lines for the current track, if any were found. Populated by the App layer,
+    /// which owns the network call this needs -- this class stays synchronous like the rest of
+    /// <c>Dock.Core</c>, the same reasoning that keeps the media session itself outside it.
+    /// </summary>
+    public ObservableCollection<LyricLineViewModel> Lyrics { get; } = [];
+
+    [ObservableProperty] private bool _hasLyrics;
+
+    /// <summary>-1 while nothing has started yet, or while there are no lyrics to point into.</summary>
+    [ObservableProperty] private int _currentLyricIndex = -1;
+
+    private LyricLineViewModel? _currentLyric;
+    private TimeSpan[] _lyricOffsets = [];
+
     public MediaViewModel(IMediaSessionSource source)
     {
         _source = source;
@@ -114,6 +130,65 @@ public partial class MediaViewModel : ObservableObject, IIslandActivity
         Progress = 0;
         PositionText = string.Empty;
         DurationText = string.Empty;
+        ClearLyrics();
+    }
+
+    /// <summary>
+    /// Replaces the lyrics for whatever track is current. Called by the App layer once its lookup
+    /// for the current title/artist finishes -- by the time it does, playback may have moved on to
+    /// a different track entirely, which is the caller's race to guard against, not this method's.
+    /// </summary>
+    public void SetLyrics(IReadOnlyList<LyricLine> lines)
+    {
+        Lyrics.Clear();
+        _currentLyric = null;
+
+        foreach (var line in lines)
+            Lyrics.Add(new LyricLineViewModel(line.Text));
+
+        _lyricOffsets = lines.Select(l => l.Offset).ToArray();
+        HasLyrics = Lyrics.Count > 0;
+
+        UpdateLyricIndex();
+    }
+
+    /// <summary>Called when a track changes (there is nothing to scroll for the new one yet) or ends.</summary>
+    public void ClearLyrics()
+    {
+        Lyrics.Clear();
+        _lyricOffsets = [];
+        _currentLyric = null;
+        CurrentLyricIndex = -1;
+        HasLyrics = false;
+    }
+
+    /// <summary>
+    /// Finds the line that should be highlighted for a given playback position and flips
+    /// <see cref="LyricLineViewModel.IsCurrent"/> only on the two rows that actually change --
+    /// touching every row on every tick would be forty property-change notifications a second for
+    /// nineteen of them that did nothing.
+    /// </summary>
+    private void UpdateLyricIndex(TimeSpan position = default)
+    {
+        if (_lyricOffsets.Length == 0)
+        {
+            CurrentLyricIndex = -1;
+            return;
+        }
+
+        var index = Array.FindLastIndex(_lyricOffsets, offset => offset <= position);
+
+        if (index == CurrentLyricIndex)
+            return;
+
+        if (_currentLyric is not null)
+            _currentLyric.IsCurrent = false;
+
+        CurrentLyricIndex = index;
+        _currentLyric = index >= 0 ? Lyrics[index] : null;
+
+        if (_currentLyric is not null)
+            _currentLyric.IsCurrent = true;
     }
 
     /// <summary>
@@ -143,6 +218,8 @@ public partial class MediaViewModel : ObservableObject, IIslandActivity
         Progress = position / snapshot.Duration;
         PositionText = Format(position);
         DurationText = Format(snapshot.Duration);
+
+        UpdateLyricIndex(position);
     }
 
     [RelayCommand]

@@ -160,3 +160,37 @@ button whose window is long gone.
 - `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations\*.customDestinations-ms` — the shell's
   own copy of each button's jump list. Written by the shell, not by us; listed here because it
   outlives the process and is where to look when a jump list seems stale.
+
+## Updates
+
+Velopack, checking GitHub Releases. Two things make that possible:
+
+`Dock.App/Program.cs` is the real entry point now, in place of the one WPF's SDK generated from
+`App.xaml`'s `ApplicationDefinition` -- `Dock.App.csproj` retargets `App.xaml` to a plain `Page`
+and points `StartupObject` at `Program` instead. `VelopackApp.Build().Run()` has to run before
+anything else touches the filesystem or the `SingleInstance` mutex: a launch that follows an
+install or an update carries hidden command-line flags Velopack uses to finish that step, and
+anywhere else in the startup path is too late to catch them.
+
+`UpdateService` (also `Dock.App`, not `Dock.Core` -- Velopack is as tied to the shape of a Windows
+install as `Dock.Interop` is to Win32) wraps a `Velopack.UpdateManager` pointed at
+`GithubSource("https://github.com/mjk1252/MajikUtils", null, false)`. `App` checks once at
+startup and every six hours after; `UpdateManager.IsInstalled` is what keeps this a no-op for a
+dev build run straight from `bin/Debug`, which has no Velopack install to update. A download that
+finishes tells `IslandWindow` to add *Restart to update MajikUtils* to the gear menu --
+deliberately not automatic, since swapping the running version out from under someone is the one
+thing an update should never do without asking.
+
+Two build scripts, for two different jobs:
+
+- `tools/build-release.ps1` -- the Inno Setup installer most people download for a *first* install.
+- `tools/build-velopack-release.ps1 -Version X.Y.Z` -- packs `releases/`, everything a GitHub
+  Release needs for *already-installed* copies to find and download: `MajikUtils-win-Setup.exe`
+  (works as a first-install path too, unsigned and less polished than the Inno one),
+  `MajikUtils-X.Y.Z-full.nupkg` (what `UpdateService` actually downloads), and `releases.win.json`
+  (the manifest `GithubSource` reads to know a release exists at all).
+
+Cutting a release means running both, then creating a GitHub Release tagged `vX.Y.Z` with every
+file `build-velopack-release.ps1` put in `releases/` attached to it -- the Inno installer can go on
+the release too, or wherever else it is normally shared. Nothing here uploads to GitHub on its
+own: creating the release is a deliberate, manual, one-at-a-time act.

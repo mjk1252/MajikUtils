@@ -4,24 +4,23 @@ using Dock.Interop.Native;
 namespace Dock.Interop.Shell;
 
 /// <summary>
-/// Owns Dock's two global, always-on hooks: the clipboard-format listener that feeds clipboard
-/// history, and the Ctrl+Alt+Shift+V hotkey that summons it.
+/// Owns Dock's clipboard-format listener, which feeds clipboard history.
 ///
-/// Both live on a message-only window of their own rather than on a panel, because the panels
-/// spend nearly all their time minimised and a hook that only fired while a window was on screen
-/// would miss every copy the user actually wants captured.
+/// Lives on a message-only window of its own rather than on a panel, because the panels spend
+/// nearly all their time minimised and a hook that only fired while a window was on screen would
+/// miss every copy the user actually wants captured.
+///
+/// The global hotkey that used to live on this same window is <see cref="HotkeyListener"/> now --
+/// split out once a second one (the command palette's) needed registering too, and a listener that
+/// only knows about "the" hotkey had no way to hold two.
 /// </summary>
 public sealed class ClipboardMonitor : IDisposable
 {
-    private const int ClipboardHotkeyId = 1;
-
     private NativeMethods.WndProcDelegate? _wndProcDelegate;
     private IntPtr _hwnd;
 
     /// <summary>Raised on the thread that called <see cref="Start"/>.</summary>
     public event Action? ClipboardChanged;
-
-    public event Action? HotkeyPressed;
 
     public void Start()
     {
@@ -38,8 +37,6 @@ public sealed class ClipboardMonitor : IDisposable
             0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wndClass.hInstance, IntPtr.Zero);
 
         NativeMethods.AddClipboardFormatListener(_hwnd);
-        NativeMethods.RegisterHotKey(_hwnd, ClipboardHotkeyId,
-            NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_SHIFT, NativeMethods.VK_V);
     }
 
     private IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
@@ -47,12 +44,6 @@ public sealed class ClipboardMonitor : IDisposable
         if (msg == NativeMethods.WM_CLIPBOARDUPDATE)
         {
             ClipboardChanged?.Invoke();
-            return IntPtr.Zero;
-        }
-
-        if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() == ClipboardHotkeyId)
-        {
-            HotkeyPressed?.Invoke();
             return IntPtr.Zero;
         }
 
@@ -65,7 +56,6 @@ public sealed class ClipboardMonitor : IDisposable
             return;
 
         NativeMethods.RemoveClipboardFormatListener(_hwnd);
-        NativeMethods.UnregisterHotKey(_hwnd, ClipboardHotkeyId);
         NativeMethods.DestroyWindow(_hwnd);
         _hwnd = IntPtr.Zero;
     }

@@ -25,6 +25,14 @@ public sealed partial class AnnouncementActivity : ObservableObject, IIslandActi
 
     private DateTimeOffset _expiresAt = DateTimeOffset.MinValue;
 
+    /// <summary>
+    /// Whether an announcement is allowed to reach the island at all. Set from Settings; false
+    /// makes <see cref="Announce"/> a no-op rather than stopping the several watchers that call it
+    /// -- those cost nothing idle, and gating the one place they all funnel into is what lets the
+    /// toggle take effect on the very next event instead of needing each of them restarted.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
     [ObservableProperty] private bool _isActive;
 
     /// <summary>The headline, e.g. "Screenshot captured".</summary>
@@ -53,6 +61,9 @@ public sealed partial class AnnouncementActivity : ObservableObject, IIslandActi
     /// </summary>
     public void Announce(DateTimeOffset now, string label, string glyph, string detail = "")
     {
+        if (!Enabled)
+            return;
+
         Label = label;
         Glyph = glyph;
         Detail = detail;

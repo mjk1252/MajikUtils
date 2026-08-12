@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Threading;
 using Dock.App.Views;
+using Dock.Core.Models;
 using Dock.Core.Services;
 using Dock.Core.ViewModels;
 using Dock.Interop.Audio;
@@ -39,6 +40,36 @@ public partial class App : System.Windows.Application
     private AudioDeviceSource? _audioDevices;
     private ConditionActivity? _lowBattery;
     private ConditionActivity? _lowDisk;
+
+    private HotkeyListener? _hotkeys;
+    private VolumeMixerSource? _volumeMixerSource;
+    private VolumeMixerActivity? _volumeMixer;
+    private CommandPaletteWindow? _paletteWindow;
+
+    private readonly UpdateService _updates = new();
+
+    /// <summary>
+    /// Long enough that a background utility running for days does not hammer GitHub's API, short
+    /// enough that a release does not sit unnoticed for a week on a machine that is rarely
+    /// restarted. The first check happens right at startup, outside this timer.
+    /// </summary>
+    private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(6) };
+
+    private readonly LrcLibLyricsProvider _lyrics = new();
+
+    /// <summary>The (artist, title) lyrics were last fetched for, so a snapshot that has not
+    /// actually changed track does not re-fetch on every one of the several a second the media
+    /// session republishes while nothing about the song has moved.</summary>
+    private (string Artist, string Title)? _lyricsFor;
+
+    // Conditions keep their watchers running even when switched off in Settings -- this flag is
+    // what actually gates the dot, so the toggle takes effect the instant it is clicked rather than
+    // needing SystemConditionSource and BatterySource restarted around it. Announcements take the
+    // same approach but the gate lives on AnnouncementActivity itself; see its Enabled property.
+    private bool _showConditions = true;
+
+    private const int ClipboardHotkeyId = 1;
+    private const int PaletteHotkeyId = 2;
 
     /// <summary>
     /// Drives the activity host's clock, which is the only thing that retires an activity whose
@@ -88,15 +119,22 @@ public partial class App : System.Windows.Application
         _viewModel.AttachWingetService(wingetService);
         LoadInstalledAppsAsync();
 
-        CreateIsland(wingetService);
+        var startupSettings = _settingsStore.Load();
+        _showConditions = startupSettings.ShowConditions;
+
+        CreateIsland(wingetService, startupSettings);
+        _announcements!.Enabled = startupSettings.ShowAnnouncements;
         CreateStackWindows();
+        CreatePalette();
+        StartUpdateChecks();
         StartClipboardMonitor();
+        StartHotkeys(startupSettings);
         StartSystemStats();
 
-        if (_settingsStore.Load().ShowMediaIsland)
+        if (startupSettings.ShowMediaIsland)
             StartMediaMonitoring();
 
-        if (_settingsStore.Load().ShowPrivacyIndicator)
+        if (startupSettings.ShowPrivacyIndicator)
             StartDeviceUsageMonitoring();
 
         StartSystemEvents();
@@ -134,7 +172,7 @@ public partial class App : System.Windows.Application
     /// sections of this panel instead. It exists for the whole run, regardless of the media
     /// setting: that only governs whether anything is playing in it.
     /// </summary>
-    private void CreateIsland(IWingetService wingetService)
+    private void CreateIsland(IWingetService wingetService, AppSettings startupSettings)
     {
         _mediaSource = new MediaSessionSource();
         _mediaViewModel = new MediaViewModel(_mediaSource);
@@ -164,6 +202,17 @@ public partial class App : System.Windows.Application
         // Its label carries the percentage, so unlike the others it is written as readings arrive.
         _lowBattery = new ConditionActivity { Key = "battery", Glyph = "\uE850" };
 
+        // The mixer's source is polled rather than pushed (see VolumeMixerSource), but it is
+        // otherwise wired exactly like every other reading here: Changed on a background thread,
+        // applied to the view model on the dispatcher.
+        _volumeMixerSource = new VolumeMixerSource();
+        _volumeMixer = new VolumeMixerActivity(_iconProvider!, _volumeMixerSource)
+        {
+            AllowPillClaim = startupSettings.ShowVolumeMixer
+        };
+        _volumeMixerSource.Changed += (_, sessions) => Dispatcher.Invoke(() => _volumeMixer.Apply(sessions));
+        _volumeMixerSource.Start();
+
         _activities = new IslandActivityHost();
         _activities.Tick(DateTimeOffset.UtcNow);
         _activities.Register(_mediaViewModel);
@@ -173,6 +222,7 @@ public partial class App : System.Windows.Application
         _activities.Register(_doNotDisturb);
         _activities.Register(_restartPending);
         _activities.Register(_lowDisk);
+        _activities.Register(_volumeMixer);
 
         // One clock for everything that measures time on the island: the host's linger windows, an
         // announcement's two and a half seconds, and the timer's countdown.
@@ -187,7 +237,11 @@ public partial class App : System.Windows.Application
         _activityTimer.Start();
 
         // Media notifications arrive on the thread pool, like the system stats below.
-        _mediaSource.Changed += (_, snapshot) => Dispatcher.Invoke(() => _mediaViewModel.Apply(snapshot));
+        _mediaSource.Changed += (_, snapshot) => Dispatcher.Invoke(() =>
+        {
+            _mediaViewModel.Apply(snapshot);
+            RequestLyricsIfTrackChanged(snapshot);
+        });
 
         // The equalizer bars read the speakers directly. Created here and owned for the whole run;
         // the island starts and stops the capture as the bars come and go.
@@ -195,10 +249,11 @@ public partial class App : System.Windows.Application
 
         _islandWindow = new IslandWindow(
             _mediaViewModel, _activities, _privacyViewModel, _timer, _notesViewModel, _todosViewModel,
-            _viewModel!, wingetService, _audioSource, _settingsStore!.Load());
+            _viewModel!, wingetService, _audioSource, _volumeMixer, startupSettings);
 
         _islandWindow.SettingsRequested += ShowSettingsWindow;
         _islandWindow.ExitRequested += Shutdown;
+        _islandWindow.RestartForUpdateRequested += _updates.ApplyAndRestart;
         _islandWindow.Show();
     }
 
@@ -234,6 +289,49 @@ public partial class App : System.Windows.Application
             window.CloseForExit();
 
         UnwatchStack(stack);
+    }
+
+    /// <summary>
+    /// Builds the command palette. Its window is created once, alongside the island, and shown and
+    /// hidden from then on -- the same lifetime a taskbar-less popup like this needs is the one
+    /// PanelWindow gives its windows for a different reason (a live taskbar button), so it is worth
+    /// repeating by hand here rather than pulled in from a base class built around one.
+    /// </summary>
+    private void CreatePalette()
+    {
+        var palette = new CommandPaletteViewModel(_viewModel!);
+
+        palette.StackActivationRequested += stack =>
+        {
+            if (_stackWindows.TryGetValue(stack, out var window))
+                window.ShowPanel();
+        };
+
+        _paletteWindow = new CommandPaletteWindow(palette);
+    }
+
+    /// <summary>
+    /// Checks for an update immediately, then again on <see cref="_updateTimer"/>'s interval for
+    /// as long as MajikUtils keeps running. Once one downloads, the gear menu is told and stops
+    /// checking -- there is nothing more recent to find until this one is applied.
+    /// </summary>
+    private void StartUpdateChecks()
+    {
+        _ = RunUpdateCheckAsync();
+
+        _updateTimer.Tick += (_, _) => _ = RunUpdateCheckAsync();
+        _updateTimer.Start();
+    }
+
+    private async Task RunUpdateCheckAsync()
+    {
+        if (_updates.UpdateReady)
+            return;
+
+        await _updates.CheckAndDownloadAsync();
+
+        if (_updates.UpdateReady)
+            _islandWindow?.SetUpdateAvailable(true);
     }
 
     private void ShowPanel(string panel)
@@ -283,9 +381,27 @@ public partial class App : System.Windows.Application
     {
         _clipboardMonitor = new ClipboardMonitor();
         _clipboardMonitor.ClipboardChanged += () => Dispatcher.Invoke(CaptureClipboardText);
-        _clipboardMonitor.HotkeyPressed += () =>
-            Dispatcher.Invoke(() => _islandWindow?.ShowSection(IslandSection.Clipboard));
         _clipboardMonitor.Start();
+    }
+
+    /// <summary>
+    /// The two hotkeys share one listener now (see <see cref="HotkeyListener"/>), which is what
+    /// lets Settings rebind either one without touching the other's registration.
+    /// </summary>
+    private void StartHotkeys(AppSettings settings)
+    {
+        _hotkeys = new HotkeyListener();
+        _hotkeys.Start();
+        _hotkeys.Register(ClipboardHotkeyId, settings.ClipboardHotkey.Modifiers, settings.ClipboardHotkey.Key);
+        _hotkeys.Register(PaletteHotkeyId, settings.PaletteHotkey.Modifiers, settings.PaletteHotkey.Key);
+
+        _hotkeys.HotkeyPressed += id => Dispatcher.Invoke(() =>
+        {
+            if (id == ClipboardHotkeyId)
+                _islandWindow?.ShowSection(IslandSection.Clipboard);
+            else if (id == PaletteHotkeyId)
+                _paletteWindow?.ShowAndFocus();
+        });
     }
 
     private void CaptureClipboardText()
@@ -355,6 +471,41 @@ public partial class App : System.Windows.Application
         _mediaSource?.Stop();
         _mediaViewModel?.Apply(null);
         _mediaViewModel?.Retire();
+        _lyricsFor = null;
+    }
+
+    /// <summary>
+    /// Kicks off a lyrics lookup the moment the title or artist actually changes, rather than on
+    /// every snapshot -- the session republishes several times a second while nothing about the
+    /// track has moved, and re-fetching on each one would hammer lrclib.net for the same answer.
+    /// </summary>
+    private void RequestLyricsIfTrackChanged(MediaSnapshot? snapshot)
+    {
+        if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.Title))
+            return;
+
+        var key = (snapshot.Artist, snapshot.Title);
+        if (_lyricsFor == key)
+            return;
+
+        _lyricsFor = key;
+        _mediaViewModel!.ClearLyrics();
+
+        Task.Run(() => _lyrics.GetLyricsAsync(
+                snapshot.Artist, snapshot.Title, snapshot.Duration, CancellationToken.None))
+            .ContinueWith(t =>
+            {
+                if (!t.IsCompletedSuccessfully || t.Result is not { Count: > 0 } lines)
+                    return;
+
+                Dispatcher.Invoke(() =>
+                {
+                    // Playback may have moved on to a different track while this was in flight;
+                    // the answer is only worth applying if it is still the one on screen.
+                    if (_lyricsFor == key)
+                        _mediaViewModel!.SetLyrics(lines);
+                });
+            });
     }
 
     /// <summary>
@@ -405,7 +556,9 @@ public partial class App : System.Windows.Application
         _bluetooth.Start();
     }
 
-    // Raised from watcher threads and WinRT callbacks, like every other source here.
+    // Raised from watcher threads and WinRT callbacks, like every other source here. Whether this
+    // actually reaches the island is AnnouncementActivity.Enabled's business, not this method's --
+    // see its doc comment for why the gate lives there instead of on each of these watchers.
     private void OnSystemEvent(object? sender, SystemEvent occurrence) =>
         Dispatcher.Invoke(() => _announcements?.Announce(
             DateTimeOffset.UtcNow, occurrence.Label, occurrence.Glyph, occurrence.Detail));
@@ -415,6 +568,9 @@ public partial class App : System.Windows.Application
         _conditions = new SystemConditionSource();
         _conditions.Changed += (_, conditions) => Dispatcher.Invoke(() =>
         {
+            if (!_showConditions)
+                return;
+
             _doNotDisturb!.IsActive = conditions.DoNotDisturb;
             _restartPending!.IsActive = conditions.RestartPending;
 
@@ -487,7 +643,7 @@ public partial class App : System.Windows.Application
 
             // Running out is a standing condition, so it takes the dot rather than the pill.
             _lowBattery!.Label = $"Battery {status.PercentRemaining ?? 0}%";
-            _lowBattery.IsActive = !status.IsCharging
+            _lowBattery.IsActive = _showConditions && !status.IsCharging
                 && status.PercentRemaining is { } percent && percent <= LowBatteryPercent;
         });
 
@@ -605,6 +761,42 @@ public partial class App : System.Windows.Application
             else
                 StopDeviceUsageMonitoring();
         };
+        _settingsWindow.AnnouncementsToggled += show =>
+        {
+            if (_announcements is not null)
+                _announcements.Enabled = show;
+        };
+
+        _settingsWindow.ConditionsToggled += show =>
+        {
+            _showConditions = show;
+
+            // Stopping the watcher would leave whatever it last reported stuck lit; forcing every
+            // reading to false is what actually takes the dot off the island the instant this is
+            // switched off, rather than at its next poll.
+            if (!show)
+            {
+                _doNotDisturb!.IsActive = false;
+                _restartPending!.IsActive = false;
+                _lowDisk!.IsActive = false;
+
+                if (_lowBattery is not null)
+                    _lowBattery.IsActive = false;
+            }
+        };
+
+        _settingsWindow.VolumeMixerToggled += show =>
+        {
+            if (_volumeMixer is not null)
+                _volumeMixer.AllowPillClaim = show;
+        };
+
+        _settingsWindow.ClipboardHotkeyChanged += binding =>
+            _hotkeys?.Register(ClipboardHotkeyId, binding.Modifiers, binding.Key);
+
+        _settingsWindow.PaletteHotkeyChanged += binding =>
+            _hotkeys?.Register(PaletteHotkeyId, binding.Modifiers, binding.Key);
+
         _settingsWindow.MediaIslandAppearanceChanged += settings =>
             _islandWindow?.ApplyAppearance(settings);
         _settingsWindow.Show();
@@ -618,6 +810,7 @@ public partial class App : System.Windows.Application
         _stackWatchers.Clear();
 
         _clipboardMonitor?.Dispose();
+        _hotkeys?.Dispose();
         _systemStatsSource?.Dispose();
         _deviceUsageMonitor?.Dispose();
         _systemEvents?.Dispose();
@@ -626,9 +819,11 @@ public partial class App : System.Windows.Application
         _volume?.Dispose();
         _battery?.Dispose();
         _audioDevices?.Dispose();
+        _volumeMixerSource?.Dispose();
 
         _activityTimer.Stop();
         _debugTimer?.Stop();
+        _updateTimer.Stop();
         _islandWindow?.CloseForExit();
         _mediaSource?.Dispose();
         _audioSource?.Dispose();

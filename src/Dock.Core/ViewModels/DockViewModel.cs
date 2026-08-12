@@ -96,6 +96,13 @@ public partial class DockViewModel : ObservableObject
         _wingetService = wingetService;
     }
 
+    /// <summary>
+    /// Every installed app, unfiltered. <see cref="LauncherResults"/> is already narrowed to the
+    /// Launch tab's own query and capped at 60 -- the command palette runs its own ranking across
+    /// every source it merges and needs the full list to rank from.
+    /// </summary>
+    public IReadOnlyList<AppLauncherItemViewModel> AllLauncherItems => _allLauncherItems;
+
     public void SetLauncherItems(List<AppLauncherItemViewModel> items)
     {
         _allLauncherItems = items;

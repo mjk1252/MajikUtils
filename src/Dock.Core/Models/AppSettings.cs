@@ -35,6 +35,31 @@ public sealed class AppSettings
     /// that button is on, so there is no position worth carrying across sessions.
     /// </summary>
     public Dictionary<string, PanelSize> PanelSizes { get; set; } = new();
+
+    /// <summary>
+    /// Whether copies, downloads, screenshots, drive and network changes, volume and Bluetooth
+    /// surface as an announcement on the island. Defaults on, and stays on for settings files
+    /// written before it existed.
+    /// </summary>
+    public bool ShowAnnouncements { get; set; } = true;
+
+    /// <summary>
+    /// Whether do-not-disturb, a pending restart, low disk space and low battery show as a dot on
+    /// the island. Defaults on, and stays on for settings files written before it existed.
+    /// </summary>
+    public bool ShowConditions { get; set; } = true;
+
+    /// <summary>
+    /// Whether an application making sound can claim the island on its own. The Mixer tab works
+    /// either way -- this only governs whether it can interrupt the ambient pill uninvited.
+    /// </summary>
+    public bool ShowVolumeMixer { get; set; } = true;
+
+    /// <summary>Opens the island on its Clipboard tab. Ctrl+Alt+Shift+V by default.</summary>
+    public HotkeyBinding ClipboardHotkey { get; set; } = new(modifiers: 0x2 | 0x1 | 0x4, key: 0x56);
+
+    /// <summary>Opens the command palette. Ctrl+Alt+Space by default.</summary>
+    public HotkeyBinding PaletteHotkey { get; set; } = new(modifiers: 0x2 | 0x1, key: 0x20);
 }
 
 public enum IslandShape
