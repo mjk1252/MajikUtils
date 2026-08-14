@@ -17,6 +17,9 @@
         <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#F21C1C1C"/>
         <SolidColorBrush x:Key="PanelBorderBrush" Color="#26FFFFFF"/>
 
+        <!-- Glyphs come from the shell's own icon font, with the Windows 10 name as a fallback. -->
+        <FontFamily x:Key="GlyphFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
         <Style x:Key="SectionHeaderText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#77FFFFFF"/>
             <Setter Property="FontSize" Value="10"/>
@@ -44,6 +47,91 @@
                     <Setter Property="Background" Value="#18FFFFFF"/>
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- A small labelled action inside a panel, as opposed to the icon-only tabs below.
+             Application-scoped for the same reason as the rest of this dictionary: the panel
+             UserControls need it as much as the island window does. -->
+        <Style x:Key="ChipButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#CCFFFFFF"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Plate" Background="#16FFFFFF" CornerRadius="9"
+                                Padding="9,3" BorderThickness="1"
+                                BorderBrush="{StaticResource PanelBorderBrush}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Plate" Property="Background" Value="#2EFFFFFF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The stock checkbox brings a light-themed box, a system accent tick and a focus
+             rectangle: three things that read as a form control on a dark HUD. This is the same
+             rounded-square vocabulary as the icon plates, with the tick drawn from the shell's
+             glyph font. -->
+        <Style x:Key="IslandCheckBox" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="Box" Width="14" Height="14" CornerRadius="4"
+                                Background="Transparent" BorderThickness="1"
+                                BorderBrush="#55FFFFFF">
+                            <TextBlock x:Name="Tick" Text="&#xE73E;"
+                                       FontFamily="{StaticResource GlyphFont}" FontSize="9"
+                                       Foreground="#FF101010" Opacity="0"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Box" Property="Background" Value="#E6FFFFFF"/>
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#E6FFFFFF"/>
+                                <Setter TargetName="Tick" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#99FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The small text actions in a panel header ("Clear", "Add folder...", the row's remove
+             glyph). They carry click handlers rather than being Buttons, so the affordance has to
+             come from a wrapper: InlineActionHost is the hit box and the hover, InlineAction the
+             label inside it. Same hover value as the tab strip. -->
+        <Style x:Key="InlineActionHost" TargetType="Border">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#18FFFFFF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="InlineAction" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#99FFFFFF"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
     </Application.Resources>
 </Application>

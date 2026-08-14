@@ -4,9 +4,9 @@
              AllowDrop="True"
              Drop="OnDrop"
              Background="Transparent">
-    <Grid Margin="14">
+    <!-- No margin of its own: SectionHost supplies the one gutter, shared by every panel. -->
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -14,19 +14,20 @@
 
         <Grid>
             <TextBlock Text="STACKS" Style="{StaticResource SectionHeaderText}"/>
-            <TextBlock Text="Add folder..." Foreground="#99FFFFFF" FontSize="10"
-                       HorizontalAlignment="Right" Cursor="Hand"
-                       MouseLeftButtonUp="OnAddFolderClick"/>
+            <Border Style="{StaticResource InlineActionHost}"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    MouseLeftButtonUp="OnAddFolderClick">
+                <TextBlock Text="Add folder..." Style="{StaticResource InlineAction}"/>
+            </Border>
         </Grid>
 
+        <!-- How stacks work belongs with the empty state and nowhere else: it is worth two lines
+             of a small panel exactly once, before the feature has been used. -->
         <TextBlock Grid.Row="1" Style="{StaticResource EmptyStateText}"
-                   Text="Each stack gets its own taskbar button -- click it to fan the folder open. Right-click the button and choose Pin to taskbar to keep it there."/>
-
-        <TextBlock Grid.Row="2" Style="{StaticResource EmptyStateText}" Margin="4,8,4,4"
-                   Text="No stacks yet -- use Add folder, or drag a folder onto this panel."
+                   Text="No stacks yet -- use Add folder, or drag a folder onto this panel. Each stack gets its own taskbar button: click it to fan the folder open, or right-click and choose Pin to taskbar to keep it there."
                    Visibility="{Binding Stacks.Count, Converter={StaticResource CountToVisibility}, ConverterParameter=invert}"/>
 
-        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
             <ItemsControl ItemsSource="{Binding Stacks}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -47,9 +48,11 @@
                                     <TextBlock Text="{Binding Path}" Foreground="#66FFFFFF" FontSize="10"
                                                TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
-                                <TextBlock Grid.Column="2" Text="Remove" Foreground="#99FFFFFF" FontSize="10"
-                                           VerticalAlignment="Center" Cursor="Hand" Margin="8,0,4,0"
-                                           MouseLeftButtonUp="OnRemoveClick"/>
+                                <Border Grid.Column="2" Style="{StaticResource InlineActionHost}"
+                                        VerticalAlignment="Center" Margin="8,0,0,0"
+                                        MouseLeftButtonUp="OnRemoveClick">
+                                    <TextBlock Text="Remove" Style="{StaticResource InlineAction}"/>
+                                </Border>
                             </Grid>
                         </Border>
                     </DataTemplate>

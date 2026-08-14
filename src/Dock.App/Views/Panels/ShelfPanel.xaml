@@ -1,7 +1,8 @@
 <UserControl x:Class="Dock.App.Views.Panels.ShelfPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Margin="14">
+    <!-- No margin of its own: SectionHost supplies the one gutter, shared by every panel. -->
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>

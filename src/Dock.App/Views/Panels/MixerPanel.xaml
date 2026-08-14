@@ -72,7 +72,8 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="14">
+    <!-- No margin of its own: SectionHost supplies the one gutter, shared by every panel. -->
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -97,6 +98,16 @@
 
                             <Border Width="24" Height="24" CornerRadius="5" Margin="0,0,10,0"
                                     Background="#22FFFFFF" VerticalAlignment="Center">
+                                <!-- Rounds the icon itself, not just the plate behind it: a Border's
+                                     corner radius does not clip its child. Same mask as the artwork
+                                     plates on the island. -->
+                                <Border.OpacityMask>
+                                    <VisualBrush>
+                                        <VisualBrush.Visual>
+                                            <Border Width="24" Height="24" CornerRadius="5" Background="White"/>
+                                        </VisualBrush.Visual>
+                                    </VisualBrush>
+                                </Border.OpacityMask>
                                 <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
                                        RenderOptions.BitmapScalingMode="HighQuality"/>
                             </Border>

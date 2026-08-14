@@ -212,31 +212,8 @@
              on" to a great many people. -->
         <SolidColorBrush x:Key="CameraInUseBrush" Color="#30D158"/>
 
-        <!-- A small labelled action inside a panel, as opposed to the icon-only tabs below. -->
-        <Style x:Key="ChipButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#CCFFFFFF"/>
-            <Setter Property="FontSize" Value="10.5"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Focusable" Value="False"/>
-            <Setter Property="Margin" Value="0,0,5,0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Plate" Background="#16FFFFFF" CornerRadius="9"
-                                Padding="9,3" BorderThickness="1"
-                                BorderBrush="{StaticResource PanelBorderBrush}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Plate" Property="Background" Value="#2EFFFFFF"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- ChipButton lives in App.xaml: the section panels are UserControls in their own XAML
+             files and cannot see a style declared on this window. -->
 
         <!-- Announcements and conditions in the pill: a glyph, a headline, and the particulars if
              there are any. One template covers every source that has this shape. -->
@@ -572,6 +549,10 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
                             <Border Width="84" Height="84" CornerRadius="8" Margin="0,0,16,0"
                                     VerticalAlignment="Top" Background="#22FFFFFF">
@@ -589,7 +570,6 @@
 
                             <Grid Grid.Column="1">
                                 <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
@@ -614,8 +594,17 @@
 
                                     <TextBlock Text="{Binding PositionText}" Style="{StaticResource TimeText}"
                                                Margin="0,0,8,0"/>
-                                    <ProgressBar Grid.Column="1" Style="{StaticResource IslandProgress}"
-                                                 Value="{Binding Progress, Mode=OneWay}"/>
+
+                                    <!-- Taller than the bar it wraps, so the click target isn't
+                                         four pixels tall: the padding is invisible but still
+                                         MouseLeftButtonDown's target. -->
+                                    <Border Grid.Column="1" Background="Transparent" Padding="0,6"
+                                            Cursor="Hand" MouseLeftButtonDown="OnMediaSeek">
+                                        <ProgressBar x:Name="MediaProgressBar"
+                                                     Style="{StaticResource IslandProgress}"
+                                                     Value="{Binding Progress, Mode=OneWay}"/>
+                                    </Border>
+
                                     <TextBlock Grid.Column="2" Text="{Binding DurationText}"
                                                Style="{StaticResource TimeText}" Margin="8,0,0,0"/>
                                 </Grid>
@@ -642,49 +631,32 @@
                                             Command="{Binding SkipNextCommand}"
                                             IsEnabled="{Binding CanSkipNext}"/>
                                 </StackPanel>
-
-                                <!-- Fixed height rather than sized to content: SectionHost is
-                                     unbounded for the Quick section (see SelectSection), so a
-                                     ninety-line lyric sheet loaded in full would otherwise be free
-                                     to grow the island straight off the bottom of the screen. -->
-                                <ListBox x:Name="LyricsList" Grid.Row="4" Margin="0,10,0,0"
-                                         Height="72" Background="Transparent" BorderThickness="0"
-                                         ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                                         Focusable="False" ItemsSource="{Binding Lyrics}"
-                                         Visibility="{Binding HasLyrics, Converter={StaticResource BoolToVisibility}}">
-                                    <ListBox.ItemContainerStyle>
-                                        <Style TargetType="ListBoxItem">
-                                            <Setter Property="Focusable" Value="False"/>
-                                            <Setter Property="Padding" Value="0,2"/>
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="ListBoxItem">
-                                                        <ContentPresenter/>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </ListBox.ItemContainerStyle>
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Text}" FontSize="12"
-                                                       TextWrapping="Wrap">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="#66FFFFFF"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                                                <Setter Property="Foreground" Value="White"/>
-                                                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
                             </Grid>
+
+                            <!-- Full width rather than squeezed into the info column: at 340px the
+                                 wrapped lines fought the artwork for space and read like an
+                                 afterthought bolted under the transport buttons. Centred and set
+                                 off by its own divider, it reads as the track's own section instead. -->
+                            <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,14,0,0"
+                                    BorderThickness="0,1,0,0" BorderBrush="{StaticResource PanelBorderBrush}"
+                                    Visibility="{Binding HasLyrics, Converter={StaticResource BoolToVisibility}}">
+                                <!-- Two rows, not a window onto a list: the line being sung and the
+                                     one coming up, and nothing else. A scrolled list put the
+                                     current line wherever ScrollIntoView left it, so the rest of
+                                     the viewport was usually lines already sung. Deriving the two
+                                     strings in the view model also keeps the block's height fixed,
+                                     which matters because SectionHost is unbounded for the Quick
+                                     section (see SelectSection): a ninety-line sheet shown in
+                                     full would be free to grow the island off the screen. -->
+                                <StackPanel Margin="0,10,0,2">
+                                    <TextBlock Text="{Binding CurrentLyricText}" FontSize="12.5"
+                                               Foreground="White" FontWeight="SemiBold"
+                                               TextWrapping="Wrap" TextAlignment="Center"/>
+                                    <TextBlock Text="{Binding NextLyricText}" FontSize="12"
+                                               Foreground="#66FFFFFF" Margin="0,4,0,0"
+                                               TextWrapping="Wrap" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
                         </Grid>
 
                         <!-- One host, every section kept alive inside it: switching tabs hides and
@@ -704,7 +676,17 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <!-- Same Auto/*/Auto shape as the collapsed pill's media template: art
+                                 and artist take what they need, the title gets the rest and trims.
+                                 The strip is only ever drawn at a section's width, which is not the
+                                 width the old fixed MaxWidths were cut for. -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
                                 <Border Width="20" Height="20" CornerRadius="4" Margin="0,0,9,0"
                                         Background="#22FFFFFF" VerticalAlignment="Center">
                                     <Border.OpacityMask>
@@ -720,19 +702,24 @@
                                            RenderOptions.BitmapScalingMode="HighQuality"/>
                                 </Border>
 
-                                <TextBlock Text="{Binding Title}" Foreground="White" FontSize="11.5"
-                                           VerticalAlignment="Center" MaxWidth="330"
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" Foreground="White"
+                                           FontSize="11.5" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis"/>
 
-                                <TextBlock Text="{Binding Artist}" Foreground="#88FFFFFF" FontSize="11"
-                                           VerticalAlignment="Center" Margin="8,0,0,0" MaxWidth="150"
+                                <TextBlock Grid.Column="2" Text="{Binding Artist}" Foreground="#88FFFFFF"
+                                           FontSize="11" VerticalAlignment="Center"
+                                           Margin="8,0,0,0" MaxWidth="180"
                                            TextTrimming="CharacterEllipsis"/>
-                            </StackPanel>
+                            </Grid>
 
-                            <Border Grid.Row="1" Height="1" Background="#22FFFFFF"/>
+                            <Border Grid.Row="1" Height="1" Background="{StaticResource PanelBorderBrush}"/>
                         </Grid>
 
-                        <Grid x:Name="SectionHost" Grid.Row="2" Margin="0,12,0,0">
+                        <!-- The one gutter between the media header/strip above and whatever section
+                             is open. The panels themselves sit flush inside it: a margin of their
+                             own would stack on top of ExpandedLayer's and jog the content sideways
+                             every time a tab changed. -->
+                        <Grid x:Name="SectionHost" Grid.Row="2" Margin="0,14,0,4">
                             <!-- The default, and what a hover shows: the scratchpad. -->
                             <Grid x:Name="QuickView">
                                 <Grid.RowDefinitions>
@@ -742,7 +729,7 @@
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <Border Height="1" Background="#33FFFFFF"
+                                <Border Height="1" Background="{StaticResource PanelBorderBrush}"
                                         Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}"/>
 
                                 <!-- Timer. Sits with the scratchpad because that is the part of the
@@ -754,7 +741,7 @@
                                      Its own DataContext, a TimerActivity set from code-behind,
                                      since the rest of this layer is bound to the media view model. -->
                                 <StackPanel x:Name="TimerPanel" Grid.Row="1" Orientation="Horizontal"
-                                            Margin="0,10,0,0">
+                                            Margin="0,14,0,0">
                                     <TextBlock Text="TIMER" Style="{StaticResource SectionHeaderText}"
                                                VerticalAlignment="Center" Margin="4,0,10,0"/>
 
@@ -764,6 +751,23 @@
                                             Click="OnTimerClick" Tag="10"/>
                                     <Button Content="25m" Style="{StaticResource ChipButton}"
                                             Click="OnTimerClick" Tag="25"/>
+
+                                    <!-- Fixed lengths cover the common case; this covers everything
+                                         else, without a second control to reach for. -->
+                                    <Border Background="#16FFFFFF" CornerRadius="9" Padding="9,3"
+                                            BorderThickness="1" BorderBrush="{StaticResource PanelBorderBrush}"
+                                            Margin="0,0,5,0">
+                                        <Grid Width="34">
+                                            <TextBlock Text="min" Foreground="#55FFFFFF" FontSize="10.5"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="{Binding Text.Length, ElementName=CustomTimerInput,
+                                                           Converter={StaticResource CountToVisibility}, ConverterParameter=invert}"/>
+                                            <TextBox x:Name="CustomTimerInput" Style="{StaticResource NoteInput}"
+                                                     FontSize="10.5"
+                                                     PreviewTextInput="OnCustomTimerPreviewTextInput"
+                                                     KeyDown="OnCustomTimerKeyDown"/>
+                                        </Grid>
+                                    </Border>
 
                                     <Button Content="Stop" Style="{StaticResource ChipButton}"
                                             Click="OnTimerCancelClick"
@@ -777,7 +781,7 @@
                                                    Converter={StaticResource BoolToVisibility}}"/>
                                 </StackPanel>
 
-                                <Grid x:Name="TodosPanel" Grid.Row="2" Margin="0,10,0,0">
+                                <Grid x:Name="TodosPanel" Grid.Row="2" Margin="0,14,0,0">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
@@ -786,10 +790,12 @@
 
                                     <Grid>
                                         <TextBlock Text="TODO" Style="{StaticResource SectionHeaderText}"/>
-                                        <TextBlock Text="Clear done" Foreground="#99FFFFFF" FontSize="10"
-                                                   HorizontalAlignment="Right" Cursor="Hand"
-                                                   MouseLeftButtonUp="OnClearDoneClick"
-                                                   Visibility="{Binding Todos.Count, Converter={StaticResource CountToVisibility}}"/>
+                                        <Border Style="{StaticResource InlineActionHost}"
+                                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                MouseLeftButtonUp="OnClearDoneClick"
+                                                Visibility="{Binding Todos.Count, Converter={StaticResource CountToVisibility}}">
+                                            <TextBlock Text="Clear done" Style="{StaticResource InlineAction}"/>
+                                        </Border>
                                     </Grid>
 
                                     <Grid Grid.Row="1" Margin="0,4,0,0">
@@ -812,7 +818,8 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
 
-                                                    <CheckBox IsChecked="{Binding IsDone}" Focusable="False"
+                                                    <CheckBox IsChecked="{Binding IsDone}"
+                                                              Style="{StaticResource IslandCheckBox}"
                                                               VerticalAlignment="Center" Margin="0,0,8,0"/>
 
                                                     <TextBlock Grid.Column="1" Text="{Binding Text}"
@@ -831,12 +838,14 @@
                                                         </TextBlock.Style>
                                                     </TextBlock>
 
-                                                    <TextBlock Grid.Column="2" Text="&#xE711;"
-                                                               FontFamily="{StaticResource GlyphFont}" FontSize="10"
-                                                               Foreground="#66FFFFFF" Cursor="Hand"
-                                                               VerticalAlignment="Center" Margin="10,0,0,0"
-                                                               ToolTip="Remove"
-                                                               MouseLeftButtonUp="OnRemoveTodoClick"/>
+                                                    <Border Grid.Column="2" Style="{StaticResource InlineActionHost}"
+                                                            VerticalAlignment="Center" Margin="6,0,0,0"
+                                                            ToolTip="Remove"
+                                                            MouseLeftButtonUp="OnRemoveTodoClick">
+                                                        <TextBlock Text="&#xE711;" Style="{StaticResource InlineAction}"
+                                                                   FontFamily="{StaticResource GlyphFont}"
+                                                                   FontSize="10" Foreground="#66FFFFFF"/>
+                                                    </Border>
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -931,7 +940,8 @@
                                               Content="&#xE70B;" ToolTip="Notes and todo"
                                               Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
 
-                                <Border Width="1" Height="16" Background="#33FFFFFF" Margin="6,0"/>
+                                <Border Width="1" Height="16" Background="{StaticResource PanelBorderBrush}"
+                                        Margin="6,0"/>
 
                                 <Button x:Name="SettingsButton" Style="{StaticResource IslandTabButton}"
                                         Content="&#xE713;" ToolTip="Settings"

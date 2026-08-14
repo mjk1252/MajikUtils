@@ -20,4 +20,5 @@ public interface IMediaSessionSource
     void TogglePlayPause();
     void SkipNext();
     void SkipPrevious();
+    void SeekTo(TimeSpan position);
 }

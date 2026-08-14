@@ -73,6 +73,37 @@ public partial class MediaViewModel : ObservableObject, IIslandActivity
     /// <summary>-1 while nothing has started yet, or while there are no lyrics to point into.</summary>
     [ObservableProperty] private int _currentLyricIndex = -1;
 
+    /// <summary>
+    /// The line being sung now. The island shows exactly two rows -- this one and
+    /// <see cref="NextLyricText"/> -- rather than a scrolling list: a window onto a list only ever
+    /// lands where the scroll leaves it, which in a 64px viewport meant the current line sharing
+    /// the space with whatever had already been sung. Two derived strings can only ever show the
+    /// two lines that matter.
+    /// </summary>
+    public string CurrentLyricText => LyricTextAt(CurrentLyricIndex);
+
+    /// <summary>
+    /// The line coming up, or empty on the last line of a song -- the view leaves that row blank
+    /// rather than filling it with anything, since there genuinely is nothing next.
+    /// </summary>
+    public string NextLyricText => LyricTextAt(CurrentLyricIndex + 1);
+
+    private string LyricTextAt(int index) =>
+        index >= 0 && index < Lyrics.Count ? Lyrics[index].Text : string.Empty;
+
+    /// <summary>
+    /// Both rows are derived from the index, so they are re-read together whenever it moves -- and
+    /// whenever the lines underneath it are replaced, which can leave the index where it was while
+    /// meaning something completely different.
+    /// </summary>
+    private void NotifyLyricTextChanged()
+    {
+        OnPropertyChanged(nameof(CurrentLyricText));
+        OnPropertyChanged(nameof(NextLyricText));
+    }
+
+    partial void OnCurrentLyricIndexChanged(int value) => NotifyLyricTextChanged();
+
     private LyricLineViewModel? _currentLyric;
     private TimeSpan[] _lyricOffsets = [];
 
@@ -149,6 +180,10 @@ public partial class MediaViewModel : ObservableObject, IIslandActivity
         _lyricOffsets = lines.Select(l => l.Offset).ToArray();
         HasLyrics = Lyrics.Count > 0;
 
+        // Back to the start before working out where the new track is: index 3 of the old sheet and
+        // index 3 of the new one are different lines, and UpdateLyricIndex does nothing when the
+        // number it computes matches the one already there.
+        CurrentLyricIndex = -1;
         UpdateLyricIndex();
     }
 
@@ -230,6 +265,19 @@ public partial class MediaViewModel : ObservableObject, IIslandActivity
 
     [RelayCommand]
     private void SkipPrevious() => _source.SkipPrevious();
+
+    /// <summary>
+    /// Seeks to a fraction of the track, as clicked on the progress bar. Guarded the same as
+    /// <see cref="Tick"/>: nothing to scale against without a snapshot and a known duration.
+    /// </summary>
+    [RelayCommand]
+    private void Seek(double progress)
+    {
+        if (_snapshot is not { } snapshot || snapshot.Duration <= TimeSpan.Zero)
+            return;
+
+        _source.SeekTo(snapshot.Duration * Math.Clamp(progress, 0, 1));
+    }
 
     private static string Format(TimeSpan value) =>
         value.TotalHours >= 1 ? value.ToString(@"h\:mm\:ss") : value.ToString(@"m\:ss");

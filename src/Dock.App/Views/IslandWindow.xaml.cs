@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -267,10 +268,6 @@ public partial class IslandWindow : Window
                 // so the panel that opened at "no lyrics yet" height has to grow once they land.
                 case nameof(MediaViewModel.HasLyrics):
                     ResizeForContentChange();
-                    break;
-
-                case nameof(MediaViewModel.CurrentLyricIndex):
-                    ScrollToCurrentLyric();
                     break;
             }
         };
@@ -675,20 +672,6 @@ public partial class IslandWindow : Window
         MediaStrip.Visibility = !quick && _media.HasSession ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>
-    /// Keeps the highlighted line inside the lyrics list's fixed viewport. A plain
-    /// <c>ItemsControl</c> has no notion of "current" to scroll to, which is the one reason this
-    /// list is a <c>ListBox</c> rather than the <c>ItemsControl</c> everything else here uses --
-    /// <c>ScrollIntoView</c> is the whole of what that buys.
-    /// </summary>
-    private void ScrollToCurrentLyric()
-    {
-        if (_media.CurrentLyricIndex < 0 || _media.CurrentLyricIndex >= _media.Lyrics.Count)
-            return;
-
-        LyricsList.ScrollIntoView(_media.Lyrics[_media.CurrentLyricIndex]);
-    }
-
     /// <summary>Lights the tab for the open section, and only that one.</summary>
     private void SyncTabs(IslandSection section)
     {
@@ -798,7 +781,34 @@ public partial class IslandWindow : Window
             _timer.Start(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(value));
     }
 
+    /// <summary>Jumps playback to wherever on the bar was clicked.</summary>
+    private void OnMediaSeek(object sender, MouseButtonEventArgs e)
+    {
+        var bar = MediaProgressBar;
+        var x = e.GetPosition(bar).X;
+        var fraction = bar.ActualWidth > 0 ? x / bar.ActualWidth : 0;
+
+        _media.SeekCommand.Execute(fraction);
+    }
+
     private void OnTimerCancelClick(object sender, RoutedEventArgs e) => _timer.Cancel();
+
+    /// <summary>Digits only, so there is never anything in the box Enter can't parse.</summary>
+    private void OnCustomTimerPreviewTextInput(object sender, TextCompositionEventArgs e) =>
+        e.Handled = !e.Text.All(char.IsDigit);
+
+    private void OnCustomTimerKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not TextBox box)
+            return;
+
+        if (int.TryParse(box.Text, out var minutes) && minutes > 0)
+        {
+            SetPinned(true);
+            _timer.Start(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(minutes));
+            box.Text = string.Empty;
+        }
+    }
 
     private void OnClearDoneClick(object sender, MouseButtonEventArgs e) =>
         _todos.ClearDoneCommand.Execute(null);

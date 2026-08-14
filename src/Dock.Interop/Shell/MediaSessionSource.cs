@@ -275,6 +275,9 @@ public sealed class MediaSessionSource : IMediaSessionSource, IDisposable
 
     public void SkipPrevious() => Invoke(s => s.TrySkipPreviousAsync());
 
+    public void SeekTo(TimeSpan position) =>
+        Invoke(s => s.TryChangePlaybackPositionAsync(position.Ticks));
+
     /// <summary>
     /// Fires a transport command at the current session and forgets it. Nothing is done with the
     /// result: whether the player honoured it shows up as the change notification it raises

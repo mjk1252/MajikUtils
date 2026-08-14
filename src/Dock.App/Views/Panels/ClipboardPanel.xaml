@@ -1,7 +1,8 @@
 <UserControl x:Class="Dock.App.Views.Panels.ClipboardPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Margin="14">
+    <!-- No margin of its own: SectionHost supplies the one gutter, shared by every panel. -->
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -10,10 +11,12 @@
 
         <Grid>
             <TextBlock Text="CLIPBOARD HISTORY" Style="{StaticResource SectionHeaderText}"/>
-            <TextBlock Text="Clear" Foreground="#99FFFFFF" FontSize="10"
-                       HorizontalAlignment="Right" Cursor="Hand"
-                       MouseLeftButtonUp="OnClearClick"
-                       Visibility="{Binding ClipboardHistory.Count, Converter={StaticResource CountToVisibility}}"/>
+            <Border Style="{StaticResource InlineActionHost}"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    MouseLeftButtonUp="OnClearClick"
+                    Visibility="{Binding ClipboardHistory.Count, Converter={StaticResource CountToVisibility}}">
+                <TextBlock Text="Clear" Style="{StaticResource InlineAction}"/>
+            </Border>
         </Grid>
 
         <TextBlock Grid.Row="1" Style="{StaticResource EmptyStateText}"
