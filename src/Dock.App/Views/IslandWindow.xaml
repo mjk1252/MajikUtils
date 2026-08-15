@@ -576,9 +576,28 @@
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Text="{Binding Title}" Foreground="White"
-                                           FontSize="14" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis"/>
+                                <!-- Title and the equalizer share the row the same way the collapsed
+                                     pill's media template does: title takes what's left, bars take
+                                     what they need. IsExpandedShowing rather than IsCollapsedShowing
+                                     because this header only draws while the panel is open. -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="{Binding Title}" Foreground="White"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+
+                                    <views:NowPlayingBars Grid.Column="1" Margin="10,0,0,0"
+                                                          IsPlaying="{Binding IsPlaying}"
+                                                          Artwork="{Binding Artwork}"
+                                                          IsRunning="{Binding IsExpandedShowing,
+                                                              RelativeSource={RelativeSource AncestorType=views:IslandWindow}}"
+                                                          AudioSource="{Binding AudioSource,
+                                                              RelativeSource={RelativeSource AncestorType=views:IslandWindow}}"/>
+                                </Grid>
 
                                 <TextBlock Grid.Row="1" Text="{Binding Artist}" Foreground="#99FFFFFF"
                                            FontSize="11.5" Margin="0,2,0,0"

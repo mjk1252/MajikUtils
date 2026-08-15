@@ -129,6 +129,20 @@ public partial class IslandWindow : Window
         private set => SetValue(IsCollapsedShowingProperty, value);
     }
 
+    /// <summary>
+    /// Whether the panel is on screen expanded, for the equalizer next to the media header's title.
+    /// Same reasoning as <see cref="IsCollapsedShowing"/>, the other half of the pill's lifetime.
+    /// </summary>
+    public static readonly DependencyProperty IsExpandedShowingProperty =
+        DependencyProperty.Register(nameof(IsExpandedShowing), typeof(bool), typeof(IslandWindow),
+            new PropertyMetadata(false));
+
+    public bool IsExpandedShowing
+    {
+        get => (bool)GetValue(IsExpandedShowingProperty);
+        private set => SetValue(IsExpandedShowingProperty, value);
+    }
+
     private IntPtr _hwnd;
     private WorkArea _work;
     private double _expandedHeight = FallbackExpandedHeight;
@@ -565,6 +579,7 @@ public partial class IslandWindow : Window
     private void UpdateCollapsedShowing()
     {
         IsCollapsedShowing = _shown && !_expanded;
+        IsExpandedShowing = _shown && _expanded;
         UpdateBubble();
     }
 
