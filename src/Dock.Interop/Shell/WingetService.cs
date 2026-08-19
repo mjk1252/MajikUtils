@@ -98,7 +98,11 @@ public sealed class WingetService : IWingetService
         {
             FileName = "cmd.exe",
             ArgumentList = { "/k", "winget", "install", "--id", result.Id, "--accept-package-agreements", "--accept-source-agreements" },
-            UseShellExecute = true
+            UseShellExecute = true,
+
+            // Same reason as ProcessAppLauncher: a console left open in our own install folder
+            // pins the directory Velopack has to rename to apply an update.
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
         });
     }
 }
