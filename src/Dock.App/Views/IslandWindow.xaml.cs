@@ -48,14 +48,16 @@ public enum IslandSection
 /// </summary>
 public partial class IslandWindow : Window
 {
-    /// <summary>Width of the hover panel: what is playing, plus the scratchpad.</summary>
-    private const double QuickWidth = 480;
-
     /// <summary>
-    /// Width of a section opened from the tab strip. Wider than the hover panel because these are
-    /// lists of files and apps rather than a couple of lines of text.
+    /// One width for every state the open island has, and the reason there is only one: the panel
+    /// used to be 480 wide for the scratchpad and 660 for a section, so every scope click slid the
+    /// whole island sideways underneath the pointer that clicked it. An overlay hanging off the top
+    /// edge is allowed to grow downwards -- that is the gesture -- and is not allowed to move.
+    ///
+    /// 560 is the compromise the two old figures were arguing about: wide enough for a row of file
+    /// names not to trim at the third word, narrow enough that a line of text is still one glance.
     /// </summary>
-    private const double SectionWidth = 660;
+    private const double IslandWidth = 560;
 
     /// <summary>
     /// Ceiling on an open section's height. These panels scroll, so without one a long clipboard
@@ -91,8 +93,7 @@ public partial class IslandWindow : Window
     private readonly MediaViewModel _media;
     private readonly IslandActivityHost _activities;
     private readonly TimerActivity _timer;
-    private readonly NotesViewModel _notes;
-    private readonly TodosViewModel _todos;
+    private readonly CaptureViewModel _capture;
 
     /// <summary>
     /// Hover is polled rather than taken from MouseEnter/MouseLeave. The pill is click-through
@@ -185,8 +186,7 @@ public partial class IslandWindow : Window
         IslandActivityHost activities,
         PrivacyViewModel privacy,
         TimerActivity timer,
-        NotesViewModel notes,
-        TodosViewModel todos,
+        CaptureViewModel capture,
         DockViewModel dock,
         IWingetService wingetService,
         IAudioLevelSource audio,
@@ -196,8 +196,7 @@ public partial class IslandWindow : Window
         _media = media;
         _activities = activities;
         _timer = timer;
-        _notes = notes;
-        _todos = todos;
+        _capture = capture;
         AudioSource = audio;
 
         InitializeComponent();
@@ -208,9 +207,7 @@ public partial class IslandWindow : Window
         CollapsedLayer.DataContext = activities;
         Bubble.DataContext = activities;
         ActivityRows.DataContext = activities;
-        TimerPanel.DataContext = timer;
-        NotesPanel.DataContext = notes;
-        TodosPanel.DataContext = todos;
+        QuickView.DataContext = capture;
 
         // The re-hosted panels and the stats readout all speak to the dock view model; the rest of
         // this window speaks to the media one. The mixer is the exception among the exceptions --
@@ -220,29 +217,20 @@ public partial class IslandWindow : Window
 
         MixerView.DataContext = mixer;
 
-        TabStrip.DataContext = dock;
         LauncherView.WingetService = wingetService;
 
         ApplyAppearance(settings);
 
         // KeyBinding.Command in XAML doesn't inherit DataContext -- InputBindings sit outside the
-        // logical tree -- so Enter-to-add is wired here instead.
-        NoteInput.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter)
-                _notes.AddNoteCommand.Execute(null);
-        };
-
-        TodoInput.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter)
-                _todos.AddTodoCommand.Execute(null);
-        };
+        // logical tree -- so Enter is wired here instead.
+        CaptureInput.KeyDown += OnCaptureKeyDown;
+        CaptureInput.TextChanged += (_, _) => UpdateCaptureHint();
 
         // Typing needs real Win32 focus, which this window only takes while it is pinned; clicking
-        // into a box is also a statement that the user means to stay a while.
-        NoteInput.PreviewMouseLeftButtonDown += (_, _) => FocusInput(NoteInput);
-        TodoInput.PreviewMouseLeftButtonDown += (_, _) => FocusInput(TodoInput);
+        // into the box is also a statement that the user means to stay a while.
+        CaptureInput.PreviewMouseLeftButtonDown += (_, _) => FocusInput(CaptureInput);
+
+        UpdateCaptureHint();
 
         // Anything that can grow the open panel has to be caught up with, and that is every list
         // in it -- not just the ones edited by hand.
@@ -254,10 +242,10 @@ public partial class IslandWindow : Window
         // the pill with them, where it cannot be clicked at all.
         foreach (var collection in new INotifyCollectionChanged[]
                  {
-                     _notes.Notes, _todos.Todos,
+                     _capture.Items,
                      dock.ShelfItems, dock.RecentFiles, dock.ClipboardHistory,
                      dock.LauncherResults, dock.WingetResults, dock.Stacks,
-                     privacy.Apps, mixer.Sessions, _media.Lyrics
+                     privacy.Apps, mixer.Sessions
                  })
         {
             collection.CollectionChanged += (_, _) => ResizeForContentChange();
@@ -267,24 +255,28 @@ public partial class IslandWindow : Window
         // to catch up with them too.
         activities.Showing.CollectionChanged += (_, _) => ResizeForContentChange();
 
-        // The now-playing block is the hover panel's, so it comes and goes with the section as well
-        // as with the session.
+        // Lyrics are deliberately absent from this list. They used to arrive mid-song and grow the
+        // open panel, because they were a band bolted under the transport row; they are a mode of
+        // the now-playing stage now, and the stage is a fixed height in both of its modes.
         _media.PropertyChanged += (_, e) =>
         {
             switch (e.PropertyName)
             {
                 case nameof(MediaViewModel.HasSession):
-                    UpdateMediaHeader();
+                    UpdateNowPlaying();
                     ResizeForContentChange();
                     break;
 
-                // Lyrics arrive after the header is already showing (the lookup is a network call),
-                // so the panel that opened at "no lyrics yet" height has to grow once they land.
-                case nameof(MediaViewModel.HasLyrics):
-                    ResizeForContentChange();
+                // Every accented thing in the app reads from one brush, and this is the only place
+                // that writes it: a new cover repaints the progress fill, the lit scope and the
+                // focused input in one assignment.
+                case nameof(MediaViewModel.Artwork):
+                    UpdateAccent();
                     break;
             }
         };
+
+        UpdateAccent();
 
         _hoverTimer.Tick += (_, _) => UpdateFromPointer();
         _progressTimer.Tick += (_, _) => _media.Tick();
@@ -301,7 +293,7 @@ public partial class IslandWindow : Window
     private FrameworkElement[] SectionViews => [ShelfView, ClipboardView, LauncherView, RecentView, StacksView];
 
     private ToggleButton[] Tabs =>
-        [ShelfTab, ClipboardTab, LauncherTab, RecentTab, StacksTab, MixerTab, NotesTab];
+        [QuickTab, ShelfTab, ClipboardTab, LauncherTab, RecentTab, StacksTab, MixerTab];
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -550,6 +542,8 @@ public partial class IslandWindow : Window
         Animate(CollapsedLayer, OpacityProperty, expanded ? 0 : 1, ShapeDuration);
         Animate(ExpandedLayer, OpacityProperty, expanded ? 1 : 0, ShapeDuration);
 
+        UpdateChrome();
+
         // Solid only while the controls are there to be pressed. Every other moment the island is
         // something to look at, and a click aimed past it should reach what it was aimed at.
         ExpandedLayer.IsHitTestVisible = expanded;
@@ -580,6 +574,8 @@ public partial class IslandWindow : Window
     {
         IsCollapsedShowing = _shown && !_expanded;
         IsExpandedShowing = _shown && _expanded;
+
+        NowPlaying.IsRunning = IsExpandedShowing;
         UpdateBubble();
     }
 
@@ -599,7 +595,15 @@ public partial class IslandWindow : Window
 
         if (pinned)
         {
+            // SetExpanded returns early when the island is already open, which a pinning click
+            // usually finds it -- so the two bands that pinning brings into existence have to be
+            // shown, and the pill re-measured around them, from here.
             SetExpanded(true);
+            UpdateChrome();
+
+            if (_expanded)
+                ResizePill(true);
+
             Activate();
             FocusSectionInput();
             return;
@@ -633,11 +637,12 @@ public partial class IslandWindow : Window
         // Sections size to their contents and scroll past a ceiling, rather than always opening at
         // full height: a shelf holding three files should not leave the island mostly empty, and a
         // clipboard history of two hundred entries must not grow it off the bottom of the screen.
+        // Capture needs no ceiling of its own -- its feed is capped at CaptureViewModel.MaxItems.
         SectionHost.MaxHeight = section == IslandSection.Quick ? double.PositiveInfinity : SectionHeight;
         SectionHost.MinHeight = section == IslandSection.Quick ? 0 : SectionMinHeight;
 
-        SyncTabs(section);
-        UpdateMediaHeader();
+        UpdateChrome();
+        UpdateNowPlaying();
 
         if (section == IslandSection.Recent)
             RecentView.Refresh();
@@ -663,28 +668,93 @@ public partial class IslandWindow : Window
                 break;
 
             case IslandSection.Quick:
-                Keyboard.Focus(TodoInput);
+                Keyboard.Focus(CaptureInput);
                 break;
         }
     }
 
     /// <summary>
-    /// Decides which of the two now-playing forms the open panel gets.
+    /// Decides which density the now-playing block gets, and whether its equalizer runs.
     ///
-    /// The full block -- artwork, timeline, transport -- belongs to the hover panel, which is the
-    /// one that is *about* what is playing. Handing it to every section spends a third of the
-    /// panel on furniture nobody opened the Shelf to use.
-    ///
-    /// The sections get the strip instead: the same information, none of the controls. It is not
-    /// dropped altogether because the collapsed pill is off screen while the panel is open, so
-    /// without it opening a section loses the track entirely.
+    /// The full form -- cover, timeline, transport -- belongs to Capture, which is the section that
+    /// is *about* what is playing, and to a plain hover, which is about nothing else at all.
+    /// Handing it to every section spends a third of the panel on furniture nobody opened the Shelf
+    /// to use, so those get the strip: the same information and none of the controls.
     /// </summary>
-    private void UpdateMediaHeader()
+    private void UpdateNowPlaying()
     {
-        var quick = _section == IslandSection.Quick;
+        NowPlaying.Density = _section == IslandSection.Quick
+            ? NowPlayingDensity.Full
+            : NowPlayingDensity.Strip;
 
-        MediaHeader.Visibility = quick && _media.HasSession ? Visibility.Visible : Visibility.Collapsed;
-        MediaStrip.Visibility = !quick && _media.HasSession ? Visibility.Visible : Visibility.Collapsed;
+        NowPlaying.IsRunning = IsExpandedShowing;
+    }
+
+    /// <summary>
+    /// Decides how much of the island exists. A hover is a glance: it answers "what is this" and
+    /// stops there. Navigation and a section appear when the island is being *used* -- pinned, or
+    /// holding a section open for a drag that is still in flight.
+    ///
+    /// This is the difference between the pill growing into something and the pill uncovering
+    /// something that was already laid out behind it, and it is most of what the old panel got
+    /// wrong: hovering the top edge of a screen handed you a workspace.
+    /// </summary>
+    private void UpdateChrome()
+    {
+        var open = _pinned || _section != IslandSection.Quick;
+
+        NavBar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        SectionHost.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+
+        // Which scope is lit depends on being pinned as much as on which section is open - Capture
+        // is where an unpinned island already is, so lighting it before there is a strip to light
+        // would be labelling a state the user has not chosen. Done here rather than in
+        // SelectSection because pinning changes the answer without changing the section: clicking
+        // an already-open panel is exactly that, and it used to leave the strip with nothing lit.
+        SyncTabs(_section);
+    }
+
+    /// <summary>
+    /// Repaints the one brush every accented thing in the app reads from, with the colour of the
+    /// cover that is playing.
+    ///
+    /// The extraction is <see cref="ArtworkAccent"/>'s, which the equalizer bars have used since
+    /// they were built -- this only spends it somewhere else as well. Mutated in place rather than
+    /// swapped, because the resource is held by name all over the visual tree and Color is a
+    /// dependency property: assigning it repaints every reference at once.
+    /// </summary>
+    private void UpdateAccent()
+    {
+        var (accent, _) = ArtworkAccent.PairFromPng(_media.Artwork);
+
+        Recolour("IslandAccentBrush", accent);
+
+        // The same hue at plate strength. Alpha rather than a darker shade, so it sits on the
+        // island's near-black at the same weight whatever colour the cover turned out to be.
+        Recolour("IslandAccentSoftBrush", Color.FromArgb(0x2E, accent.R, accent.G, accent.B));
+    }
+
+    /// <summary>
+    /// Puts a new colour behind one of the accent keys.
+    ///
+    /// Replaced rather than recoloured, and that is not a preference. A ResourceDictionary seals
+    /// every Freezable handed to it - on insertion, whatever the source - so a brush that lives in
+    /// one is frozen by definition and can be neither assigned to nor animated. The first attempt
+    /// here mutated the brush in place and was silently discarded on every track; the second
+    /// installed a fresh brush at startup and was frozen the moment it went into the dictionary.
+    ///
+    /// So the entry is swapped instead, which is why every accent reference in the XAML is a
+    /// DynamicResource: a StaticResource resolved once at load and would still be holding the
+    /// white one it started with.
+    ///
+    /// The consequence is that a track change swaps the accent rather than easing into it. That is
+    /// a fair trade at this scale - the artwork, the title and the timeline all change in the same
+    /// frame, and nobody has ever seen the crossfade that transition was protecting.
+    /// </summary>
+    private static void Recolour(string key, Color colour)
+    {
+        if (Application.Current is { } app)
+            app.Resources[key] = new SolidColorBrush(colour);
     }
 
     /// <summary>Lights the tab for the open section, and only that one.</summary>
@@ -698,7 +768,7 @@ public partial class IslandWindow : Window
             IslandSection.Recent => RecentTab,
             IslandSection.Stacks => StacksTab,
             IslandSection.Mixer => MixerTab,
-            _ => _pinned ? NotesTab : null
+            _ => _pinned ? QuickTab : null
         };
 
         foreach (var tab in Tabs)
@@ -785,53 +855,73 @@ public partial class IslandWindow : Window
     }
 
     /// <summary>
-    /// Starts a countdown of the length on the button. Pinned first, because reaching for one of
-    /// these means the user is working in the panel rather than glancing at it.
+    /// Commits whatever is in the capture box. The view model decides what the line meant and acts
+    /// on it; a search is the one reading it cannot carry out itself, because the launcher is a
+    /// place in this window and the view model knows nothing about windows.
     /// </summary>
-    private void OnTimerClick(object sender, RoutedEventArgs e)
+    private void OnCaptureKeyDown(object sender, KeyEventArgs e)
     {
-        SetPinned(true);
-
-        if (sender is FrameworkElement { Tag: string minutes } && double.TryParse(minutes, out var value))
-            _timer.Start(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(value));
-    }
-
-    /// <summary>Jumps playback to wherever on the bar was clicked.</summary>
-    private void OnMediaSeek(object sender, MouseButtonEventArgs e)
-    {
-        var bar = MediaProgressBar;
-        var x = e.GetPosition(bar).X;
-        var fraction = bar.ActualWidth > 0 ? x / bar.ActualWidth : 0;
-
-        _media.SeekCommand.Execute(fraction);
-    }
-
-    private void OnTimerCancelClick(object sender, RoutedEventArgs e) => _timer.Cancel();
-
-    /// <summary>Digits only, so there is never anything in the box Enter can't parse.</summary>
-    private void OnCustomTimerPreviewTextInput(object sender, TextCompositionEventArgs e) =>
-        e.Handled = !e.Text.All(char.IsDigit);
-
-    private void OnCustomTimerKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter || sender is not TextBox box)
+        if (e.Key != Key.Enter)
             return;
 
-        if (int.TryParse(box.Text, out var minutes) && minutes > 0)
+        // Pinned first: anything typed here means the user is working in the panel rather than
+        // glancing at it, and starting a timer used to require reaching for a chip to say so.
+        SetPinned(true);
+
+        var intent = _capture.Submit(DateTimeOffset.UtcNow, _timer);
+
+        if (intent.Kind == CaptureKind.Search)
         {
-            SetPinned(true);
-            _timer.Start(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(minutes));
-            box.Text = string.Empty;
+            SelectSection(IslandSection.Launcher);
+            LauncherView.SetQuery(intent.Text);
         }
+
+        UpdateCaptureHint();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Says back what Enter is about to do, before it does it. The grammar is four rules and the
+    /// box is one line, so this is the whole of its documentation -- with nothing typed it reads as
+    /// the legend, and from the first keystroke it reads as a prediction.
+    /// </summary>
+    private void UpdateCaptureHint()
+    {
+        var intent = CaptureViewModel.Parse(CaptureInput.Text);
+
+        CaptureHint.Text = intent.Kind switch
+        {
+            CaptureKind.Timer => $"Enter starts a {Describe(intent.Duration)} timer",
+            CaptureKind.Search => "Enter searches your apps",
+            CaptureKind.Note => "Enter files this as a note",
+            CaptureKind.Todo => "Enter adds this as a task",
+            _ => "25m timer     .note     /search"
+        };
+    }
+
+    private static string Describe(TimeSpan duration) =>
+        duration.Hours > 0 && duration.Minutes > 0 ? $"{duration.Hours}h {duration.Minutes}m"
+        : duration.Hours > 0 ? $"{duration.Hours}h"
+        : $"{(int)duration.TotalMinutes}m";
+
+    /// <summary>
+    /// A click anywhere on the open panel holds it there. This is the gesture that separates a
+    /// glance from a session, and without it the two bands that only exist while pinned would have
+    /// nothing to bring them out: the scope strip is one of them.
+    /// </summary>
+    private void OnPillClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_expanded && !_pinned)
+            SetPinned(true);
     }
 
     private void OnClearDoneClick(object sender, MouseButtonEventArgs e) =>
-        _todos.ClearDoneCommand.Execute(null);
+        _capture.ClearDoneCommand.Execute(null);
 
     private void OnRemoveTodoClick(object sender, MouseButtonEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: TodoItemViewModel item })
-            _todos.RemoveTodoCommand.Execute(item);
+        if (sender is FrameworkElement { DataContext: CaptureItemViewModel item })
+            _capture.RemoveCommand.Execute(item);
     }
 
     /// <summary>
@@ -915,8 +1005,12 @@ public partial class IslandWindow : Window
         Keyboard.Focus(input);
     }
 
-    /// <summary>Width of the pill for whatever is currently showing in it.</summary>
-    private double ContentWidth => _section == IslandSection.Quick ? QuickWidth : SectionWidth;
+    /// <summary>
+    /// Width of the pill once it is open, which no longer depends on what is in it. Kept as a
+    /// property rather than inlined because the hit region and the silhouette both have to be told,
+    /// and they must never be told two different numbers.
+    /// </summary>
+    private static double ContentWidth => IslandWidth;
 
     /// <summary>
     /// The silhouette and the content host are sized separately rather than nested, because the

@@ -32,6 +32,19 @@ public partial class LauncherPanel : UserControl
         Keyboard.Focus(SearchBox);
     }
 
+    /// <summary>
+    /// Seeds the search from somewhere else -- today the island's capture box, which routes a line
+    /// beginning with a slash here rather than making the user find this panel and retype it.
+    /// Assigning Text raises TextChanged, so the filter and the winget debounce run exactly as they
+    /// would have if the characters had been typed into the box.
+    /// </summary>
+    public void SetQuery(string query)
+    {
+        SearchBox.Text = query;
+        SearchBox.CaretIndex = SearchBox.Text.Length;
+        Keyboard.Focus(SearchBox);
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e) => FocusSearch();
 
     private void OnSearchChanged(object sender, TextChangedEventArgs e)

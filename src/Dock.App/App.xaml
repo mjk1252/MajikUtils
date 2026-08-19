@@ -1,4 +1,4 @@
-<Application x:Class="Dock.App.App"
+﻿<Application x:Class="Dock.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:Dock.App"
@@ -17,18 +17,66 @@
         <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#F21C1C1C"/>
         <SolidColorBrush x:Key="PanelBorderBrush" Color="#26FFFFFF"/>
 
+        <!-- The text ramp, and the whole of it. Three levels, not the six the island had grown:
+             hierarchy on a dark HUD is carried by *few* clearly separated steps, and a ramp with
+             #77, #88 and #99 in it is three ways of saying the same thing that read as one. -->
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFFFF"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#99FFFFFF"/>
+        <SolidColorBrush x:Key="TextTertiaryBrush" Color="#61FFFFFF"/>
+
+        <!-- Taken from the artwork of whatever is playing and pushed here by the island, so a
+             brush declared once is the single place every accented thing reads from: the progress
+             fill, the lit scope, a focused input's rule. Mutated in place rather than replaced -
+             StaticResource holds the instance, and Color is a dependency property, so every
+             reference repaints without any of them having to be dynamic.
+
+             Also why it is application-scoped: the section panels are UserControls in their own
+             files and cannot see a brush declared on the island's window. -->
+        <!-- IslandAccentBrush and IslandAccentSoftBrush are NOT declared here, and cannot be.
+             WPF freezes what it can when it loads a resource dictionary from BAML, and a frozen
+             brush can neither be recoloured nor animated - which is the only thing these two
+             exist to do. Declared in XAML they came out frozen and every repaint was silently
+             discarded. App.InstallAccentBrushes creates them instead; see there for the seeds. -->
+
+        <!-- Three text roles. Everything in the island is one of these or it is a mistake:
+             a title, a line of content, or a label about the content. -->
+        <Style x:Key="IslandTitleText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="IslandBodyText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="IslandMetaText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="IslandFaintText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
         <!-- Glyphs come from the shell's own icon font, with the Windows 10 name as a fallback. -->
         <FontFamily x:Key="GlyphFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
         <Style x:Key="SectionHeaderText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#77FFFFFF"/>
+            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="4,0,0,8"/>
         </Style>
 
         <Style x:Key="EmptyStateText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#55FFFFFF"/>
+            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="4,0,4,4"/>
@@ -128,7 +176,7 @@
         </Style>
 
         <Style x:Key="InlineAction" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#99FFFFFF"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="VerticalAlignment" Value="Center"/>

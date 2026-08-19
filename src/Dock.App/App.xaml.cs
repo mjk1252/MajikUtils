@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Dock.App.Views;
 using Dock.Core.Models;
@@ -85,9 +86,33 @@ public partial class App : System.Windows.Application
     private IAppLauncher? _launcher;
     private readonly Dictionary<StackItemViewModel, StackFolderWatcher> _stackWatchers = [];
 
+    /// <summary>
+    /// The two brushes every accented thing in the app reads from: the colour taken off whatever
+    /// artwork is playing, and the same hue at plate strength behind a lit control.
+    ///
+    /// Seeded here rather than declared in App.xaml only so that there is one obvious place to read
+    /// the starting colours. They are replaced wholesale every time the artwork changes: a
+    /// ResourceDictionary freezes every Freezable put into it, so an accent brush can never be
+    /// edited in place, and every reference to these two keys in the XAML is a DynamicResource for
+    /// exactly that reason. See IslandWindow.Recolour.
+    ///
+    /// The seeds are what the island looks like with nothing playing: plain white, and a faint
+    /// white plate. <see cref="Views.IslandWindow"/> is the only thing that ever writes them.
+    /// </summary>
+    private static void InstallAccentBrushes()
+    {
+        Current.Resources["IslandAccentBrush"] =
+            new SolidColorBrush(Color.FromArgb(0xDD, 0xFF, 0xFF, 0xFF));
+
+        Current.Resources["IslandAccentSoftBrush"] =
+            new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        InstallAccentBrushes();
 
         // "--exit" arrives from a jump-list entry, which always starts a *new* process: the work is
         // to tell the running instance to quit, then quit ourselves without ever building a UI.
@@ -247,8 +272,12 @@ public partial class App : System.Windows.Application
         // the island starts and stops the capture as the bars come and go.
         _audioSource = new AudioLoopbackSource();
 
+        // Notes and todos are still two stores and two view models -- they are genuinely different
+        // things and they persist differently. They are merged into one surface, not one model.
+        var capture = new CaptureViewModel(_todosViewModel!, _notesViewModel!);
+
         _islandWindow = new IslandWindow(
-            _mediaViewModel, _activities, _privacyViewModel, _timer, _notesViewModel, _todosViewModel,
+            _mediaViewModel, _activities, _privacyViewModel, _timer, capture,
             _viewModel!, wingetService, _audioSource, _volumeMixer, startupSettings);
 
         _islandWindow.SettingsRequested += ShowSettingsWindow;

@@ -1,0 +1,353 @@
+<UserControl x:Class="Dock.App.Views.NowPlayingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:Dock.App.Views">
+    <UserControl.Resources>
+        <!-- Transport. Skip buttons are plain; the play button is not, because it is the one
+             control on the island anybody presses twice a day and the old row gave all three the
+             same 30px circle and the same weight. -->
+        <Style x:Key="SkipButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Plate" Background="Transparent" CornerRadius="15">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Plate" Property="Background" Value="#22FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.3"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PlayButton" TargetType="Button" BasedOn="{StaticResource SkipButton}">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Plate" CornerRadius="18"
+                                Background="{DynamicResource IslandAccentSoftBrush}"
+                                BorderThickness="1" BorderBrush="{StaticResource PanelBorderBrush}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Plate" Property="BorderBrush"
+                                        Value="{DynamicResource IslandAccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The bar the artwork's own colour fills. The stock template's gradient and animated
+             glow read as a dialog control; this is a 4px rule and nothing else. -->
+        <Style x:Key="AccentProgress" TargetType="ProgressBar">
+            <Setter Property="Height" Value="4"/>
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="1"/>
+            <Setter Property="Background" Value="#2EFFFFFF"/>
+            <Setter Property="Foreground" Value="{DynamicResource IslandAccentBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="2">
+                            <Grid>
+                                <Rectangle x:Name="PART_Track"/>
+                                <Border x:Name="PART_Indicator" HorizontalAlignment="Left"
+                                        Background="{TemplateBinding Foreground}" CornerRadius="2"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TimeText" TargetType="TextBlock" BasedOn="{StaticResource IslandFaintText}">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- The lyrics switch. A ToggleButton rather than a second panel, which is the whole point
+             of the mode: lyrics take the stage the artwork was using instead of being bolted
+             underneath it. -->
+        <Style x:Key="StageToggle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Plate" Background="Transparent" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Plate" Property="Background"
+                                        Value="{DynamicResource IslandAccentSoftBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource IslandAccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Two densities of one control, not two controls. The island shows what is playing in two
+         places - the panel that is *about* the track, and a one-line reminder above a section
+         that is about something else - and those used to be two hand-maintained blocks of markup
+         bound to the same view model, which is two things that had to be kept agreeing forever. -->
+    <Grid>
+        <!-- FULL  -->
+        <Grid x:Name="FullDensity">
+            <!-- The cover, blurred to a wash. The artwork is the richest thing the island ever has
+                 to hand and it was being spent on an 84px thumbnail; at 40px of blur and a tenth of
+                 opacity it stops being a picture and becomes the colour of the panel. Masked to
+                 fade out downwards so it never reaches the section below and turns into a smudge
+                 behind a list of filenames. -->
+            <!-- Sized, and clipped, and both for the same reason: an Image asks for the natural
+                 size of what it is showing, so an unconstrained one behind this block reserved the
+                 full height of a 640px cover and left the panel mostly empty underneath.
+
+                 104 is the stage plus the 16 it bleeds upwards, which nets out to exactly the
+                 stage's own 88 once the negative margin is applied - so the backdrop can never be
+                 the tallest thing in the block, whatever it is a picture of. -->
+            <Border x:Name="Wash" Height="104" VerticalAlignment="Top" ClipToBounds="True"
+                    Margin="-20,-16,-20,0" IsHitTestVisible="False" Opacity="0.16">
+                <Border.OpacityMask>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Offset="0" Color="#FF000000"/>
+                        <GradientStop Offset="0.55" Color="#66000000"/>
+                        <GradientStop Offset="1" Color="#00000000"/>
+                    </LinearGradientBrush>
+                </Border.OpacityMask>
+                <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
+                       Stretch="UniformToFill"
+                       RenderOptions.BitmapScalingMode="LowQuality">
+                    <Image.Effect>
+                        <BlurEffect Radius="44" KernelType="Gaussian" RenderingBias="Performance"/>
+                    </Image.Effect>
+                </Image>
+            </Border>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- The stage. Fixed height on purpose: the lyrics mode swaps what is drawn here
+                     and nothing else, so switching to it must not move the timeline or the
+                     transport row a single pixel. -->
+                <Grid x:Name="Stage" Height="88">
+                    <Grid x:Name="CoverStage">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Width="88" Height="88" CornerRadius="10" Background="#22FFFFFF"
+                                VerticalAlignment="Top">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.45"
+                                                  Color="Black"/>
+                            </Border.Effect>
+                            <Border CornerRadius="10" ClipToBounds="True">
+                                <Border.OpacityMask>
+                                    <VisualBrush>
+                                        <VisualBrush.Visual>
+                                            <Border Width="88" Height="88" CornerRadius="10"
+                                                    Background="White"/>
+                                        </VisualBrush.Visual>
+                                    </VisualBrush>
+                                </Border.OpacityMask>
+                                <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
+                                       Stretch="UniformToFill"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                            </Border>
+                        </Border>
+
+                        <Grid Grid.Column="1" Margin="16,2,0,0" VerticalAlignment="Top">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Title takes what is left, the bars take what they need - the same
+                                 Auto/* shape the collapsed pill uses. The right margin is the lane
+                                 the lyrics switch occupies: it is not a child of this row any more
+                                 (see the Stage below), so nothing else reserves the space for it. -->
+                            <Grid Margin="0,0,32,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Text="{Binding Title}" Style="{StaticResource IslandTitleText}"
+                                           VerticalAlignment="Center"/>
+
+                                <views:NowPlayingBars x:Name="Equalizer" Grid.Column="1"
+                                                      Margin="10,0,0,0"
+                                                      IsPlaying="{Binding IsPlaying}"
+                                                      Artwork="{Binding Artwork}"/>
+                            </Grid>
+
+                            <TextBlock Grid.Row="1" Text="{Binding Artist}" Margin="0,4,0,0"
+                                       Style="{StaticResource IslandMetaText}"/>
+                        </Grid>
+                    </Grid>
+
+                    <!-- The other mode. Same box, same wash behind it, no change in height: two
+                         lines centred where the cover was. A window onto a scrolling sheet only
+                         ever lands where the scroll left it, which in a box this size meant the
+                         line being sung sharing it with lines already sung. -->
+                    <Grid x:Name="LyricStage" Visibility="Collapsed">
+                        <StackPanel VerticalAlignment="Center" Margin="32,0,32,0">
+                            <TextBlock Text="{Binding CurrentLyricText}" FontSize="14"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontWeight="SemiBold" TextWrapping="Wrap"
+                                       TextAlignment="Center" MaxHeight="46"/>
+                            <TextBlock Text="{Binding NextLyricText}" Margin="0,6,0,0"
+                                       FontSize="12.5" Foreground="{StaticResource TextTertiaryBrush}"
+                                       TextWrapping="Wrap" TextAlignment="Center" MaxHeight="34"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- A sibling of both stages rather than a child of one. It lived in the title
+                         row, which is part of the cover stage - so switching lyrics on hid the
+                         control that switches them off, and there was no way back. Anything that
+                         toggles between two views has to outlive both of them. -->
+                    <ToggleButton x:Name="LyricsToggle"
+                                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                                  Margin="0,1,0,0"
+                                  Style="{StaticResource StageToggle}"
+                                  Content="&#xEC71;" ToolTip="Lyrics"
+                                  Checked="OnLyricsToggled" Unchecked="OnLyricsToggled"
+                                  Visibility="{Binding HasLyrics,
+                                      Converter={StaticResource BoolToVisibility}}"/>
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="0,16,0,0"
+                      Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Text="{Binding PositionText}" Style="{StaticResource TimeText}"
+                               Margin="0,0,8,0"/>
+
+                    <!-- Taller than the bar it wraps, so the click target is not four pixels tall:
+                         the padding is invisible and still the thing the click lands on. -->
+                    <Border Grid.Column="1" Background="Transparent" Padding="0,6"
+                            Cursor="Hand" MouseLeftButtonDown="OnSeek">
+                        <ProgressBar x:Name="Timeline" Style="{StaticResource AccentProgress}"
+                                     Value="{Binding Progress, Mode=OneWay}"/>
+                    </Border>
+
+                    <TextBlock Grid.Column="2" Text="{Binding DurationText}"
+                               Style="{StaticResource TimeText}" Margin="8,0,0,0"/>
+                </Grid>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0"
+                            HorizontalAlignment="Center">
+                    <Button Style="{StaticResource SkipButton}" Content="&#xE892;"
+                            Command="{Binding SkipPreviousCommand}"
+                            IsEnabled="{Binding CanSkipPrevious}"/>
+
+                    <Button Style="{StaticResource PlayButton}" Margin="10,0"
+                            Command="{Binding PlayPauseCommand}">
+                        <Grid>
+                            <TextBlock Text="&#xE769;"
+                                       Visibility="{Binding IsPlaying,
+                                           Converter={StaticResource BoolToVisibility}}"/>
+                            <TextBlock Text="&#xE768;"
+                                       Visibility="{Binding IsPlaying,
+                                           Converter={StaticResource BoolToVisibility},
+                                           ConverterParameter=invert}"/>
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource SkipButton}" Content="&#xE893;"
+                            Command="{Binding SkipNextCommand}"
+                            IsEnabled="{Binding CanSkipNext}"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- STRIP  -->
+        <!-- What is playing, for the sections that are not about it. Thirty pixels instead of a
+             hundred and sixty, so a list still gets the panel - and it earns those thirty because
+             the collapsed pill is off screen while the panel is open, so without it opening the
+             Shelf loses the track entirely. -->
+        <Grid x:Name="StripDensity" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Width="22" Height="22" CornerRadius="5" Margin="0,0,10,0"
+                        Background="#22FFFFFF" VerticalAlignment="Center">
+                    <Border.OpacityMask>
+                        <VisualBrush>
+                            <VisualBrush.Visual>
+                                <Border Width="22" Height="22" CornerRadius="5" Background="White"/>
+                            </VisualBrush.Visual>
+                        </VisualBrush>
+                    </Border.OpacityMask>
+                    <Image Source="{Binding Artwork, Converter={StaticResource PngToImage}}"
+                           Stretch="UniformToFill"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Border>
+
+                <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center"
+                           Style="{StaticResource IslandBodyText}"/>
+
+                <TextBlock Grid.Column="2" Text="{Binding Artist}" VerticalAlignment="Center"
+                           Margin="10,0,0,0" MaxWidth="180"
+                           Style="{StaticResource IslandMetaText}"/>
+            </Grid>
+
+            <!-- The rule that used to divide the strip from the section, now carrying the position
+                 as well. It was a 1px line doing nothing; at the same weight it can be the only
+                 timeline a section needs. -->
+            <ProgressBar Grid.Row="1" Height="1" Style="{StaticResource AccentProgress}"
+                         Background="{StaticResource PanelBorderBrush}"
+                         Value="{Binding Progress, Mode=OneWay}"/>
+        </Grid>
+    </Grid>
+</UserControl>
