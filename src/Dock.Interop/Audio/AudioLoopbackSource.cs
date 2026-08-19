@@ -95,6 +95,16 @@ public sealed class AudioLoopbackSource : IAudioLevelSource, IDisposable
     private ManualResetEventSlim? _started;
     private volatile bool _startedOk;
 
+    /// <summary>
+    /// How many callers currently want the capture running. The collapsed pill and the expanded
+    /// panel each hold their own <c>NowPlayingBars</c> against this one source, and each calls
+    /// Start/Stop as its own visibility changes with no idea the other exists. Without counting,
+    /// whichever of the two tears down last stops the capture out from under the one still on
+    /// screen -- which is exactly what collapsing back to the pill did, since the expanded
+    /// header's Unloaded fires after the pill's Loaded has already restarted it.
+    /// </summary>
+    private int _wanters;
+
     public event EventHandler<double[]>? LevelsChanged;
 
     public int BandCount => Bands.Length;
@@ -109,6 +119,8 @@ public sealed class AudioLoopbackSource : IAudioLevelSource, IDisposable
 
     public bool Start()
     {
+        _wanters++;
+
         if (_running)
             return _startedOk;
 
@@ -133,6 +145,12 @@ public sealed class AudioLoopbackSource : IAudioLevelSource, IDisposable
 
     public void Stop()
     {
+        if (_wanters > 0)
+            _wanters--;
+
+        if (_wanters > 0)
+            return;
+
         _running = false;
 
         var thread = _thread;

@@ -26,7 +26,21 @@ public sealed class MediaSessionSource : IMediaSessionSource, IDisposable
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
-    private GlobalSystemMediaTransportControlsSession? _session;
+
+    /// <summary>
+    /// The session actually being read -- SMTC's own "current" session if it is playing, otherwise
+    /// whichever other session is. Chromium's picture-in-picture window is the case this exists
+    /// for: it plays on without ever being promoted to SMTC's current session, so trusting that
+    /// pointer alone leaves the island stuck on whatever last held it.
+    /// </summary>
+    private GlobalSystemMediaTransportControlsSession? _activeSession;
+
+    /// <summary>
+    /// Every session SMTC currently knows about, each watched for its playback state alone -- cheap
+    /// enough to hold open on all of them just to notice one of them starting to play.
+    /// </summary>
+    private readonly List<GlobalSystemMediaTransportControlsSession> _watchedSessions = [];
+
     private bool _disposed;
 
     // Cached because refreshing them means an await and a thumbnail decode, while playback and
@@ -56,62 +70,151 @@ public sealed class MediaSessionSource : IMediaSessionSource, IDisposable
             return;
 
         _manager.CurrentSessionChanged += OnCurrentSessionChanged;
-        AttachCurrentSession();
+        _manager.SessionsChanged += OnSessionsChanged;
+        RefreshWatchedSessions();
+        SelectActiveSession();
     }
 
     public void Stop()
     {
-        DetachSession();
+        DetachActiveSession();
+        UnwatchAllSessions();
 
         if (_manager is not null)
+        {
             _manager.CurrentSessionChanged -= OnCurrentSessionChanged;
+            _manager.SessionsChanged -= OnSessionsChanged;
+        }
 
         _manager = null;
     }
 
     private void OnCurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, object args)
-        => AttachCurrentSession();
+        => SelectActiveSession();
+
+    private void OnSessionsChanged(GlobalSystemMediaTransportControlsSessionManager sender, SessionsChangedEventArgs args)
+    {
+        RefreshWatchedSessions();
+        SelectActiveSession();
+    }
 
     /// <summary>
-    /// Points at whichever session Windows currently considers foremost. Handlers move with it:
-    /// they are per-session, so a switch from one player to another means unsubscribing from the
-    /// old one or its events keep arriving for a session nothing is displaying.
+    /// A session nobody promoted to "current" starting or stopping playback. Watched on every
+    /// session SMTC knows about, not just the active one, which is the only way to notice
+    /// Chromium's picture-in-picture player waking up: it never raises CurrentSessionChanged.
     /// </summary>
-    private void AttachCurrentSession()
-    {
-        DetachSession();
+    private void OnWatchedPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, object args)
+        => SelectActiveSession();
 
+    /// <summary>
+    /// Picks what to actually show: SMTC's current session if it is playing, otherwise the first
+    /// watched session that is, otherwise the current session anyway (so a deliberately paused
+    /// track still displays), otherwise nothing.
+    /// </summary>
+    private void SelectActiveSession()
+    {
         if (_disposed)
             return;
 
+        GlobalSystemMediaTransportControlsSession? current;
         try
         {
-            _session = _manager?.GetCurrentSession();
+            current = _manager?.GetCurrentSession();
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException)
         {
-            _session = null;
+            current = null;
         }
 
-        if (_session is not null)
+        var candidate = current;
+
+        if (!IsPlaying(candidate))
         {
-            _session.MediaPropertiesChanged += OnMediaPropertiesChanged;
-            _session.PlaybackInfoChanged += OnPlaybackInfoChanged;
-            _session.TimelinePropertiesChanged += OnTimelinePropertiesChanged;
+            var playing = _watchedSessions.FirstOrDefault(IsPlaying);
+            if (playing is not null)
+                candidate = playing;
+        }
+
+        SetActiveSession(candidate);
+    }
+
+    private static bool IsPlaying(GlobalSystemMediaTransportControlsSession? session)
+    {
+        if (session is null)
+            return false;
+
+        try
+        {
+            return session.GetPlaybackInfo()?.PlaybackStatus
+                == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+        }
+        catch (Exception ex) when (IsTransient(ex))
+        {
+            return false;
+        }
+    }
+
+    private void SetActiveSession(GlobalSystemMediaTransportControlsSession? session)
+    {
+        DetachActiveSession();
+        _activeSession = session;
+
+        if (_activeSession is not null)
+        {
+            _activeSession.MediaPropertiesChanged += OnMediaPropertiesChanged;
+            _activeSession.PlaybackInfoChanged += OnPlaybackInfoChanged;
+            _activeSession.TimelinePropertiesChanged += OnTimelinePropertiesChanged;
         }
 
         _ = RefreshAsync(includeProperties: true);
     }
 
-    private void DetachSession()
+    private void DetachActiveSession()
     {
-        if (_session is null)
+        if (_activeSession is null)
             return;
 
-        _session.MediaPropertiesChanged -= OnMediaPropertiesChanged;
-        _session.PlaybackInfoChanged -= OnPlaybackInfoChanged;
-        _session.TimelinePropertiesChanged -= OnTimelinePropertiesChanged;
-        _session = null;
+        _activeSession.MediaPropertiesChanged -= OnMediaPropertiesChanged;
+        _activeSession.PlaybackInfoChanged -= OnPlaybackInfoChanged;
+        _activeSession.TimelinePropertiesChanged -= OnTimelinePropertiesChanged;
+        _activeSession = null;
+    }
+
+    /// <summary>
+    /// Re-syncs the watch list against SMTC's current session set. Unsubscribed and resubscribed
+    /// wholesale rather than diffed: WinRT hands back a fresh wrapper per call, so there is no
+    /// reference to diff against, and this runs only on session add/remove, not per frame.
+    /// </summary>
+    private void RefreshWatchedSessions()
+    {
+        UnwatchAllSessions();
+
+        if (_disposed)
+            return;
+
+        IReadOnlyList<GlobalSystemMediaTransportControlsSession> sessions;
+        try
+        {
+            sessions = _manager?.GetSessions() ?? [];
+        }
+        catch (Exception ex) when (IsTransient(ex))
+        {
+            sessions = [];
+        }
+
+        foreach (var session in sessions)
+        {
+            session.PlaybackInfoChanged += OnWatchedPlaybackInfoChanged;
+            _watchedSessions.Add(session);
+        }
+    }
+
+    private void UnwatchAllSessions()
+    {
+        foreach (var session in _watchedSessions)
+            session.PlaybackInfoChanged -= OnWatchedPlaybackInfoChanged;
+
+        _watchedSessions.Clear();
     }
 
     private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, object args)
@@ -151,7 +254,7 @@ public sealed class MediaSessionSource : IMediaSessionSource, IDisposable
         const bool Publish = true;
         const bool Ignore = false;
 
-        var session = _session;
+        var session = _activeSession;
         if (session is null)
         {
             ClearProperties();
@@ -164,10 +267,10 @@ public sealed class MediaSessionSource : IMediaSessionSource, IDisposable
             {
                 var properties = await session.TryGetMediaPropertiesAsync();
 
-                // The current session can be swapped out while that await is in flight, in which
+                // The active session can be swapped out while that await is in flight, in which
                 // case these properties describe a player nobody is looking at any more. The
                 // refresh the swap kicked off is the one that will publish.
-                if (!ReferenceEquals(session, _session))
+                if (!ReferenceEquals(session, _activeSession))
                     return (Ignore, null);
 
                 _title = properties?.Title ?? string.Empty;
@@ -285,7 +388,7 @@ public sealed class MediaSessionSource : IMediaSessionSource, IDisposable
     /// </summary>
     private void Invoke(Func<GlobalSystemMediaTransportControlsSession, IAsyncOperation<bool>> command)
     {
-        var session = _session;
+        var session = _activeSession;
         if (session is null)
             return;
 
