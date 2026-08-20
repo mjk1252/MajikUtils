@@ -24,6 +24,17 @@ public partial class ClipboardPanel : UserControl
         ViewModel.FilterClipboard(SearchBox.Text);
 
     /// <summary>
+    /// Puts the caret in this panel's own box. The island hides its global one while this scope is
+    /// open -- two search fields on screen at once is one too many -- so somebody arriving here
+    /// with the keyboard has to land somewhere, and this is the only field left.
+    /// </summary>
+    public void FocusSearch()
+    {
+        SearchBox.SelectAll();
+        Keyboard.Focus(SearchBox);
+    }
+
+    /// <summary>
     /// Clicking the row copies the entry back. Clicking the pin inside it does not.
     ///
     /// The pin used to say so by marking PreviewMouseLeftButtonUp handled, which did stop the copy

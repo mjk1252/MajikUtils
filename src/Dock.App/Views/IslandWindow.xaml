@@ -614,7 +614,10 @@
                              the bottom of it. Seven 28px glyphs in a corner were a toolbar nobody
                              could read: the lit one now says its name, which is enough to learn the
                              other six by. -->
-                        <Grid x:Name="NavBar" Grid.Row="2" Margin="0,16,0,0">
+                        <!-- Collapsed to begin with, because unpinned is how the island starts and
+                             UpdateChrome does not run until something changes. Left visible, the
+                             very first measure counted three bands that were about to be hidden. -->
+                        <Grid x:Name="NavBar" Grid.Row="2" Margin="0,16,0,0" Visibility="Collapsed">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -658,7 +661,7 @@
                         <!-- The one box. What you type decides what it becomes, and a leading slash
                              makes it a search over everything the app already knows how to find -
                              which is what the separate palette window was for. -->
-                        <Grid x:Name="CaptureBar" Grid.Row="3" Margin="0,14,0,0">
+                        <Grid x:Name="CaptureBar" Grid.Row="3" Margin="0,14,0,0" Visibility="Collapsed">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -734,7 +737,7 @@
                         <!-- One host, every section kept alive inside it: switching scopes hides
                              and shows rather than rebuilding, so a search box keeps its text and a
                              list its scroll position across a switch. -->
-                        <Grid x:Name="SectionHost" Grid.Row="4" Margin="0,12,0,0">
+                        <Grid x:Name="SectionHost" Grid.Row="4" Margin="0,12,0,0" Visibility="Collapsed">
                             <!-- Tasks and notes in one feed, newest first. They were two lists
                                  under two headers; they are captured in the same moment and re-read
                                  in the same moment, and the difference between them is one checkbox

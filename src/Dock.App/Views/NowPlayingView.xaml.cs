@@ -84,16 +84,31 @@ public partial class NowPlayingView : UserControl
     private static void OnAudioSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
         ((NowPlayingView)d).Equalizer.AudioSource = (IAudioLevelSource?)e.NewValue;
 
+    private MediaViewModel? _hooked;
+
+    /// <summary>
+    /// Watches the session for lyrics going away, so a mode left on from the last track does not
+    /// leave the stage empty.
+    ///
+    /// Unhooks the previous one first. DataContextChanged can fire more than once, and a handler
+    /// added per fire is a handler that runs as many times as the control has ever been re-bound
+    /// -- harmless here today, and the kind of thing that stops being harmless quietly.
+    /// </summary>
     private void Hook()
     {
-        if (Media is null)
-            return;
+        if (_hooked is not null)
+            _hooked.PropertyChanged -= OnMediaChanged;
 
-        Media.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MediaViewModel.HasLyrics) && !Media.HasLyrics)
-                LyricsToggle.IsChecked = false;
-        };
+        _hooked = Media;
+
+        if (_hooked is not null)
+            _hooked.PropertyChanged += OnMediaChanged;
+    }
+
+    private void OnMediaChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MediaViewModel.HasLyrics) && Media is { HasLyrics: false })
+            LyricsToggle.IsChecked = false;
     }
 
     private void ApplyVisualState()

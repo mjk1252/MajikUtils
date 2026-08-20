@@ -558,12 +558,16 @@ public partial class IslandWindow : Window
         if (!expanded && !_pinned)
             SelectSection(IslandSection.Quick);
 
+        // Before the measure, not after. ResizePill asks the panel how tall it needs to be, and
+        // the answer depends on which bands are showing -- so hiding them afterwards meant the
+        // first hover of every session measured the whole pinned workspace and opened a pill sized
+        // for it with only the media block drawn inside.
+        UpdateChrome();
+
         ResizePill(expanded);
 
         Animate(CollapsedLayer, OpacityProperty, expanded ? 0 : 1, ShapeDuration);
         Animate(ExpandedLayer, OpacityProperty, expanded ? 1 : 0, ShapeDuration);
-
-        UpdateChrome();
 
         // Solid only while the controls are there to be pressed. Every other moment the island is
         // something to look at, and a click aimed past it should reach what it was aimed at.
@@ -661,10 +665,9 @@ public partial class IslandWindow : Window
         // Sections size to their contents and scroll past a ceiling, rather than always opening at
         // full height: a shelf holding three files should not leave the island mostly empty, and a
         // clipboard history of two hundred entries must not grow it off the bottom of the screen.
-        // Capture needs no ceiling of its own -- its feed is capped at CaptureViewModel.MaxItems.
-        // Capture and Search both size to their contents: Capture's feed is capped at
-        // CaptureViewModel.MaxItems, and Search's list has a MaxHeight of its own. The rest are
-        // lists of unknown length and need the ceiling.
+        //
+        // Capture and Search are the two that need no ceiling: Capture's feed is capped at
+        // CaptureViewModel.MaxItems and Search's list carries a MaxHeight of its own.
         var sizesItself = section is IslandSection.Quick or IslandSection.Search;
 
         SectionHost.MaxHeight = sizesItself ? double.PositiveInfinity : SectionHeight;
@@ -692,8 +695,14 @@ public partial class IslandWindow : Window
     {
         switch (_section)
         {
+            // The two that brought their own field. The island's box is hidden here, so focusing it
+            // would put the caret somewhere invisible and send every keystroke nowhere.
             case IslandSection.Launcher:
                 LauncherView.FocusSearch();
+                break;
+
+            case IslandSection.Clipboard:
+                ClipboardView.FocusSearch();
                 break;
 
             // Everything else types into the one box, which is the point of there being one.
@@ -734,8 +743,18 @@ public partial class IslandWindow : Window
         var open = _pinned || _section != IslandSection.Quick;
 
         NavBar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-        CaptureBar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         SectionHost.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+
+        // The one box steps aside for a scope that brought its own.
+        //
+        // Two search fields stacked on one panel is the redundancy the palette merge was supposed
+        // to remove, and it came back the moment the capture box moved above the section: Apps and
+        // Clipboard both filter their own list. They keep their boxes rather than surrendering them
+        // -- Apps' box also drives the debounced winget search, which deliberately stays out of a
+        // list re-ranked on every keystroke -- so the global one hides instead.
+        CaptureBar.Visibility = open && !OwnsItsSearch(_section)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // Which scope is lit depends on being pinned as much as on which section is open - Capture
         // is where an unpinned island already is, so lighting it before there is a strip to light
@@ -744,6 +763,10 @@ public partial class IslandWindow : Window
         // an already-open panel is exactly that, and it used to leave the strip with nothing lit.
         SyncTabs(_section);
     }
+
+    /// <summary>Whether a section brings a search field of its own.</summary>
+    private static bool OwnsItsSearch(IslandSection section) =>
+        section is IslandSection.Launcher or IslandSection.Clipboard;
 
     /// <summary>
     /// Repaints the one brush every accented thing in the app reads from, with the colour of the
