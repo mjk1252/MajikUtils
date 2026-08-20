@@ -559,7 +559,9 @@ needed, because most activities are the same thing wearing different labels.
 | --- | --- | --- |
 | `MediaViewModel` | Ambient | the system media session |
 | `PrivacyViewModel` | Background | camera in use |
-| `TimerActivity` | Background | the countdown |
+| `TimerActivity` | Background | the countdown, and reminders |
+| `ProgressActivity` | Background | winget installs, and anything else long enough to watch |
+| `VolumeMixerActivity` | Background | an application making sound |
 | `ConditionActivity` | Background | do-not-disturb, restart pending |
 | `AnnouncementActivity` | Transient | clipboard, volume, downloads, screenshots, drives, network, Bluetooth |
 
@@ -572,6 +574,18 @@ after it expires would be counting the same thing twice.
 
 `ConditionActivity` is one class with two instances, since all that separates "Do not disturb" from
 "Restart pending" is a label and a glyph.
+
+`ProgressActivity` is the one to copy when adding an activity with a live value, and the one that
+shows what the ring in the bubble was actually for. It is a *sink*: nothing in it polls or watches,
+and whoever is doing the work calls `Report(label, fraction)` and then `Finish`. That is what lets a
+winget install and, later, a file copy or a download share a single activity without the activity
+knowing what any of them are -- and it is why adding the next one costs a call site rather than a
+class. `fraction` is nullable, because work with no figure yet is the common case at the start of a
+job and a ring claiming to be 0% done is a lie rather than a placeholder.
+
+`TimerActivity` covers reminders as well as countdowns, which is the same trick from the other
+direction: a reminder is a countdown with a name on it and nothing else, so it wanted a `Label` and
+a `StartAt`, not a second activity, a second ring and a second pair of templates.
 
 ### Where each reading comes from
 
