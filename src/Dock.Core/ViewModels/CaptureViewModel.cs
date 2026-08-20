@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Core.Models;
+using Dock.Core.Services;
 
 namespace Dock.Core.ViewModels;
 
@@ -20,6 +21,12 @@ public enum CaptureKind
     /// <summary>A query for the launcher, the one intent this view model cannot act on itself.</summary>
     Search,
 
+    /// <summary>A sum. The answer goes to the clipboard rather than into a list.</summary>
+    Math,
+
+    /// <summary>A countdown to a clock time rather than a length, with a name on it.</summary>
+    Reminder,
+
     Note,
     Todo
 }
@@ -31,6 +38,13 @@ public enum CaptureKind
 public readonly record struct CaptureIntent(CaptureKind Kind, string Text, TimeSpan Duration)
 {
     public static readonly CaptureIntent None = new(CaptureKind.None, string.Empty, TimeSpan.Zero);
+
+    /// <summary>
+    /// When a reminder is due. Only meaningful for <see cref="CaptureKind.Reminder"/>, and carried
+    /// alongside the duration rather than instead of it so that the hint line can say "in 40m" and
+    /// the timer can be started from either.
+    /// </summary>
+    public DateTimeOffset When { get; init; }
 }
 
 /// <summary>
@@ -42,8 +56,14 @@ public readonly record struct CaptureIntent(CaptureKind Kind, string Text, TimeS
 /// with it. So there is one box, and what you typed decides what it becomes.
 ///
 /// The grammar is deliberately tiny, because a syntax nobody remembers is worse than a second
-/// button. A bare duration starts a timer, a leading slash searches, a leading dot files a note,
-/// and everything else -- the common case, and so the one that needs no prefix at all -- is a task.
+/// button. A bare duration starts a timer, a leading at-sign sets one for a clock time, a leading
+/// slash searches, a leading dot files a note, a sum is worked out and copied, and everything else
+/// -- the common case, and so the one that needs no prefix at all -- is a task.
+///
+/// Every rule fails soft. A line that begins with an at-sign but does not name a time, or that
+/// contains an arithmetic operator without being arithmetic, falls through to being a task rather
+/// than being refused: the box is where things get written down, and a grammar that eats input is
+/// worse than one that occasionally under-reads it.
 ///
 /// Parsing is a pure static, which is the point of it living here rather than in the window: the
 /// whole grammar can be asserted without a UI.
@@ -74,6 +94,12 @@ public partial class CaptureViewModel : ObservableObject
     private readonly TodosViewModel _todos;
     private readonly NotesViewModel _notes;
 
+    /// <summary>
+    /// Only the calculator needs this, and only to put its answer somewhere useful. Optional so the
+    /// grammar can still be exercised without one.
+    /// </summary>
+    private readonly IClipboardWriter? _clipboard;
+
     [ObservableProperty] private string _draftText = string.Empty;
 
     /// <summary>
@@ -95,10 +121,11 @@ public partial class CaptureViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private bool _hasDone;
 
-    public CaptureViewModel(TodosViewModel todos, NotesViewModel notes)
+    public CaptureViewModel(TodosViewModel todos, NotesViewModel notes, IClipboardWriter? clipboard = null)
     {
         _todos = todos;
         _notes = notes;
+        _clipboard = clipboard;
 
         _todos.Todos.CollectionChanged += OnSourceChanged;
         _notes.Notes.CollectionChanged += OnSourceChanged;
@@ -173,7 +200,10 @@ public partial class CaptureViewModel : ObservableObject
     /// </summary>
     public CaptureIntent Submit(DateTimeOffset now, TimerActivity timer)
     {
-        var intent = Parse(DraftText);
+        // Against the moment passed in, not the wall clock. A reminder reads its target time from
+        // one and counts down from the other, and if those disagree the countdown is nonsense --
+        // by a few milliseconds in real use, and by four days in a test that names its own Monday.
+        var intent = Parse(DraftText, now);
 
         switch (intent.Kind)
         {
@@ -182,6 +212,17 @@ public partial class CaptureViewModel : ObservableObject
 
             case CaptureKind.Timer:
                 timer.Start(now, intent.Duration);
+                break;
+
+            case CaptureKind.Reminder:
+                timer.StartAt(now, intent.When, intent.Text);
+                break;
+
+            case CaptureKind.Math:
+                // Straight to the clipboard, which is where an answer is wanted: nobody works a sum
+                // out in order to read it. It lands in the clipboard history on the way past, so it
+                // is still there in a minute when it turns out to have been needed twice.
+                _clipboard?.SetText(intent.Text);
                 break;
 
             case CaptureKind.Note:
@@ -204,8 +245,20 @@ public partial class CaptureViewModel : ObservableObject
         return intent;
     }
 
-    /// <summary>The whole grammar. Pure, static and total: every string is one of the five kinds.</summary>
-    public static CaptureIntent Parse(string? draft)
+    /// <summary>
+    /// The whole grammar, against the wall clock. Used by the hint line, which has no particular
+    /// moment in mind and only wants to know what Enter would do right now.
+    /// </summary>
+    public static CaptureIntent Parse(string? draft) => Parse(draft, DateTimeOffset.Now);
+
+    /// <summary>
+    /// The whole grammar. Pure, static and total: every string is one of the kinds.
+    ///
+    /// <paramref name="now"/> is here for the reminder, which is the one rule whose reading depends
+    /// on when it is read -- "@9am" is forty minutes away or twenty-three hours away depending on
+    /// the hour it was typed in, and a test should be able to say which.
+    /// </summary>
+    public static CaptureIntent Parse(string? draft, DateTimeOffset now)
     {
         var text = (draft ?? string.Empty).Trim();
         if (text.Length == 0)
@@ -222,9 +275,17 @@ public partial class CaptureViewModel : ObservableObject
                 : new CaptureIntent(CaptureKind.Note, note, TimeSpan.Zero);
         }
 
+        if (text[0] == '@' && ReminderTime.TryParse(text[1..], now, out var when, out var label))
+            return new CaptureIntent(CaptureKind.Reminder, label, when - now) { When = when };
+
         var duration = ParseDuration(text);
         if (duration > TimeSpan.Zero)
             return new CaptureIntent(CaptureKind.Timer, text, duration);
+
+        // Last before the fallthrough, so that anything the earlier rules claim stays theirs:
+        // "1h30" is a timer, not a subtraction with a missing operand.
+        if (Arithmetic.TryEvaluate(text, out var value))
+            return new CaptureIntent(CaptureKind.Math, Arithmetic.Format(value), TimeSpan.Zero);
 
         return new CaptureIntent(CaptureKind.Todo, text, TimeSpan.Zero);
     }

@@ -32,6 +32,21 @@ public sealed partial class TimerActivity : ObservableObject, IIslandActivity
 
     [ObservableProperty] private string _remainingText = string.Empty;
 
+    /// <summary>
+    /// What the countdown is for, when it is for something. Empty for a plain timer, which is most
+    /// of them -- twenty-five minutes is its own explanation.
+    ///
+    /// It exists because a reminder is a countdown with a name on it, and that is the whole of the
+    /// difference: "call Tom at nine" needs no second activity, no second ring and no second set of
+    /// templates, only a line of text the timer did not previously carry.
+    /// </summary>
+    [ObservableProperty] private string _label = string.Empty;
+
+    /// <summary>Whether this countdown is for something named.</summary>
+    public bool HasLabel => Label.Length > 0;
+
+    partial void OnLabelChanged(string value) => OnPropertyChanged(nameof(HasLabel));
+
     /// <summary>0 at the start, 1 at the end. What the ring in the bubble draws.</summary>
     [ObservableProperty] private double _progress;
 
@@ -55,18 +70,27 @@ public sealed partial class TimerActivity : ObservableObject, IIslandActivity
     public TimeSpan Linger => TimeSpan.Zero;
 
     /// <summary>Starts, or restarts, the countdown.</summary>
-    public void Start(DateTimeOffset now, TimeSpan duration)
+    public void Start(DateTimeOffset now, TimeSpan duration, string label = "")
     {
         if (duration <= TimeSpan.Zero)
             return;
 
         _duration = duration;
         _endsAt = now + duration;
+        Label = label;
         IsFinished = false;
         IsActive = true;
 
         Tick(now);
     }
+
+    /// <summary>
+    /// Starts a countdown that ends at a given moment rather than after a given length. The same
+    /// timer either way -- only the arithmetic to get there differs, and doing it here keeps every
+    /// caller from having to.
+    /// </summary>
+    public void StartAt(DateTimeOffset now, DateTimeOffset when, string label = "") =>
+        Start(now, when - now, label);
 
     [RelayCommand]
     public void Cancel()
@@ -96,7 +120,11 @@ public sealed partial class TimerActivity : ObservableObject, IIslandActivity
             }
 
             Progress = 1;
-            RemainingText = "Time's up";
+
+            // A named countdown announces its name. "Time's up" is the right thing for a plain
+            // timer and useless for a reminder, which was set precisely so that the thing would be
+            // said back at the right moment.
+            RemainingText = HasLabel ? Label : "Time's up";
 
             // Goes on its own eventually, so a timer that finished while nobody was looking does
             // not sit on the island until the next restart.
@@ -117,6 +145,7 @@ public sealed partial class TimerActivity : ObservableObject, IIslandActivity
     public void Retire()
     {
         RemainingText = string.Empty;
+        Label = string.Empty;
         Progress = 0;
     }
 

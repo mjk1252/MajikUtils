@@ -15,8 +15,19 @@ public partial class ClipboardEntryViewModel : ObservableObject
     private const int NamedFiles = 3;
 
     private readonly IClipboardWriter _writer;
+    private readonly Action? _pinChanged;
 
     public ClipboardEntry Entry { get; }
+
+    /// <summary>
+    /// Whether this entry is exempt from being evicted, and written to disk between sessions.
+    ///
+    /// State on the view model rather than the entry, because it is the one thing about a clipboard
+    /// entry that changes after it was captured -- everything else is a record of a moment.
+    /// </summary>
+    [ObservableProperty] private bool _isPinned;
+
+    partial void OnIsPinnedChanged(bool value) => _pinChanged?.Invoke();
 
     public string Text => Entry.Text;
 
@@ -47,14 +58,29 @@ public partial class ClipboardEntryViewModel : ObservableObject
     /// <summary>One line of words for any entry, whatever it holds.</summary>
     public string Preview => Entry.Kind == ClipboardKind.Text ? BuildPreview(Entry.Text) : Entry.Text;
 
-    public ClipboardEntryViewModel(ClipboardEntry entry, IClipboardWriter writer)
+    public ClipboardEntryViewModel(ClipboardEntry entry, IClipboardWriter writer,
+        Action? pinChanged = null, bool isPinned = false)
     {
         Entry = entry;
         _writer = writer;
+        _pinChanged = pinChanged;
+
+        // Set through the field so restoring a pinned entry at startup does not call back into the
+        // store that just loaded it.
+        _isPinned = isPinned;
 
         foreach (var path in entry.Paths.Take(NamedFiles))
             Files.Add(new ClipboardFileViewModel(path));
     }
+
+    /// <summary>
+    /// Whether this entry answers a search. Matches the words a row actually shows -- the preview
+    /// for text, the file names for a drop list -- rather than the raw payload, so what you can
+    /// find is what you can see.
+    /// </summary>
+    public bool Matches(string query) =>
+        Preview.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+        Entry.Paths.Any(p => p.Contains(query, StringComparison.OrdinalIgnoreCase));
 
     private static string BuildPreview(string text)
     {
@@ -73,6 +99,9 @@ public partial class ClipboardEntryViewModel : ObservableObject
     /// and files copied out as a real drop list are the whole point of holding either: a screenshot
     /// that came back as the words "Image 1920 x 1080" would be a worse feature than not keeping it.
     /// </summary>
+    [RelayCommand]
+    private void TogglePin() => IsPinned = !IsPinned;
+
     [RelayCommand]
     private void Copy()
     {

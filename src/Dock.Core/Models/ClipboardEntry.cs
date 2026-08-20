@@ -46,6 +46,15 @@ public sealed class ClipboardEntry
     /// <summary>PNG bytes for <see cref="ClipboardKind.Image"/>, null otherwise.</summary>
     public byte[]? ImagePng { get; private init; }
 
+    /// <summary>
+    /// The image's dimensions, zero for the other kinds. Kept rather than re-read off the PNG,
+    /// because a pinned entry is written to disk and read back, and decoding a picture to recover
+    /// two numbers that were known when it was captured is work for nothing.
+    /// </summary>
+    public int Width { get; private init; }
+
+    public int Height { get; private init; }
+
     /// <summary>Paths for <see cref="ClipboardKind.Files"/>, empty otherwise.</summary>
     public IReadOnlyList<string> Paths { get; private init; } = [];
 
@@ -78,6 +87,8 @@ public sealed class ClipboardEntry
         {
             Text = $"Image {width} x {height}",
             ImagePng = png,
+            Width = width,
+            Height = height,
             Signature = $"image:{png.LongLength}:{Hash(png)}"
         };
 

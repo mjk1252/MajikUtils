@@ -274,7 +274,7 @@ public partial class App : System.Windows.Application
 
         // Notes and todos are still two stores and two view models -- they are genuinely different
         // things and they persist differently. They are merged into one surface, not one model.
-        var capture = new CaptureViewModel(_todosViewModel!, _notesViewModel!);
+        var capture = new CaptureViewModel(_todosViewModel!, _notesViewModel!, new ClipboardWriter());
 
         _islandWindow = new IslandWindow(
             _mediaViewModel, _activities, _privacyViewModel, _timer, capture,

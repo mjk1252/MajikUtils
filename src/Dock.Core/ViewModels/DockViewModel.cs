@@ -28,6 +28,8 @@ public partial class DockViewModel : ObservableObject
 
     private IWingetService? _wingetService;
     private IClipboardWriter? _clipboardWriter;
+    private readonly ClipboardStore _clipboardStore = new();
+    private string _clipboardQuery = "";
     private List<AppLauncherItemViewModel> _allLauncherItems = [];
     private string _launcherQuery = "";
 
@@ -36,7 +38,15 @@ public partial class DockViewModel : ObservableObject
     public ObservableCollection<RecentFileItemViewModel> RecentFiles { get; } = [];
     public ObservableCollection<ShelfItemViewModel> ShelfItems { get; } = [];
     public ObservableCollection<StackItemViewModel> Stacks { get; } = [];
+    /// <summary>Everything held, newest first. The source of truth; the panel draws the filtered view.</summary>
     public ObservableCollection<ClipboardEntryViewModel> ClipboardHistory { get; } = [];
+
+    /// <summary>
+    /// What the clipboard panel actually lists: <see cref="ClipboardHistory"/> through the search
+    /// box. Mirrors the launcher's arrangement rather than filtering in the view, so the palette and
+    /// the store keep reading the unfiltered list.
+    /// </summary>
+    public ObservableCollection<ClipboardEntryViewModel> ClipboardResults { get; } = [];
 
     [ObservableProperty]
     private bool isWingetSearching;
@@ -193,9 +203,45 @@ public partial class DockViewModel : ObservableObject
 
     private void SaveShelf() => _shelfStore.Save(ShelfItems.Select(s => s.Item).ToList());
 
+    /// <summary>
+    /// Hands over the writer, and restores whatever was pinned last session.
+    ///
+    /// The restore lives here rather than in the constructor because a pinned entry needs a writer
+    /// to be worth building -- clicking one has to put it back on the clipboard, and a row that
+    /// cannot do that is decoration.
+    /// </summary>
     public void AttachClipboardWriter(IClipboardWriter writer)
     {
         _clipboardWriter = writer;
+
+        foreach (var entry in _clipboardStore.Load().OrderByDescending(e => e.CapturedAt))
+            ClipboardHistory.Add(new ClipboardEntryViewModel(entry, writer, SavePinned, isPinned: true));
+
+        FilterClipboard(_clipboardQuery);
+    }
+
+    /// <summary>
+    /// Narrows the panel's list. Searches the preview rather than the entry, so a file entry
+    /// matches on its names and an image on its dimensions -- which is all either of them has in
+    /// the way of words.
+    /// </summary>
+    public void FilterClipboard(string query)
+    {
+        _clipboardQuery = query;
+        ClipboardResults.Clear();
+
+        var matches = string.IsNullOrWhiteSpace(query)
+            ? ClipboardHistory
+            : ClipboardHistory.Where(e => e.Matches(query));
+
+        foreach (var entry in matches)
+            ClipboardResults.Add(entry);
+    }
+
+    private void SavePinned()
+    {
+        _clipboardStore.Save(ClipboardHistory.Where(e => e.IsPinned).Select(e => e.Entry));
+        FilterClipboard(_clipboardQuery);
     }
 
     /// <summary>Convenience for the commonest kind, and what the tests mostly reach for.</summary>
@@ -226,21 +272,38 @@ public partial class DockViewModel : ObservableObject
         if (ClipboardHistory.Count > 0 && ClipboardHistory[0].Entry.Signature == entry.Signature)
             return;
 
-        ClipboardHistory.Insert(0, new ClipboardEntryViewModel(entry, writer));
+        ClipboardHistory.Insert(0, new ClipboardEntryViewModel(entry, writer, SavePinned));
 
         AttachIcons(ClipboardHistory[0]);
-
-        while (ClipboardHistory.Count > MaxClipboardEntries)
-            ClipboardHistory.RemoveAt(ClipboardHistory.Count - 1);
-
-        // Oldest first, and never the entry just added -- see ClipboardBudget for why that
-        // exception is the whole point of the rule.
-        var excess = ClipboardBudget.Excess(
-            ClipboardHistory.Select(e => e.Entry.ByteCost).ToList(), MaxClipboardImageBytes);
-
-        for (var i = 0; i < excess; i++)
-            ClipboardHistory.RemoveAt(ClipboardHistory.Count - 1);
+        TrimHistory();
+        FilterClipboard(_clipboardQuery);
     }
+
+    /// <summary>
+    /// Applies both bounds. Pinned entries are exempt from each of them: the count is a limit on
+    /// how much is being kept *for* you, and a pin moves an entry out of that pile and into the one
+    /// you asked for.
+    /// </summary>
+    private void TrimHistory()
+    {
+        for (var i = ClipboardHistory.Count - 1; i > 0 && UnpinnedCount() > MaxClipboardEntries; i--)
+        {
+            if (!ClipboardHistory[i].IsPinned)
+                ClipboardHistory.RemoveAt(i);
+        }
+
+        // Oldest first, never the entry just added, never a pin -- see ClipboardBudget for why
+        // those exceptions are the whole point of the rule.
+        var costs = ClipboardHistory
+            .Select(e => new ClipboardCost(e.Entry.ByteCost, e.IsPinned))
+            .ToList();
+
+        // Descending, so removing one does not shift the index of the next.
+        foreach (var index in ClipboardBudget.Excess(costs, MaxClipboardImageBytes).OrderByDescending(i => i))
+            ClipboardHistory.RemoveAt(index);
+    }
+
+    private int UnpinnedCount() => ClipboardHistory.Count(e => !e.IsPinned);
 
     /// <summary>
     /// Fills in the shell icons for a files entry, the same way the shelf does. Best effort: a path
@@ -252,6 +315,19 @@ public partial class DockViewModel : ObservableObject
             file.IconPng = _iconProvider.GetIconPng(file.Path, 16);
     }
 
+    /// <summary>
+    /// Empties the history, except for what was pinned. "Clear" means "throw away what I did not
+    /// ask you to keep" -- a pin that a neighbouring button could wipe out is not a pin.
+    /// </summary>
     [RelayCommand]
-    private void ClearClipboardHistory() => ClipboardHistory.Clear();
+    private void ClearClipboardHistory()
+    {
+        for (var i = ClipboardHistory.Count - 1; i >= 0; i--)
+        {
+            if (!ClipboardHistory[i].IsPinned)
+                ClipboardHistory.RemoveAt(i);
+        }
+
+        FilterClipboard(_clipboardQuery);
+    }
 }

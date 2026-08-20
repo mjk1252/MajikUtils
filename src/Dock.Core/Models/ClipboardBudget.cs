@@ -12,26 +12,35 @@ namespace Dock.Core.Models;
 public static class ClipboardBudget
 {
     /// <summary>
-    /// How many entries to drop from the end of a newest-first history so the total fits.
+    /// Which entries to drop from a newest-first history so the total fits, oldest first.
     ///
-    /// Never returns the whole count: the newest entry survives at any size.
+    /// Indices rather than a count, because two things are now exempt and neither of them is at a
+    /// predictable end of the list: the newest entry, and anything pinned.
     /// </summary>
-    public static int Excess(IReadOnlyList<long> costsNewestFirst, long budget)
+    public static IReadOnlyList<int> Excess(IReadOnlyList<ClipboardCost> newestFirst, long budget)
     {
         var total = 0L;
-        foreach (var cost in costsNewestFirst)
-            total += cost;
+        foreach (var entry in newestFirst)
+            total += entry.Cost;
 
-        var drop = 0;
+        var drop = new List<int>();
 
-        // Walks backwards from the oldest. Stops one short of the front by construction, so a
-        // single entry larger than the whole budget is kept rather than dropped into nothing.
-        for (var i = costsNewestFirst.Count - 1; i > 0 && total > budget; i--)
+        // Walks backwards from the oldest, stopping one short of the front: a single entry larger
+        // than the whole budget is kept rather than dropped into nothing.
+        for (var i = newestFirst.Count - 1; i > 0 && total > budget; i--)
         {
-            total -= costsNewestFirst[i];
-            drop++;
+            // A pin is the user saying "keep this one". Evicting it to make room for something they
+            // did not ask to keep gets the priority exactly backwards.
+            if (newestFirst[i].Pinned)
+                continue;
+
+            total -= newestFirst[i].Cost;
+            drop.Add(i);
         }
 
         return drop;
     }
 }
+
+/// <summary>What the budget needs to know about one entry: what it costs, and whether it is spoken for.</summary>
+public readonly record struct ClipboardCost(long Cost, bool Pinned);

@@ -101,18 +101,6 @@
             </Setter>
         </Style>
 
-        <!-- Caret and selection are the only chrome a stock TextBox brings that still belongs here;
-             everything else reads as a form field dropped onto a HUD. -->
-        <Style x:Key="CaptureText" TargetType="TextBox">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="CaretBrush" Value="White"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="11.5"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-
         <!-- What the collapsed pill shows when media holds it. One of a set: the pill is a
              ContentControl over whichever activity is primary, and each activity's collapsed form
              is a template like this one, picked by the type of the view model.
@@ -211,6 +199,12 @@
                            Margin="0,0,8,0"/>
                 <TextBlock Text="{Binding RemainingText}" Style="{StaticResource IslandBodyText}"
                            VerticalAlignment="Center"/>
+
+                <!-- Trimmed hard: the collapsed pill is one line and the number is the part that
+                     has to survive. -->
+                <TextBlock Text="{Binding Label}" Style="{StaticResource IslandMetaText}"
+                           VerticalAlignment="Center" Margin="8,0,0,0" MaxWidth="120"
+                           Visibility="{Binding HasLabel, Converter={StaticResource BoolToVisibility}}"/>
             </StackPanel>
         </DataTemplate>
 
@@ -286,6 +280,13 @@
                 <TextBlock Text="{Binding RemainingText}"
                            Style="{StaticResource IslandTitleText}"
                            VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                <!-- Only a named countdown has anything to say here, and a reminder is exactly a
+                     countdown with a name on it. -->
+                <TextBlock Text="{Binding Label}" Style="{StaticResource IslandMetaText}"
+                           VerticalAlignment="Center" Margin="0,0,12,0" MaxWidth="220"
+                           Visibility="{Binding HasLabel, Converter={StaticResource BoolToVisibility}}"/>
+
                 <Button Content="Stop" Style="{StaticResource ChipButton}"
                         Command="{Binding CancelCommand}" VerticalAlignment="Center"/>
             </StackPanel>

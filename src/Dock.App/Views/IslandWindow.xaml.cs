@@ -892,17 +892,41 @@ public partial class IslandWindow : Window
         CaptureHint.Text = intent.Kind switch
         {
             CaptureKind.Timer => $"Enter starts a {Describe(intent.Duration)} timer",
+            CaptureKind.Reminder => intent.Text.Length > 0
+                ? $"Enter reminds you to {intent.Text} at {intent.When:h:mm tt}, in {Describe(intent.Duration)}"
+                : $"Enter reminds you at {intent.When:h:mm tt}, in {Describe(intent.Duration)}",
+
+            // The answer, not a description of one. A calculator that made you press Enter to find
+            // out whether it agreed with you would be a worse calculator than the one in the
+            // Start menu, and this line is already where the box says what it thinks.
+            CaptureKind.Math => $"= {intent.Text}   ·   Enter copies it",
+
             CaptureKind.Search => "Enter searches your apps",
             CaptureKind.Note => "Enter files this as a note",
             CaptureKind.Todo => "Enter adds this as a task",
-            _ => "25m timer     .note     /search"
+            _ => "25m timer     @9am reminder     2+2     .note     /search"
         };
     }
 
-    private static string Describe(TimeSpan duration) =>
-        duration.Hours > 0 && duration.Minutes > 0 ? $"{duration.Hours}h {duration.Minutes}m"
-        : duration.Hours > 0 ? $"{duration.Hours}h"
-        : $"{(int)duration.TotalMinutes}m";
+    /// <summary>
+    /// A length in the roundest words that still say it. Reminders can be nearly a day out, so this
+    /// has to cope with a good deal more than the timer chips it was written for.
+    /// </summary>
+    private static string Describe(TimeSpan duration)
+    {
+        var hours = (int)duration.TotalHours;
+        var minutes = duration.Minutes;
+
+        if (hours > 0 && minutes > 0)
+            return $"{hours}h {minutes}m";
+
+        if (hours > 0)
+            return $"{hours}h";
+
+        // Anything under a minute would otherwise read as "0m", which looks broken rather than
+        // imminent.
+        return duration.TotalMinutes < 1 ? "under a minute" : $"{(int)duration.TotalMinutes}m";
+    }
 
     /// <summary>
     /// A click anywhere on the open panel holds it there. This is the gesture that separates a

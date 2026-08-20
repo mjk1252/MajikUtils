@@ -1,5 +1,7 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 
 namespace Dock.App.Views.Panels;
 
@@ -40,16 +42,60 @@ public sealed class FileDragGesture
     /// Starts a file drag for <paramref name="path"/> if the gesture qualifies. Returns false
     /// when the move was just tremor, so callers can treat the interaction as a plain click.
     /// </summary>
-    public bool TryDrag(MouseEventArgs e, DependencyObject source, string path)
+    public bool TryDrag(MouseEventArgs e, DependencyObject source, string path) =>
+        TryDrag(e, source, ForFiles([path]));
+
+    /// <summary>
+    /// The same gesture for a drag that is not a single file.
+    ///
+    /// The clipboard history needed this: an entry there can be a picture or a line of text as
+    /// easily as a path, and all three are worth being able to pull out of the island. Only what is
+    /// being carried differs -- the threshold, the internal marker and the blocking DoDragDrop call
+    /// are the parts nobody should be writing twice.
+    /// </summary>
+    public bool TryDrag(MouseEventArgs e, DependencyObject source, DataObject data)
     {
         if (e.LeftButton != MouseButtonState.Pressed || !HasExceededThreshold(e))
             return false;
 
         _start = null;
 
-        var data = new DataObject(DataFormats.FileDrop, new[] { path });
         data.SetData(InternalDragFormat, true);
         DragDrop.DoDragDrop(source, data, DragDropEffects.Copy | DragDropEffects.Move);
         return true;
+    }
+
+    public static DataObject ForFiles(IEnumerable<string> paths) =>
+        new(DataFormats.FileDrop, paths.ToArray());
+
+    public static DataObject ForText(string text) => new(DataFormats.UnicodeText, text);
+
+    /// <summary>
+    /// A picture, offered both ways at once: as the file it was just written to, and as a bitmap
+    /// for the applications that would rather have the pixels than a path.
+    /// </summary>
+    public static DataObject ForImage(string path, byte[] png)
+    {
+        var data = ForFiles([path]);
+
+        try
+        {
+            using var stream = new MemoryStream(png);
+
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+
+            data.SetImage(image);
+        }
+        catch (Exception)
+        {
+            // The file half of the drop still works, which is the half that reaches a folder.
+        }
+
+        return data;
     }
 }

@@ -145,17 +145,21 @@ public class ClipboardTests
 
     // ---------------------------------------------------------------- the budget
 
+    private static ClipboardCost Loose(long cost) => new(cost, Pinned: false);
+
+    private static ClipboardCost Kept(long cost) => new(cost, Pinned: true);
+
     [Fact]
     public void Budget_UnderBudget_DropsNothing()
     {
-        Assert.Equal(0, ClipboardBudget.Excess([10, 10, 10], 100));
+        Assert.Empty(ClipboardBudget.Excess([Loose(10), Loose(10), Loose(10)], 100));
     }
 
     [Fact]
     public void Budget_OverBudget_DropsTheOldestFirst()
     {
         // 40 over a budget of 25: dropping the last two leaves 20.
-        Assert.Equal(2, ClipboardBudget.Excess([10, 10, 10, 10], 25));
+        Assert.Equal([3, 2], ClipboardBudget.Excess([Loose(10), Loose(10), Loose(10), Loose(10)], 25));
     }
 
     /// <summary>
@@ -165,12 +169,147 @@ public class ClipboardTests
     [Fact]
     public void Budget_ANewEntryBiggerThanTheBudget_IsStillKept()
     {
-        Assert.Equal(2, ClipboardBudget.Excess([500, 10, 10], 100));
+        Assert.Equal([2, 1], ClipboardBudget.Excess([Loose(500), Loose(10), Loose(10)], 100));
     }
 
     [Fact]
     public void Budget_TextOnlyHistory_IsNeverTrimmed()
     {
-        Assert.Equal(0, ClipboardBudget.Excess([0, 0, 0, 0, 0], 0));
+        Assert.Empty(ClipboardBudget.Excess([Loose(0), Loose(0), Loose(0), Loose(0)], 0));
+    }
+
+    /// <summary>
+    /// A pin is the user saying "keep this one". Evicting it to make room for something they never
+    /// asked to keep gets the priority exactly backwards.
+    /// </summary>
+    [Fact]
+    public void Budget_NeverEvictsAPin()
+    {
+        var dropped = ClipboardBudget.Excess([Loose(10), Kept(50), Loose(10), Loose(10)], 25);
+
+        Assert.DoesNotContain(1, dropped);
+        Assert.Equal([3, 2], dropped);
+    }
+
+    [Fact]
+    public void Budget_EverythingPinned_DropsNothingHowerverOverBudget()
+    {
+        Assert.Empty(ClipboardBudget.Excess([Kept(500), Kept(500), Kept(500)], 10));
+    }
+
+    // ---------------------------------------------------------------- pinning
+
+    [Fact]
+    public void Pinning_RaisesTheCallbackThatPersists()
+    {
+        var saves = 0;
+        var vm = new ClipboardEntryViewModel(
+            ClipboardEntry.ForText("keep me", DateTime.Now), new FakeWriter(), () => saves++);
+
+        Assert.False(vm.IsPinned);
+
+        vm.TogglePinCommand.Execute(null);
+
+        Assert.True(vm.IsPinned);
+        Assert.Equal(1, saves);
+
+        vm.TogglePinCommand.Execute(null);
+
+        Assert.False(vm.IsPinned);
+        Assert.Equal(2, saves);
+    }
+
+    /// <summary>
+    /// Restoring last session's pins must not call back into the store that just loaded them.
+    /// </summary>
+    [Fact]
+    public void Pinning_RestoredAtStartup_DoesNotSaveAgain()
+    {
+        var saves = 0;
+        var vm = new ClipboardEntryViewModel(
+            ClipboardEntry.ForText("kept", DateTime.Now), new FakeWriter(), () => saves++, isPinned: true);
+
+        Assert.True(vm.IsPinned);
+        Assert.Equal(0, saves);
+    }
+
+    // ---------------------------------------------------------------- search
+
+    [Fact]
+    public void Matches_SearchesTheWordsTheRowShows()
+    {
+        var text = new ClipboardEntryViewModel(
+            ClipboardEntry.ForText("the quick brown fox", DateTime.Now), new FakeWriter());
+
+        Assert.True(text.Matches("QUICK"));
+        Assert.False(text.Matches("slow"));
+    }
+
+    [Fact]
+    public void Matches_FindsAFileByPathAsWellAsName()
+    {
+        var files = new ClipboardEntryViewModel(
+            ClipboardEntry.ForFiles([@"C:\invoices\march.pdf"], DateTime.Now), new FakeWriter());
+
+        Assert.True(files.Matches("march"));
+        Assert.True(files.Matches("invoices"));
+        Assert.False(files.Matches("april"));
+    }
+
+    // ---------------------------------------------------------------- persistence
+
+    [Fact]
+    public void Store_RoundTripsEveryKind()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var store = new ClipboardStore(path);
+        var now = DateTime.Now;
+
+        store.Save([
+            ClipboardEntry.ForText("a note to keep", now),
+            ClipboardEntry.ForImage([1, 2, 3, 4], 800, 600, now),
+            ClipboardEntry.ForFiles([@"C:\a.txt", @"C:\b.txt"], now)
+        ]);
+
+        var loaded = store.Load();
+
+        Assert.Equal(3, loaded.Count);
+        Assert.Equal("a note to keep", loaded[0].Text);
+        Assert.Equal([1, 2, 3, 4], loaded[1].ImagePng);
+        Assert.Equal(800, loaded[1].Width);
+        Assert.Equal([@"C:\a.txt", @"C:\b.txt"], loaded[2].Paths);
+
+        File.Delete(path);
+    }
+
+    /// <summary>
+    /// A pinned 4K screenshot is ~90MB of base64 read synchronously at every launch. It stays
+    /// pinned for the session; it just does not survive a restart.
+    /// </summary>
+    [Fact]
+    public void Store_SkipsImagesTooLargeToBeWorthReadingAtStartup()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var store = new ClipboardStore(path);
+        var huge = new byte[ClipboardStore.MaxPinnedImageBytes + 1];
+
+        store.Save([
+            ClipboardEntry.ForImage(huge, 4000, 3000, DateTime.Now),
+            ClipboardEntry.ForText("small enough", DateTime.Now)
+        ]);
+
+        var loaded = store.Load();
+
+        Assert.Equal("small enough", Assert.Single(loaded).Text);
+
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void Store_MissingFile_IsAnEmptyList()
+    {
+        var store = new ClipboardStore(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
+
+        Assert.Empty(store.Load());
     }
 }
