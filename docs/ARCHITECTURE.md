@@ -20,6 +20,11 @@ taskbar button has to be one, and the island reaches all of it more directly: th
 files, the stack list, clipboard history and the shelf are sections of its expanded panel, and the
 `Views/Panels` UserControls they were always built from are simply hosted there instead.
 
+The command palette went the same way, and for a different reason: it never needed a taskbar button,
+it needed a *text box*, and the island had grown one. `CommandPaletteViewModel` survives untouched --
+the ranking and merge across apps, stacks, recent files and clipboard history were never the part
+that wanted a window -- and `SearchPanel` hosts its results as one more section.
+
 Windows groups taskbar buttons by AppUserModelID, so several buttons from one process only stay
 separate if each HWND is stamped with a distinct ID — see `Dock.Interop/Shell/AppIdRegistrar.cs`.
 The same property store carries the `Relaunch*` values, which are what a *pinned* button uses to
@@ -69,9 +74,43 @@ since it sits where the pointer passes; and it has to let clicks through, becaus
 of screen other windows use.
 
 **Hovered versus pinned.** A hover panel that vanishes when the pointer leaves is right for glancing
-at a track and wrong for everything else in it, so clicking a tab *pins* the island: the pointer
-poll stops deciding, `WS_EX_NOACTIVATE` is lifted so a search box can hold real keyboard focus, and
-it stays until Esc, a click on the lit tab, or the foreground moving to another application.
+at a track and wrong for everything else in it, so clicking anywhere on the island *pins* it: the
+pointer poll stops deciding, `WS_EX_NOACTIVATE` is lifted so the box can hold real keyboard focus,
+and it stays until Esc, a click on the lit scope, or the foreground moving to another application.
+
+The two states show different amounts of island, which is `UpdateChrome`'s whole job. A hover draws
+the activity rows and the now-playing block and stops; the scope strip, the box and the section host
+exist only once pinned (or while a drag is holding a section open). That is the difference between
+the pill *growing into* something and merely uncovering something already laid out behind it.
+
+It also means order matters when resizing: `ResizePill` measures the panel, and the answer depends
+on which bands are showing, so `UpdateChrome` has to run first. It did not, once, and every session's
+first hover opened a pill sized for the whole workspace with a media block rattling around in it.
+
+**One width.** The panel was 480 wide for the scratchpad and 660 for a section, so every scope click
+slid the island sideways under the pointer that clicked it. `IslandWidth` is 560 for every state now.
+An overlay hanging off the top edge is allowed to grow downwards -- that is the gesture -- and is not
+allowed to move.
+
+**One box.** Everything typed at the island goes through `CaptureViewModel.Parse`, a pure static
+that reads a line and says what it meant: a task, a duration, a clock time, a sum, a note, or a
+search. Being pure and total is what makes it cheap to extend and possible to assert -- the whole
+grammar is exercised without a window in `CaptureVerbTests`.
+
+Every rule fails soft, which is the part that took the care. `@home buy milk` is a task, because what
+follows the at-sign is not a clock; `buy 2 x 4 timber` is a task, because the calculator refuses
+anything it cannot consume whole; `1h30` is a timer rather than a subtraction with a missing operand.
+The box is where things get written down, and a grammar that eats input is worse than one that
+occasionally under-reads it.
+
+A search is the one reading the view model cannot act on itself, since the launcher is a place in a
+window and `Dock.Core` knows nothing about windows: it comes back as an intent for `IslandWindow` to
+route. The box lives above the section host rather than inside the Capture pane, which is what lets
+it act on any scope -- and is exactly why the separate palette window stopped being necessary.
+
+Two scopes bring a search field of their own (Apps, whose box also drives the debounced winget
+search, and Clipboard), so the global box hides while either is open. One search box on screen at a
+time.
 
 **Shape and placement.** `NotchShape` draws either a notch fused to the screen edge (top corners
 flaring outwards, which is what makes it read as part of the edge rather than a window pushed off
@@ -123,6 +162,13 @@ a player restarting between albums, a camera renegotiating a stream -- from tear
 and rebuilding it a moment later. `Retire` is what finally clears an activity's display state,
 which is deliberately *not* the moment it stops claiming a slot: the gap between two tracks has to
 keep showing the track.
+
+`TimerActivity` and `ProgressActivity` are the two worth reading as examples, because they are the
+ones with a live value: both draw a ring in the bubble that says how far along they are without a
+word, and both rank `Background` for the same reason -- evicting a track somebody chose in order to
+spell out a number they can read off an arc is a bad trade. `ProgressActivity` is deliberately a
+sink rather than a source: whoever is doing the work calls `Report`, which is what lets a winget
+install and a file copy share one activity without it knowing what either of them is.
 
 There are two slots. `Primary` takes the pill; `Secondary` splits off into a bubble beside it,
 drawn from the same `NotchShape` so the two silhouettes always agree about the screen edge. That is

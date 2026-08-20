@@ -4,23 +4,49 @@ A set of Windows 11 utilities that live in an island at the top of the screen, b
 
 **The island** is the whole app. It hangs from the top edge of a monitor as a notch fused to the
 screen edge or, if you prefer, a pill floating just below it — at either end of that edge or in the
-middle, on whichever monitor you pick (*Settings*). Collapsed it shows whatever is playing. Point at
-it and it opens into album art, a progress bar, prev/play-pause/next, a todo list, notes, and a strip
-of tabs along the bottom:
+middle, on whichever monitor you pick (*Settings*).
 
+Collapsed, it shows whatever is playing. **Point at it** and it opens into the cover, a progress bar
+and prev/play-pause/next — a glance, and nothing else. **Click it** and the rest appears: one text
+box, a strip of scopes, and whichever scope is open.
+
+### The box
+
+Everything you type goes in one place, and what you type decides what it becomes:
+
+| You type | What happens |
+| --- | --- |
+| `renew the domain` | a task, ticked off later |
+| `25m` or `1h30` | a countdown |
+| `@9am call Tom` | a countdown to that time, which says *call Tom* when it fires |
+| `2 + 2` | works it out; Enter copies the answer |
+| `.wifi is on the router` | a note |
+| `/firefox` | searches your apps, stacks, recent files and clipboard |
+
+A line under the box tells you which of those Enter is about to do, before you press it. Nothing
+needs a prefix except the four that have one — an ordinary task is just an ordinary sentence.
+
+Searching with `/` filters as you type; **up** and **down** choose a result and **Enter** opens it,
+without your hands leaving the keyboard. `Ctrl+Alt+Space` opens the island straight into it.
+
+### The scopes
+
+- **Capture** — the box above, and a feed of what you have put through it.
 - **Shelf** — a holding area for files. **Drag a file to the island** and it opens the shelf ready to
   drop into. Drag items back out whenever you need them.
-- **Clipboard** — the history captured in the background. `Ctrl+Alt+Shift+V` anywhere opens the
-  island straight onto it.
-- **Search apps** — installed apps, or new ones found and installed via winget. Opens with the caret
-  already in the search box, so it is click-and-type.
+- **Clipboard** — text, images and copied files, captured in the background. Search it, and **pin**
+  anything worth keeping: a pin survives the list filling up, *Clear*, and a restart. Nothing else is
+  ever written to disk. Drag a screenshot straight out into whatever wants it. `Ctrl+Alt+Shift+V`
+  anywhere opens the island onto this.
+- **Apps** — installed apps, or new ones found and installed via winget. An install shows its
+  progress on the island rather than in a console window.
 - **Recent files** and **Stacks** (which folders are stacks).
-- **Notes and todo** — a scratchpad. Type a task, press Enter, tick it off later.
+- **Mixer** — per-application volume.
 - **The gear** — *Settings...* and *Exit MajikUtils*.
 
-Pointing at the island opens it; clicking a tab holds it open until you click away or press Esc. It
-never takes focus until you ask it to, lets clicks through whenever its controls aren't showing, and
-gets out of the way of full-screen apps.
+Pointing at the island opens it; clicking holds it open until you click away or press Esc. It never
+takes focus until you ask it to, lets clicks through whenever its controls aren't showing, and gets
+out of the way of full-screen apps.
 
 One thing still lives on the taskbar:
 
