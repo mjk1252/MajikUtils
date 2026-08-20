@@ -20,16 +20,93 @@
         </Grid>
 
         <TextBlock Grid.Row="1" Style="{StaticResource EmptyStateText}"
-                   Text="Nothing copied yet -- press Ctrl+Alt+Shift+V anytime to reopen this list."
+                   Text="Nothing copied yet - press Ctrl+Alt+Shift+V anytime to reopen this list."
                    Visibility="{Binding ClipboardHistory.Count, Converter={StaticResource CountToVisibility}, ConverterParameter=invert}"/>
 
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding ClipboardHistory}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
+                        <!-- One row template with three bodies rather than a template selector.
+                             The three are the same row - same plate, same hover, same click - and
+                             differ only in what fills it, so a selector would be three copies of
+                             the chrome to keep in agreement for the sake of avoiding two
+                             collapsed elements. -->
                         <Border Style="{StaticResource ListRow}" Padding="8,7" MouseLeftButtonUp="OnItemClick">
-                            <TextBlock Text="{Binding Preview}" Foreground="White" FontSize="12"
-                                       TextWrapping="Wrap" MaxHeight="52" TextTrimming="CharacterEllipsis"/>
+                            <Grid>
+                                <!-- TEXT -->
+                                <TextBlock Text="{Binding Preview}"
+                                           Style="{StaticResource IslandBodyText}" FontSize="12"
+                                           TextWrapping="Wrap" MaxHeight="52"
+                                           TextTrimming="CharacterEllipsis"
+                                           Visibility="{Binding IsText, Converter={StaticResource BoolToVisibility}}"/>
+
+                                <!-- IMAGE. The thumbnail is the preview: a row that said
+                                     "Image 1920 x 1080" would make you click every screenshot in
+                                     the list to find the one you meant. Left-aligned and height
+                                     capped so a panorama and a portrait both cost one row. -->
+                                <Grid Visibility="{Binding IsImage, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border CornerRadius="4" MaxWidth="96" MaxHeight="54"
+                                            Background="#22FFFFFF" ClipToBounds="True"
+                                            VerticalAlignment="Center">
+                                        <Image Source="{Binding ImagePng, Converter={StaticResource PngToImage}}"
+                                               Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    </Border>
+
+                                    <TextBlock Grid.Column="1" Text="{Binding Preview}"
+                                               Style="{StaticResource IslandMetaText}"
+                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </Grid>
+
+                                <!-- FILES -->
+                                <Grid Visibility="{Binding IsFiles, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <ItemsControl ItemsSource="{Binding Files}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,0,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Collapsed rather than left blank when the
+                                                         shell gave us nothing: an empty 16px box
+                                                         reads as an icon that failed to load. -->
+                                                    <Border Width="16" Height="16" Margin="0,0,8,0"
+                                                            VerticalAlignment="Center"
+                                                            Visibility="{Binding IconPng,
+                                                                Converter={StaticResource NullToVisibility},
+                                                                ConverterParameter=invert}">
+                                                        <Image Source="{Binding IconPng, Converter={StaticResource PngToImage}}"
+                                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                    </Border>
+
+                                                    <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                               Style="{StaticResource IslandBodyText}"
+                                                               FontSize="12" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Grid.Row="1" Margin="24,2,0,0"
+                                               Style="{StaticResource IslandFaintText}" FontSize="10"
+                                               Text="{Binding ExtraFileCount, StringFormat={}+{0} more}"
+                                               Visibility="{Binding ExtraFileCount,
+                                                   Converter={StaticResource CountToVisibility}}"/>
+                                </Grid>
+                            </Grid>
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

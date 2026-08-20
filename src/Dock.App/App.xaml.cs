@@ -435,7 +435,7 @@ public partial class App : System.Windows.Application
     private void StartClipboardMonitor()
     {
         _clipboardMonitor = new ClipboardMonitor();
-        _clipboardMonitor.ClipboardChanged += () => Dispatcher.Invoke(CaptureClipboardText);
+        _clipboardMonitor.ClipboardChanged += () => Dispatcher.Invoke(CaptureClipboard);
         _clipboardMonitor.Start();
     }
 
@@ -459,30 +459,112 @@ public partial class App : System.Windows.Application
         });
     }
 
-    private void CaptureClipboardText()
+    /// <summary>
+    /// Records whatever just landed on the clipboard.
+    ///
+    /// The order the three formats are tried in is the whole of the logic, and it is the part worth
+    /// reading twice: a copy usually offers several formats at once, and only one of them is what
+    /// the user meant.
+    ///
+    /// Files first, because a set of paths is never incidentally present -- an app that offers a
+    /// drop list is an app that was asked to copy files.
+    ///
+    /// Then text, ahead of the image, which is the counter-intuitive one. Excel, Word and
+    /// PowerPoint all put a *picture* of the selection on the clipboard next to its text, so trying
+    /// the image first turns every copied spreadsheet cell into a screenshot of a spreadsheet cell.
+    /// Nothing is lost by the other ordering: the things that genuinely are images -- a snip, a
+    /// browser's "copy image" -- put no plain text on at all, so they still fall through to here.
+    /// </summary>
+    private void CaptureClipboard()
     {
         try
         {
-            if (System.Windows.Clipboard.ContainsText())
-            {
-                var text = System.Windows.Clipboard.GetText();
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    _viewModel!.AddClipboardEntry(text);
+            var entry = ReadClipboardEntry();
+            if (entry is null)
+                return;
 
-                    // Nearly free: this monitor was already firing on every copy to build the
-                    // history, and nothing was showing that it had.
-                    _announcements?.Announce(DateTimeOffset.UtcNow, "Copied", "\uE8C8",
-                        Summarise(text));
-                }
-            }
+            _viewModel!.AddClipboardEntry(entry);
+
+            // Nearly free: this monitor was already firing on every copy to build the history, and
+            // nothing was showing that it had.
+            _announcements?.Announce(DateTimeOffset.UtcNow, "Copied", GlyphFor(entry.Kind),
+                Summarise(entry.Text));
         }
         catch (System.Runtime.InteropServices.COMException)
         {
             // Clipboard is transiently locked by whichever app just wrote to it -- that write is
             // exactly what triggered this notification, so nothing to capture is actually lost.
         }
+        catch (System.OutOfMemoryException)
+        {
+            // GetImage on something enormous. Dropping the entry is the right outcome; taking the
+            // whole app down over a copy that was too big to hold is not.
+        }
     }
+
+    private static ClipboardEntry? ReadClipboardEntry()
+    {
+        var now = DateTime.Now;
+
+        if (System.Windows.Clipboard.ContainsFileDropList())
+        {
+            var paths = System.Windows.Clipboard.GetFileDropList()
+                .Cast<string?>()
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => p!)
+                .ToList();
+
+            if (paths.Count > 0)
+                return ClipboardEntry.ForFiles(paths, now);
+        }
+
+        if (System.Windows.Clipboard.ContainsText())
+        {
+            var text = System.Windows.Clipboard.GetText();
+            if (!string.IsNullOrWhiteSpace(text))
+                return ClipboardEntry.ForText(text, now);
+        }
+
+        if (System.Windows.Clipboard.ContainsImage() && System.Windows.Clipboard.GetImage() is { } image)
+        {
+            var png = EncodePng(image);
+            if (png.Length > 0)
+                return ClipboardEntry.ForImage(png, image.PixelWidth, image.PixelHeight, now);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// PNG rather than the BitmapSource itself, because the history holds these for the life of the
+    /// process and a decoded 4K frame is four times the size of the file it came from. It is also
+    /// the format everything else in this app already passes pictures around as.
+    /// </summary>
+    private static byte[] EncodePng(System.Windows.Media.Imaging.BitmapSource image)
+    {
+        try
+        {
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+
+            using var stream = new System.IO.MemoryStream();
+            encoder.Save(stream);
+            return stream.ToArray();
+        }
+        catch (Exception)
+        {
+            // Whatever was on the clipboard claimed to be an image and would not encode as one.
+            // An entry that cannot be put back is not worth a row.
+            return [];
+        }
+    }
+
+    private static string GlyphFor(ClipboardKind kind) => kind switch
+    {
+        ClipboardKind.Image => "\uEB9F",
+        ClipboardKind.Files => "\uE8B7",
+        _ => "\uE8C8"
+    };
 
     /// <summary>
     /// A few words of whatever was copied, on one line. Newlines out, because a clipboard entry is
