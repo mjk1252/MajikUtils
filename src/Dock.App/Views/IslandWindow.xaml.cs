@@ -632,6 +632,8 @@ public partial class IslandWindow : Window
 
         // Back to being looked at rather than used. The pointer poll takes over from here and will
         // collapse it on the next tick if the pointer has already moved away.
+        ClearSearchDraft();
+
         foreach (var tab in Tabs)
             tab.IsChecked = false;
 
@@ -820,10 +822,27 @@ public partial class IslandWindow : Window
     private static Visibility VisibilityFor(IslandSection active, IslandSection section) =>
         active == section ? Visibility.Visible : Visibility.Collapsed;
 
+    /// <summary>
+    /// Empties the box if what is in it is a search.
+    ///
+    /// A query left behind is a trap: the island reopens showing Capture with a slash still sitting
+    /// in the box, and the next keystroke jumps back into results the user had finished with. Only
+    /// a search is cleared -- a half-typed task is worth keeping, which is the entire reason the
+    /// box holds its text at all.
+    /// </summary>
+    private void ClearSearchDraft()
+    {
+        if (CaptureViewModel.Parse(_capture.DraftText).Kind == CaptureKind.Search)
+            _capture.DraftText = string.Empty;
+    }
+
     private void OnTabChecked(object sender, RoutedEventArgs e)
     {
         if (_syncingTabs)
             return;
+
+        // Reaching for a scope is leaving the search, whatever is still in the box.
+        ClearSearchDraft();
 
         var tab = (ToggleButton)sender;
 

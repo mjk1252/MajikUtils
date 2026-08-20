@@ -105,6 +105,13 @@ public sealed class WingetService : IWingetService
                 {
                     "install", "--id", result.Id,
                     "--accept-package-agreements", "--accept-source-agreements",
+
+                    // Deliberate, and a real trade. There is no console for winget to prompt into
+                    // now, so a package whose installer wants an answer would hang forever waiting
+                    // for one nobody can give. Failing fast and saying so is the better of the two
+                    // bad outcomes; the package can still be installed from a terminal by hand.
+                    // (Elevation is unaffected -- a UAC prompt comes from the installer itself and
+                    // appears on the secure desktop whether or not we made a window.)
                     "--disable-interactivity"
                 },
                 UseShellExecute = false,
@@ -133,7 +140,7 @@ public sealed class WingetService : IWingetService
             var ok = process.ExitCode == 0;
 
             report?.Finished(
-                ok ? $"Installed {result.Name}" : $"{result.Name} failed to install",
+                ok ? $"Installed {result.Name}" : $"{result.Name} could not be installed",
                 ok);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)

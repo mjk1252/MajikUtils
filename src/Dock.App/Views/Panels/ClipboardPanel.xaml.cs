@@ -1,6 +1,8 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using System.Windows.Input;
 using Dock.Core.Models;
 using Dock.Core.ViewModels;
@@ -21,19 +23,35 @@ public partial class ClipboardPanel : UserControl
     private void OnSearchChanged(object sender, TextChangedEventArgs e) =>
         ViewModel.FilterClipboard(SearchBox.Text);
 
+    /// <summary>
+    /// Clicking the row copies the entry back. Clicking the pin inside it does not.
+    ///
+    /// The pin used to say so by marking PreviewMouseLeftButtonUp handled, which did stop the copy
+    /// -- and also stopped the pin. Handling a preview event suppresses the bubbling one entirely,
+    /// and the bubbling MouseLeftButtonUp is what ButtonBase raises Click from, so the toggle never
+    /// fired at all. Asking where the click came from leaves the button's own handling alone.
+    /// </summary>
     private void OnItemClick(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: ClipboardEntryViewModel item })
             return;
 
+        if (CameFromAToggle(e.OriginalSource as DependencyObject))
+            return;
+
         item.CopyCommand.Execute(null);
     }
 
-    /// <summary>
-    /// The pin sits inside the row, and the row's job is to copy. Handled on the preview so the
-    /// click stops here rather than also putting the entry back on the clipboard.
-    /// </summary>
-    private void OnPinClick(object sender, MouseButtonEventArgs e) => e.Handled = true;
+    private static bool CameFromAToggle(DependencyObject? source)
+    {
+        for (var node = source; node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is ToggleButton)
+                return true;
+        }
+
+        return false;
+    }
 
     private void OnClearClick(object sender, MouseButtonEventArgs e)
     {

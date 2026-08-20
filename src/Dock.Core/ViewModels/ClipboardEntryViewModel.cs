@@ -74,12 +74,15 @@ public partial class ClipboardEntryViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Whether this entry answers a search. Matches the words a row actually shows -- the preview
-    /// for text, the file names for a drop list -- rather than the raw payload, so what you can
-    /// find is what you can see.
+    /// Whether this entry answers a search.
+    ///
+    /// Against the whole payload, not the preview. The preview is truncated at 140 characters, and
+    /// searching that meant a copied page could not be found by any word past the first line or
+    /// two -- which is exactly the entry a search is for. What a row *shows* being what you can
+    /// find sounds tidy right up against the case where the row shows a hundredth of it.
     /// </summary>
     public bool Matches(string query) =>
-        Preview.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+        Entry.Text.Contains(query, StringComparison.OrdinalIgnoreCase) ||
         Entry.Paths.Any(p => p.Contains(query, StringComparison.OrdinalIgnoreCase));
 
     private static string BuildPreview(string text)

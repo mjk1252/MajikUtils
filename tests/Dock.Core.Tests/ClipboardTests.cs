@@ -245,6 +245,21 @@ public class ClipboardTests
         Assert.False(text.Matches("slow"));
     }
 
+    /// <summary>
+    /// The preview stops at 140 characters. Searching that meant a copied page could not be found
+    /// by any word past its first line or two -- which is exactly the entry a search is for.
+    /// </summary>
+    [Fact]
+    public void Matches_FindsTextPastTheEndOfThePreview()
+    {
+        var long_ = new string('x', 400) + " needle";
+        var vm = new ClipboardEntryViewModel(
+            ClipboardEntry.ForText(long_, DateTime.Now), new FakeWriter());
+
+        Assert.DoesNotContain("needle", vm.Preview);
+        Assert.True(vm.Matches("needle"));
+    }
+
     [Fact]
     public void Matches_FindsAFileByPathAsWellAsName()
     {

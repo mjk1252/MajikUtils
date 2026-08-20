@@ -193,8 +193,7 @@
                                 <ToggleButton Grid.Column="1" Style="{StaticResource PinButton}"
                                               VerticalAlignment="Top" Margin="6,0,0,0"
                                               ToolTip="Keep this entry"
-                                              IsChecked="{Binding IsPinned}"
-                                              PreviewMouseLeftButtonUp="OnPinClick"/>
+                                              IsChecked="{Binding IsPinned}"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
