@@ -13,6 +13,61 @@ namespace Dock.Interop.Shell;
 /// </summary>
 public sealed class WingetService : IWingetService
 {
+    /// <summary>
+    /// Runs winget and collects what it said, without deadlocking on its own output.
+    ///
+    /// Both call sites used to redirect stderr and then never read it. A child process writing more
+    /// than the pipe buffer holds -- a few kilobytes -- blocks until somebody drains it, so winget
+    /// would stop mid-write, never exit, and the ReadToEnd waiting on *stdout* would wait forever
+    /// for an end that could no longer come. Nothing in the app would report it: the search spinner
+    /// simply never stopped, and an install's ring never finished turning.
+    ///
+    /// So stderr is drained on its own task while stdout is read here, and the whole thing is
+    /// bounded: a winget that has genuinely wedged gets killed rather than owning a thread until
+    /// the app closes.
+    /// </summary>
+    private static (int ExitCode, string Output)? Run(ProcessStartInfo info, TimeSpan timeout)
+    {
+        using var process = Process.Start(info);
+        if (process is null)
+            return null;
+
+        // Started before the synchronous read below, or the two pipes take it in turns to fill.
+        var draining = process.StandardError.ReadToEndAsync();
+
+        var output = process.StandardOutput.ReadToEnd();
+
+        if (!process.WaitForExit((int)timeout.TotalMilliseconds))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (Exception)
+            {
+                // It exited between the check and the kill, or it is not ours to kill. Either way
+                // there is nothing further to do about it.
+            }
+
+            return null;
+        }
+
+        // Best effort: the process is gone, so this has already completed or never will.
+        draining.Wait(TimeSpan.FromSeconds(1));
+
+        return (process.ExitCode, output);
+    }
+
+    /// <summary>How long a search may take before it is treated as wedged.</summary>
+    private static readonly TimeSpan SearchTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// And an install. Generous, because a large package on a slow connection genuinely takes
+    /// minutes -- but not unbounded, because the island is showing a ring the whole time and a ring
+    /// that never stops is worse than one that stops on a failure.
+    /// </summary>
+    private static readonly TimeSpan InstallTimeout = TimeSpan.FromMinutes(30);
+
     public IReadOnlyList<WingetResult> Search(string query)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -31,12 +86,10 @@ public sealed class WingetService : IWingetService
                 CreateNoWindow = true
             };
 
-            using var process = Process.Start(info);
-            if (process is null)
+            if (Run(info, SearchTimeout) is not { } run)
                 return [];
 
-            output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(15000);
+            output = run.Output;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
         {
@@ -124,20 +177,13 @@ public sealed class WingetService : IWingetService
                 WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
             };
 
-            using var process = Process.Start(info);
-            if (process is null)
+            if (Run(info, InstallTimeout) is not { } run)
             {
-                report?.Finished($"Could not start winget", succeeded: false);
+                report?.Finished($"{result.Name} could not be installed", succeeded: false);
                 return;
             }
 
-            // Read rather than discard: winget writes a progress bar to stdout and blocks once the
-            // pipe buffer fills, so a caller that ignores the output does not get a silent install,
-            // it gets a stalled one.
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            var ok = process.ExitCode == 0;
+            var ok = run.ExitCode == 0;
 
             report?.Finished(
                 ok ? $"Installed {result.Name}" : $"{result.Name} could not be installed",

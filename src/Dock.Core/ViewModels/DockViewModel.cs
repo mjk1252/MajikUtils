@@ -217,7 +217,16 @@ public partial class DockViewModel : ObservableObject
         _clipboardWriter = writer;
 
         foreach (var entry in _clipboardStore.Load().OrderByDescending(e => e.CapturedAt))
-            ClipboardHistory.Add(new ClipboardEntryViewModel(entry, writer, SavePinned, isPinned: true));
+        {
+            var restored = new ClipboardEntryViewModel(entry, writer, SavePinned, isPinned: true);
+
+            // The same treatment a freshly copied entry gets. Restored pins went without, so a
+            // pinned set of files came back after a restart as a column of names with a gap where
+            // the icons had been.
+            AttachIcons(restored);
+
+            ClipboardHistory.Add(restored);
+        }
 
         FilterClipboard(_clipboardQuery);
     }
@@ -240,11 +249,13 @@ public partial class DockViewModel : ObservableObject
             ClipboardResults.Add(entry);
     }
 
-    private void SavePinned()
-    {
+    /// <summary>
+    /// Writes the pins out. Deliberately does not re-filter: pinning cannot change what matches the
+    /// query, and rebuilding the results collection would tear down and recreate the very row the
+    /// pointer is sitting on -- so the button being clicked would vanish and reappear underneath it.
+    /// </summary>
+    private void SavePinned() =>
         _clipboardStore.Save(ClipboardHistory.Where(e => e.IsPinned).Select(e => e.Entry));
-        FilterClipboard(_clipboardQuery);
-    }
 
     /// <summary>Convenience for the commonest kind, and what the tests mostly reach for.</summary>
     public void AddClipboardEntry(string text)
