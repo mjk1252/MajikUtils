@@ -23,7 +23,7 @@
          independent of this and set by build-velopack-release.ps1's -Version at pack time (that
          script defaults -Version to this line). installer/MajikUtils.iss's AppVersion is still
          bumped separately alongside both. -->
-    <Version>2.0.1</Version>
+    <Version>2.1.0</Version>
     <!-- Program.Main has to run before WPF's own generated one would, so Velopack sees a launch
          carrying its install/update/uninstall flags before anything else does. -->
     <StartupObject>Dock.App.Program</StartupObject>
