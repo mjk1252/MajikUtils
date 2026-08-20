@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MajikUtils Island</title>
+<meta name="description" content="A small island that hangs from the top edge of your screen. One box for tasks, timers, sums and search, plus a clipboard that keeps screenshots.">
+
+<meta property="og:title" content="MajikUtils Island">
+<meta property="og:description" content="A small island that hangs from the top edge of your screen. One box for tasks, timers, sums and search, plus a clipboard that keeps screenshots.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://mjk1252.github.io/MajikUtils/assets/shelf.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%23101010%22/><rect x=%225%22 y=%2213%22 width=%2222%22 height=%226%22 rx=%223%22 fill=%22%23FF5C33%22/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  /* One deliberate visual world, not two. The product is a dark overlay fused to a screen edge and
+     every screenshot on this page is near-black; a light ground would leave them floating in it.
+     So there is no prefers-color-scheme block, and every colour is painted explicitly so the page
+     holds whichever theme the host is in. */
+  :root {
+    --ground: #0E0F13;
+    --raised: #15171D;
+    --line: #23262F;
+    --line-soft: #1A1D24;
+
+    --text: #EEF0F5;
+    --text-dim: #9AA1B1;
+    --text-faint: #656C7C;
+
+    /* The app pulls two colours off whatever artwork is playing, roughly 45 degrees apart, and
+       uses the pair. So does this page: never one accent alone. */
+    --warm: #FF5C33;
+    --cool: #6E9BFF;
+
+    --measure: 66ch;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1020px;
+    margin: 0 auto;
+    padding: 0 28px 96px;
+  }
+
+  .col { max-width: var(--measure); }
+
+  h1, h2, h3 {
+    font-family: Archivo, "Archivo", ui-sans-serif, system-ui, sans-serif;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  h1 {
+    font-weight: 800;
+    font-size: clamp(2.6rem, 6.4vw, 4.3rem);
+    line-height: 0.98;
+    letter-spacing: -0.033em;
+  }
+
+  h2 {
+    font-weight: 700;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.08;
+    letter-spacing: -0.022em;
+  }
+
+  h3 {
+    font-weight: 600;
+    font-size: 1.02rem;
+    letter-spacing: -0.008em;
+  }
+
+  p { margin: 0; }
+
+  a { color: var(--text); }
+
+  /* ── the edge ────────────────────────────────────────────────────────────
+     Not a drawing of the island: a recording of it. Thirty-four frames of the
+     real collapsed pill, bars moving to whatever was actually playing.
+
+     The strip behind it is #141414 because that is the exact colour the capture
+     has around the pill — matching it means the recording has no edges, and the
+     band reads as what it is, the top of a screen. It melts into the page below
+     rather than stopping at a seam. */
+  .edge {
+    background: #141414;
+    display: flex;
+    justify-content: center;
+  }
+
+  .edge img {
+    display: block;
+    width: 288px;
+    height: 46px;
+  }
+
+  .edge-fade {
+    height: 88px;
+    background: linear-gradient(#141414, var(--ground));
+  }
+
+  /* ── hero ──────────────────────────────────────────────────────────────── */
+  .hero { padding: 4px 0 0; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 22px;
+  }
+
+  .lede {
+    font-size: 1.24rem;
+    color: var(--text-dim);
+    margin-top: 26px;
+    max-width: 54ch;
+  }
+
+  /* The one rule on the page that carries both accents, because it stands for the pair. */
+  .pair-rule {
+    height: 2px;
+    border: 0;
+    margin: 46px 0 0;
+    background: linear-gradient(90deg, var(--warm), var(--cool) 62%, transparent);
+  }
+
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px 20px;
+    margin-top: 34px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 22px;
+    border-radius: 10px;
+    background: var(--warm);
+    color: #140602;
+    font-weight: 600;
+    font-size: 0.97rem;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform 120ms ease, filter 120ms ease;
+  }
+
+  .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+  .btn-quiet {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--line);
+  }
+
+  .btn-quiet:hover { border-color: var(--cool); filter: none; }
+
+  a:focus-visible, .btn:focus-visible {
+    outline: 2px solid var(--cool);
+    outline-offset: 3px;
+  }
+
+  .meta {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    color: var(--text-faint);
+  }
+
+  /* ── sections ──────────────────────────────────────────────────────────── */
+  section { margin-top: 104px; }
+
+  .section-head { display: flex; flex-direction: column; gap: 16px; }
+
+  .shot {
+    margin-top: 34px;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--line-soft);
+    background: #08090C;
+    line-height: 0;
+  }
+
+  .shot img { width: 100%; height: auto; display: block; }
+
+  /* The clipboard list genuinely continues past the crop, so it fades rather than stopping dead. */
+  .shot-fade { position: relative; }
+  .shot-fade::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 84px;
+    background: linear-gradient(to bottom, transparent, #08090C);
+    pointer-events: none;
+  }
+
+  figcaption {
+    margin-top: 12px;
+    font-size: 14px;
+    color: var(--text-faint);
+  }
+
+  figure { margin: 0; }
+
+  /* ── the grammar ───────────────────────────────────────────────────────── */
+  .grammar-wrap { overflow-x: auto; margin-top: 30px; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 520px;
+    font-size: 15.5px;
+  }
+
+  th {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 500;
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    padding: 0 0 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  td {
+    padding: 15px 0;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: baseline;
+  }
+
+  td:first-child { width: 40%; padding-right: 28px; }
+
+  code, kbd {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.93em;
+  }
+
+  td code { color: var(--warm); }
+
+  kbd {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-size: 0.82em;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  /* ── scopes ────────────────────────────────────────────────────────────── */
+  .scopes {
+    list-style: none;
+    padding: 0;
+    margin: 32px 0 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+    gap: 1px;
+    background: var(--line-soft);
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .scopes li {
+    background: var(--ground);
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .scopes p { font-size: 15px; color: var(--text-dim); }
+
+  .note {
+    margin-top: 30px;
+    padding: 20px 24px;
+    border-left: 2px solid var(--cool);
+    background: var(--raised);
+    border-radius: 0 10px 10px 0;
+    font-size: 15.5px;
+    color: var(--text-dim);
+  }
+
+  .note strong { color: var(--text); font-weight: 600; }
+
+  /* ── close ─────────────────────────────────────────────────────────────── */
+  .close {
+    margin-top: 112px;
+    padding-top: 44px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 28px;
+  }
+
+  .specs {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    color: var(--text-faint);
+  }
+</style>
+</head>
+<body>
+
+
+<header class="edge">
+  <img src="assets/pill.gif" width="288" height="46"
+       alt="The collapsed island hanging from the top of a screen: album art, the track name, the artist, and four bars moving with the music.">
+</header>
+<div class="edge-fade"></div>
+
+<div class="wrap">
+
+  <div class="hero col">
+    <p class="eyebrow">Windows 11 · WPF · open source</p>
+    <h1>The top edge of your screen was doing nothing.</h1>
+    <p class="lede">
+      MajikUtils hangs a small island from it. Glance at it to see what is playing. Click it and it
+      becomes the one place you type — a task, a timer, a sum, a search across everything your
+      machine already knows.
+    </p>
+
+    <hr class="pair-rule">
+
+    <div class="cta-row">
+      <a class="btn" href="https://github.com/mjk1252/MajikUtils/releases/latest">Download for Windows 11</a>
+      <a class="btn btn-quiet" href="https://github.com/mjk1252/MajikUtils">Source on GitHub</a>
+      <span class="meta">v2.3.4 · per-user install · updates itself</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head col">
+      <h2>One box. What you type decides what it becomes.</h2>
+      <p>
+        There is no mode to pick and nothing to click first. A line under the box tells you what
+        Enter is about to do, before you press it — so the grammar is something you notice rather
+        than something you learn.
+      </p>
+    </div>
+
+    <div class="grammar-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">You type</th><th scope="col">What happens</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>renew the domain</code></td><td>A task, to tick off later.</td></tr>
+          <tr><td><code>25m</code> or <code>1h30</code></td><td>A countdown, with a ring on the island.</td></tr>
+          <tr><td><code>@9am call Tom</code></td><td>A countdown to nine, which says <em>call Tom</em> when it fires.</td></tr>
+          <tr><td><code>23 * 1.2</code></td><td>Shows <code>27.6</code>. Enter copies it.</td></tr>
+          <tr><td><code>.wifi is on the router</code></td><td>A note.</td></tr>
+          <tr><td><code>/firefox</code></td><td>Searches apps, folder stacks, recent files and clipboard.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note col">
+      <strong>It never eats what you typed.</strong> <code>@home buy milk</code> is a task, because what
+      follows the at-sign is not a clock. <code>buy 2 x 4 timber</code> is a task, because the
+      calculator refuses anything it cannot read whole. A grammar that swallows a sentence is worse
+      than one that occasionally under-reads it.
+    </div>
+
+    <figure class="shot-fade">
+      <div class="shot"><img src="assets/shelf.png" alt="The island open on the Shelf scope, showing the capture box and its hint line above a dropped file."></div>
+      <figcaption>The box sits above whichever scope is open, so it works from anywhere.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <h2>A clipboard that keeps the screenshot.</h2>
+      <p>
+        Text, images and copied files. A screenshot is the thing on that list you most cannot get
+        back — take a second one and the first is gone — so images are held and shown as themselves,
+        and drag straight out into whatever wants them.
+      </p>
+    </div>
+
+    <figure>
+      <div class="shot shot-fade"><img src="assets/clipboard.png" alt="The clipboard scope with its search box and a list of copied entries."></div>
+      <figcaption>Search it, and pin anything worth keeping.</figcaption>
+    </figure>
+
+    <div class="note col">
+      <strong>Only what you pin is written down.</strong> The rest of the history lives in memory and
+      dies with the app. A clipboard sees passwords, licence keys and one-time codes, and quietly
+      keeping all of them in a file between sessions would be a liability sold as a convenience.
+      Pinning is you saying keep this — and a pin survives the list filling up, <em>Clear</em>, and a
+      restart.
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <h2>Seven places, one keystroke apart.</h2>
+      <p>
+        The lit scope says its name; the rest stay out of the way as icons. Arrow keys and Enter work
+        throughout, so a search never needs the mouse.
+      </p>
+    </div>
+
+    <ul class="scopes">
+      <li><h3>Capture</h3><p>The box, and a feed of everything you have put through it.</p></li>
+      <li><h3>Shelf</h3><p>Drag a file at the island and it opens ready to drop into.</p></li>
+      <li><h3>Clipboard</h3><p>Text, images and files, searchable and pinnable.</p></li>
+      <li><h3>Apps</h3><p>Everything installed, plus anything winget can fetch.</p></li>
+      <li><h3>Recent</h3><p>What you had open, without going to find it.</p></li>
+      <li><h3>Stacks</h3><p>A folder fanned out from its own taskbar button.</p></li>
+      <li><h3>Mixer</h3><p>Per-application volume, where the sound is coming from.</p></li>
+    </ul>
+
+    <figure>
+      <div class="shot"><img src="assets/apps.png" alt="The Apps scope listing installed applications with their icons."></div>
+      <figcaption>Installing something shows its progress on the island, not in a console window.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="section-head col">
+      <h2>It gets out of the way.</h2>
+      <p>
+        The island never takes focus until you ask it to, lets clicks pass straight through whenever
+        its controls are not showing, and takes itself off screen when a game or a full-screen video
+        owns the monitor. Pointing at it opens it. Clicking holds it open until you click away or
+        press <kbd>Esc</kbd>.
+      </p>
+    </div>
+
+    <div class="note col">
+      <strong>The colour comes off the album art.</strong> The progress bar, the lit scope and the
+      focused input all take their hue from whatever is playing — the same pair of colours the four
+      bars in the pill have always used.
+    </div>
+  </section>
+
+  <div class="close">
+    <div>
+      <h2>Put something on the edge.</h2>
+      <div class="cta-row">
+        <a class="btn" href="https://github.com/mjk1252/MajikUtils/releases/latest">Download v2.3.4</a>
+        <a class="btn btn-quiet" href="https://github.com/mjk1252/MajikUtils">Read the source</a>
+      </div>
+    </div>
+
+    <ul class="specs">
+      <li>Windows 11 · x64</li>
+      <li>Installs per user — no admin</li>
+      <li>Self-contained, .NET 9</li>
+      <li>Updates in the background</li>
+      <li>Hotkeys: <kbd>Ctrl+Alt+Space</kbd> · <kbd>Ctrl+Alt+Shift+V</kbd></li>
+    </ul>
+  </div>
+
+</div>
+
+</body>
+</html>

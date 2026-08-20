@@ -2,6 +2,16 @@
 
 A set of Windows 11 utilities that live in an island at the top of the screen, built in WPF (.NET 9).
 
+<p align="center">
+  <img src="docs/assets/pill.gif" width="288" height="46"
+       alt="The collapsed island: album art, track name, artist, and four bars moving with the music.">
+</p>
+
+<p align="center">
+  <a href="https://mjk1252.github.io/MajikUtils/"><b>See it</b></a> &nbsp;·&nbsp;
+  <a href="https://github.com/mjk1252/MajikUtils/releases/latest"><b>Download</b></a>
+</p>
+
 **The island** is the whole app. It hangs from the top edge of a monitor as a notch fused to the
 screen edge or, if you prefer, a pill floating just below it — at either end of that edge or in the
 middle, on whichever monitor you pick (*Settings*).
@@ -47,6 +57,10 @@ without your hands leaving the keyboard. `Ctrl+Alt+Space` opens the island strai
 Pointing at the island opens it; clicking holds it open until you click away or press Esc. It never
 takes focus until you ask it to, lets clicks through whenever its controls aren't showing, and gets
 out of the way of full-screen apps.
+
+![The island open on the Shelf scope, showing the capture box above a dropped file](docs/assets/shelf.png)
+
+![The Clipboard scope, with its search box over a list of copied entries](docs/assets/clipboard.png)
 
 One thing still lives on the taskbar:
 
