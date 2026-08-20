@@ -11,9 +11,6 @@ public partial class LauncherPanel : UserControl
 {
     private readonly DispatcherTimer _wingetDebounceTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
 
-    /// <summary>Raised when a winget install starts, so the host window can show progress on its taskbar button.</summary>
-    public event Action? InstallStarted;
-
     public IWingetService? WingetService { get; set; }
 
     public LauncherPanel()
@@ -29,19 +26,6 @@ public partial class LauncherPanel : UserControl
     public void FocusSearch()
     {
         SearchBox.SelectAll();
-        Keyboard.Focus(SearchBox);
-    }
-
-    /// <summary>
-    /// Seeds the search from somewhere else -- today the island's capture box, which routes a line
-    /// beginning with a slash here rather than making the user find this panel and retype it.
-    /// Assigning Text raises TextChanged, so the filter and the winget debounce run exactly as they
-    /// would have if the characters had been typed into the box.
-    /// </summary>
-    public void SetQuery(string query)
-    {
-        SearchBox.Text = query;
-        SearchBox.CaretIndex = SearchBox.Text.Length;
         Keyboard.Focus(SearchBox);
     }
 
@@ -94,5 +78,4 @@ public partial class LauncherPanel : UserControl
     /// The Button's own Command does the installing; this only tells the host that one is under
     /// way. Click and Command both fire for the same press, so nothing is being intercepted here.
     /// </summary>
-    private void OnInstallClick(object sender, RoutedEventArgs e) => InstallStarted?.Invoke();
 }

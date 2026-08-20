@@ -63,7 +63,6 @@
                                 <TextBlock Text="{Binding Name}" Foreground="White"
                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 <Button Grid.Column="1" Content="Install" Command="{Binding InstallCommand}"
-                                        Click="OnInstallClick"
                                         Style="{StaticResource ChipButton}"
                                         VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </Grid>

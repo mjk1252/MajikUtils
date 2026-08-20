@@ -264,6 +264,13 @@ public partial class IslandWindow : Window
         foreach (var collection in new INotifyCollectionChanged[]
                  {
                      _capture.Items,
+
+                     // ClipboardResults, not just the history behind it: the panel draws the
+                     // filtered view, so typing in its search box is a change in how tall the
+                     // section wants to be. Watching only the history meant narrowing a list of
+                     // twenty to one left the island still sized for twenty.
+                     dock.ClipboardResults,
+
                      dock.ShelfItems, dock.RecentFiles, dock.ClipboardHistory,
                      dock.LauncherResults, dock.WingetResults, dock.Stacks,
                      privacy.Apps, mixer.Sessions
