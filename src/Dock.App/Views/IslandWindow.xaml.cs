@@ -25,6 +25,13 @@ public enum IslandSection
 {
     /// <summary>The scratchpad -- todo list and notes. What a hover gets, and the default.</summary>
     Quick,
+
+    /// <summary>
+    /// Results from the one box, across everything the app can find. Reached by typing a slash
+    /// rather than by a scope chip, because it is a mode of the capture box rather than a place:
+    /// the strip keeps Capture lit while you are in it.
+    /// </summary>
+    Search,
     Shelf,
     Clipboard,
     Launcher,
@@ -94,6 +101,7 @@ public partial class IslandWindow : Window
     private readonly IslandActivityHost _activities;
     private readonly TimerActivity _timer;
     private readonly CaptureViewModel _capture;
+    private readonly CommandPaletteViewModel _palette;
 
     /// <summary>
     /// Hover is polled rather than taken from MouseEnter/MouseLeave. The pill is click-through
@@ -187,6 +195,7 @@ public partial class IslandWindow : Window
         PrivacyViewModel privacy,
         TimerActivity timer,
         CaptureViewModel capture,
+        CommandPaletteViewModel palette,
         DockViewModel dock,
         IWingetService wingetService,
         IAudioLevelSource audio,
@@ -197,6 +206,7 @@ public partial class IslandWindow : Window
         _activities = activities;
         _timer = timer;
         _capture = capture;
+        _palette = palette;
         AudioSource = audio;
 
         InitializeComponent();
@@ -208,6 +218,13 @@ public partial class IslandWindow : Window
         Bubble.DataContext = activities;
         ActivityRows.DataContext = activities;
         QuickView.DataContext = capture;
+        CaptureBar.DataContext = capture;
+        SearchView.DataContext = palette;
+
+        // A result that has been run means the island has done its job. Unpinning here rather than
+        // inside the panel keeps the panel ignorant of the window, which is the only reason it can
+        // be a plain UserControl.
+        SearchView.Activated += () => SetPinned(false);
 
         // The re-hosted panels and the stats readout all speak to the dock view model; the rest of
         // this window speaks to the media one. The mixer is the exception among the exceptions --
@@ -223,8 +240,12 @@ public partial class IslandWindow : Window
 
         // KeyBinding.Command in XAML doesn't inherit DataContext -- InputBindings sit outside the
         // logical tree -- so Enter is wired here instead.
-        CaptureInput.KeyDown += OnCaptureKeyDown;
-        CaptureInput.TextChanged += (_, _) => UpdateCaptureHint();
+        CaptureInput.PreviewKeyDown += OnCaptureKeyDown;
+        CaptureInput.TextChanged += (_, _) =>
+        {
+            UpdateCaptureHint();
+            UpdateSearch();
+        };
 
         // Typing needs real Win32 focus, which this window only takes while it is pinned; clicking
         // into the box is also a statement that the user means to stay a while.
@@ -627,6 +648,7 @@ public partial class IslandWindow : Window
         _section = section;
 
         QuickView.Visibility = VisibilityFor(section, IslandSection.Quick);
+        SearchView.Visibility = VisibilityFor(section, IslandSection.Search);
         ShelfView.Visibility = VisibilityFor(section, IslandSection.Shelf);
         ClipboardView.Visibility = VisibilityFor(section, IslandSection.Clipboard);
         LauncherView.Visibility = VisibilityFor(section, IslandSection.Launcher);
@@ -638,8 +660,13 @@ public partial class IslandWindow : Window
         // full height: a shelf holding three files should not leave the island mostly empty, and a
         // clipboard history of two hundred entries must not grow it off the bottom of the screen.
         // Capture needs no ceiling of its own -- its feed is capped at CaptureViewModel.MaxItems.
-        SectionHost.MaxHeight = section == IslandSection.Quick ? double.PositiveInfinity : SectionHeight;
-        SectionHost.MinHeight = section == IslandSection.Quick ? 0 : SectionMinHeight;
+        // Capture and Search both size to their contents: Capture's feed is capped at
+        // CaptureViewModel.MaxItems, and Search's list has a MaxHeight of its own. The rest are
+        // lists of unknown length and need the ceiling.
+        var sizesItself = section is IslandSection.Quick or IslandSection.Search;
+
+        SectionHost.MaxHeight = sizesItself ? double.PositiveInfinity : SectionHeight;
+        SectionHost.MinHeight = sizesItself ? 0 : SectionMinHeight;
 
         UpdateChrome();
         UpdateNowPlaying();
@@ -667,7 +694,8 @@ public partial class IslandWindow : Window
                 LauncherView.FocusSearch();
                 break;
 
-            case IslandSection.Quick:
+            // Everything else types into the one box, which is the point of there being one.
+            default:
                 Keyboard.Focus(CaptureInput);
                 break;
         }
@@ -704,6 +732,7 @@ public partial class IslandWindow : Window
         var open = _pinned || _section != IslandSection.Quick;
 
         NavBar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        CaptureBar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         SectionHost.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
 
         // Which scope is lit depends on being pinned as much as on which section is open - Capture
@@ -768,6 +797,8 @@ public partial class IslandWindow : Window
             IslandSection.Recent => RecentTab,
             IslandSection.Stacks => StacksTab,
             IslandSection.Mixer => MixerTab,
+
+            // Search included: it is a mode of the box, and the box belongs to Capture.
             _ => _pinned ? QuickTab : null
         };
 
@@ -855,29 +886,107 @@ public partial class IslandWindow : Window
     }
 
     /// <summary>
-    /// Commits whatever is in the capture box. The view model decides what the line meant and acts
-    /// on it; a search is the one reading it cannot carry out itself, because the launcher is a
-    /// place in this window and the view model knows nothing about windows.
+    /// The box's keyboard, which is now also the search results' keyboard.
+    ///
+    /// The caret never leaves this box: the arrows move a selection in the list below it and Enter
+    /// runs the highlighted row. That is the arrangement every search box worth using has, and it
+    /// is what the separate palette window was doing behind its own copy of this handler.
+    ///
+    /// Preview rather than KeyDown, because a TextBox consumes Up and Down for caret movement
+    /// before an ordinary handler ever sees them.
     /// </summary>
     private void OnCaptureKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter)
-            return;
+        var searching = _section == IslandSection.Search;
 
+        switch (e.Key)
+        {
+            case Key.Down when searching:
+                e.Handled = SearchView.MoveSelection(1);
+                return;
+
+            case Key.Up when searching:
+                e.Handled = SearchView.MoveSelection(-1);
+                return;
+
+            case Key.Enter when searching:
+                // Cleared first: activating takes the foreground and puts the island away, and a
+                // slash left in the box would put it straight back into search on the next open.
+                var ran = SearchView.ActivateSelected();
+                if (ran)
+                {
+                    _capture.DraftText = string.Empty;
+                    UpdateCaptureHint();
+                }
+
+                e.Handled = true;
+                return;
+
+            case Key.Enter:
+                Commit();
+                e.Handled = true;
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Commits whatever is in the capture box. The view model decides what the line meant and acts
+    /// on it -- see CaptureViewModel for the grammar.
+    /// </summary>
+    private void Commit()
+    {
         // Pinned first: anything typed here means the user is working in the panel rather than
         // glancing at it, and starting a timer used to require reaching for a chip to say so.
         SetPinned(true);
 
-        var intent = _capture.Submit(DateTimeOffset.UtcNow, _timer);
+        _capture.Submit(DateTimeOffset.UtcNow, _timer);
+        UpdateCaptureHint();
+    }
 
-        if (intent.Kind == CaptureKind.Search)
+    /// <summary>
+    /// Keeps the open section and the search results in step with the box.
+    ///
+    /// A leading slash is the whole gesture: typing one drops into the results, deleting it comes
+    /// back out. Live rather than on Enter, because a search you have to commit before seeing is
+    /// not a search box, it is a form.
+    /// </summary>
+    private void UpdateSearch()
+    {
+        var intent = CaptureViewModel.Parse(CaptureInput.Text);
+        var wanted = intent.Kind == CaptureKind.Search;
+
+        if (wanted)
         {
-            SelectSection(IslandSection.Launcher);
-            LauncherView.SetQuery(intent.Text);
+            // Pinning here is what makes the palette hotkey work: it prefills a slash, which lands
+            // in this method, which opens the island for real rather than leaving a hover panel
+            // that vanishes the moment the pointer moves.
+            SetPinned(true);
+
+            if (_section != IslandSection.Search)
+                SelectSection(IslandSection.Search);
+
+            SearchView.Search(intent.Text);
+            ResizeForContentChange();
+            return;
         }
 
-        UpdateCaptureHint();
-        e.Handled = true;
+        if (_section == IslandSection.Search)
+            SelectSection(IslandSection.Quick);
+    }
+
+    /// <summary>
+    /// Opens the island as a search box, which is what the palette hotkey does now. The slash is
+    /// prefilled rather than implied, so the box on screen says the same thing it would if the user
+    /// had typed it.
+    /// </summary>
+    public void ShowSearch()
+    {
+        SetShown(true);
+        SetPinned(true);
+
+        _capture.DraftText = "/";
+        CaptureInput.CaretIndex = CaptureInput.Text.Length;
+        Keyboard.Focus(CaptureInput);
     }
 
     /// <summary>
@@ -888,6 +997,14 @@ public partial class IslandWindow : Window
     private void UpdateCaptureHint()
     {
         var intent = CaptureViewModel.Parse(CaptureInput.Text);
+
+        // A magnifier while the line is a search, a pencil the rest of the time: the box has two
+        // jobs and this is the cheapest way for it to say which one it is doing.
+        CaptureGlyph.Text = intent.Kind == CaptureKind.Search ? "\uE721" : "\uE70F";
+
+        CapturePlaceholder.Text = intent.Kind == CaptureKind.Search
+            ? "Search everything"
+            : "Type a task, 25m, .note or /search";
 
         CaptureHint.Text = intent.Kind switch
         {
@@ -901,7 +1018,9 @@ public partial class IslandWindow : Window
             // Start menu, and this line is already where the box says what it thinks.
             CaptureKind.Math => $"= {intent.Text}   ·   Enter copies it",
 
-            CaptureKind.Search => "Enter searches your apps",
+            CaptureKind.Search => intent.Text.Length == 0
+                ? "Search apps, stacks, recent files and clipboard"
+                : "Up and down to choose, Enter to open",
             CaptureKind.Note => "Enter files this as a note",
             CaptureKind.Todo => "Enter adds this as a task",
             _ => "25m timer     @9am reminder     2+2     .note     /search"

@@ -44,8 +44,14 @@ public partial class App : System.Windows.Application
 
     private HotkeyListener? _hotkeys;
     private VolumeMixerSource? _volumeMixerSource;
+
+    /// <summary>
+    /// The island's one slot for long-running work. Shared rather than one per job: the pill has
+    /// room for a single ring, and two installs at once is a rarer thing than the complexity of
+    /// deciding which of them gets to be drawn.
+    /// </summary>
+    private ProgressActivity? _progress;
     private VolumeMixerActivity? _volumeMixer;
-    private CommandPaletteWindow? _paletteWindow;
 
     private readonly UpdateService _updates = new();
 
@@ -141,7 +147,7 @@ public partial class App : System.Windows.Application
         _viewModel.AttachClipboardWriter(new ClipboardWriter());
 
         var wingetService = new WingetService();
-        _viewModel.AttachWingetService(wingetService);
+        _viewModel.AttachWingetService(wingetService, new IslandProgressReporter(this));
         LoadInstalledAppsAsync();
 
         var startupSettings = _settingsStore.Load();
@@ -150,7 +156,6 @@ public partial class App : System.Windows.Application
         CreateIsland(wingetService, startupSettings);
         _announcements!.Enabled = startupSettings.ShowAnnouncements;
         CreateStackWindows();
-        CreatePalette();
         StartUpdateChecks();
         StartClipboardMonitor();
         StartHotkeys(startupSettings);
@@ -178,6 +183,29 @@ public partial class App : System.Windows.Application
         // panel. A plain launch (startup, first install) leaves every button sitting minimised.
         if (requestedPanel is not null)
             ShowPanel(requestedPanel);
+    }
+
+    /// <summary>
+    /// Puts a background job onto the island.
+    ///
+    /// This is where the marshalling lives, and it lives here because this is the first layer that
+    /// knows there is a dispatcher at all: <c>IWingetProgress</c> is called from whatever thread is
+    /// doing the work, and Dock.Core has no idea what a UI thread is.
+    /// </summary>
+    private sealed class IslandProgressReporter(App app) : IWingetProgress
+    {
+        public void Progress(string label, double? fraction) =>
+            app.Dispatcher.Invoke(() => app._progress?.Report(label, fraction));
+
+        public void Finished(string label, bool succeeded) =>
+            app.Dispatcher.Invoke(() =>
+            {
+                // A failure is worth a moment of the pill too. It says what happened and goes on
+                // its own, which is more than the console window it replaced ever managed.
+                app._progress?.Finish(DateTimeOffset.UtcNow, label);
+                app._announcements?.Announce(DateTimeOffset.UtcNow, label,
+                    succeeded ? "\uE930" : "\uE783", string.Empty);
+            });
     }
 
     private static string? ParsePanelArgument(string[] args)
@@ -210,6 +238,7 @@ public partial class App : System.Windows.Application
         _privacyViewModel = new PrivacyViewModel(_iconProvider!);
         _announcements = new AnnouncementActivity();
         _timer = new TimerActivity();
+        _progress = new ProgressActivity();
 
         // Two instances of one class: what separates these is a label and a glyph.
         _doNotDisturb = new ConditionActivity
@@ -244,6 +273,7 @@ public partial class App : System.Windows.Application
         _activities.Register(_privacyViewModel);
         _activities.Register(_announcements);
         _activities.Register(_timer);
+        _activities.Register(_progress);
         _activities.Register(_doNotDisturb);
         _activities.Register(_restartPending);
         _activities.Register(_lowDisk);
@@ -256,6 +286,7 @@ public partial class App : System.Windows.Application
             var now = DateTimeOffset.UtcNow;
             _announcements.Tick(now);
             _timer.Tick(now);
+            _progress!.Tick(now);
             _activities.Tick(now);
         };
 
@@ -277,7 +308,7 @@ public partial class App : System.Windows.Application
         var capture = new CaptureViewModel(_todosViewModel!, _notesViewModel!, new ClipboardWriter());
 
         _islandWindow = new IslandWindow(
-            _mediaViewModel, _activities, _privacyViewModel, _timer, capture,
+            _mediaViewModel, _activities, _privacyViewModel, _timer, capture, CreatePalette(),
             _viewModel!, wingetService, _audioSource, _volumeMixer, startupSettings);
 
         _islandWindow.SettingsRequested += ShowSettingsWindow;
@@ -327,7 +358,11 @@ public partial class App : System.Windows.Application
     /// PanelWindow gives its windows for a different reason (a live taskbar button), so it is worth
     /// repeating by hand here rather than pulled in from a base class built around one.
     /// </summary>
-    private void CreatePalette()
+    /// <summary>
+    /// Builds the palette's view model. There is no palette window any more -- the island hosts the
+    /// results, so this is the ranking layer and its one outward wire, nothing else.
+    /// </summary>
+    private CommandPaletteViewModel CreatePalette()
     {
         var palette = new CommandPaletteViewModel(_viewModel!);
 
@@ -337,7 +372,7 @@ public partial class App : System.Windows.Application
                 window.ShowPanel();
         };
 
-        _paletteWindow = new CommandPaletteWindow(palette);
+        return palette;
     }
 
     /// <summary>
@@ -455,7 +490,7 @@ public partial class App : System.Windows.Application
             if (id == ClipboardHotkeyId)
                 _islandWindow?.ShowSection(IslandSection.Clipboard);
             else if (id == PaletteHotkeyId)
-                _paletteWindow?.ShowAndFocus();
+                _islandWindow?.ShowSearch();
         });
     }
 

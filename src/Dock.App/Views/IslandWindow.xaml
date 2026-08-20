@@ -246,6 +246,80 @@
             </Grid>
         </DataTemplate>
 
+        <SolidColorBrush x:Key="ProgressBrush" Color="#0A84FF"/>
+
+        <!-- A job in the bubble: the same ring the timer uses, because the timer was never the only
+             thing with a number between nought and one. An indeterminate job draws the track alone,
+             which reads as "started" without claiming a figure it does not have. -->
+        <DataTemplate x:Key="Compact.ProgressActivity">
+            <Grid Width="26" Height="26" ToolTip="{Binding Label}">
+                <Ellipse Width="26" Height="26" Stroke="#33FFFFFF" StrokeThickness="2.5"/>
+                <Path Data="{Binding Progress, Converter={StaticResource ProgressToArc}}"
+                      Stroke="{StaticResource ProgressBrush}" StrokeThickness="2.5"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Visibility="{Binding IsIndeterminate,
+                          Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"/>
+
+                <!-- Something has to move while there is no figure, or a stalled install and a
+                     starting one look identical. -->
+                <Ellipse Width="6" Height="6" Fill="{StaticResource ProgressBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Visibility="{Binding IsIndeterminate,
+                             Converter={StaticResource BoolToVisibility}}">
+                    <Ellipse.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                     From="1" To="0.15" Duration="0:0:0.9"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </Ellipse.Triggers>
+                </Ellipse>
+            </Grid>
+        </DataTemplate>
+
+        <!-- With nothing playing it takes the pill, and then it can use words. -->
+        <DataTemplate DataType="{x:Type vm:ProgressActivity}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#xE896;" FontFamily="{StaticResource GlyphFont}"
+                           FontSize="12" Foreground="{StaticResource ProgressBrush}"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding Label}" Style="{StaticResource IslandBodyText}"
+                           VerticalAlignment="Center" MaxWidth="150"/>
+                <TextBlock Text="{Binding ProgressText}" Style="{StaticResource IslandMetaText}"
+                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- The expanded row, where there is room for a bar rather than a ring. -->
+        <DataTemplate x:Key="Expanded.ProgressActivity">
+            <Grid Margin="4,0,0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="{Binding Label}" Style="{StaticResource IslandBodyText}"
+                           VerticalAlignment="Center"/>
+
+                <TextBlock Grid.Column="1" Text="{Binding ProgressText}"
+                           Style="{StaticResource IslandMetaText}"
+                           VerticalAlignment="Center" Margin="10,0,0,0"/>
+
+                <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="3" Margin="0,7,0,0"
+                             Minimum="0" Maximum="1" Background="#2EFFFFFF"
+                             Foreground="{StaticResource ProgressBrush}"
+                             IsIndeterminate="{Binding IsIndeterminate}"
+                             Value="{Binding Progress, Mode=OneWay}"/>
+            </Grid>
+        </DataTemplate>
+
         <DataTemplate x:Key="Compact.AnnouncementActivity">
             <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
                        FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"
@@ -485,20 +559,23 @@
                                    Visibility="{Binding Primary, Converter={StaticResource NullToVisibility}}"/>
                     </Grid>
 
-                    <!-- Expanded. Four bands, top to bottom, and the reading order is the point:
-                         what the island is telling you, what is playing, where you can go, and the
-                         place you went. Laid out at the expanded size from the start and revealed
-                         by opacity, so the pill's growth does not reflow it.
+                    <!-- Expanded. Five bands, top to bottom, and the reading order is the point:
+                         what the island is telling you, what is playing, where you can go, the one
+                         box, and the place you went.
 
-                         Two of those bands only exist once the island is *pinned*. A hover is a
-                         glance - it answers "what is this" and nothing else - and handing a whole
-                         workspace to a pointer that drifted across the top of the screen is what
-                         made the growth read as a reveal of something already there rather than as
-                         an opening. See UpdateChrome. -->
+                         The box sits above the section rather than inside one, which is the whole
+                         of the command palette merge: it used to live in the Capture pane, so it
+                         only existed while you were looking at that pane, and a second window with
+                         a second search box existed to cover everywhere else. One box over every
+                         scope is the same box that window was.
+
+                         Three of these bands only exist once the island is *pinned*. A hover is a
+                         glance - it answers "what is this" and nothing else. See UpdateChrome. -->
                     <Grid x:Name="ExpandedLayer" Opacity="0" IsHitTestVisible="False"
                           Width="440" Margin="20,16,20,16"
                           HorizontalAlignment="Center" VerticalAlignment="Top">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -517,8 +594,7 @@
                                       ItemTemplateSelector="{StaticResource ExpandedActivity}"/>
 
                         <!-- What is playing. One control at one of two densities rather than the
-                             two parallel blocks this used to be - see NowPlayingView. Which
-                             density it gets is UpdateNowPlaying's decision. -->
+                             two parallel blocks this used to be - see NowPlayingView. -->
                         <views:NowPlayingView x:Name="NowPlaying" Grid.Row="1"
                                               AudioSource="{Binding AudioSource,
                                                   RelativeSource={RelativeSource AncestorType=views:IslandWindow}}"
@@ -579,46 +655,50 @@
                                     Click="OnSettingsClick"/>
                         </Grid>
 
-                        <!-- One host, every section kept alive inside it: switching scopes hides
-                             and shows rather than rebuilding, so a search box keeps its text and a
-                             list its scroll position across a switch.
+                        <!-- The one box. What you type decides what it becomes, and a leading slash
+                             makes it a search over everything the app already knows how to find -
+                             which is what the separate palette window was for. -->
+                        <Grid x:Name="CaptureBar" Grid.Row="3" Margin="0,14,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                             The panels sit flush inside it: a margin of their own would stack on
-                             top of this one and jog the content sideways every time the scope
-                             changed. -->
-                        <Grid x:Name="SectionHost" Grid.Row="3" Margin="0,14,0,0">
-                            <!-- The default, and the one section that is not a list of something
-                                 the system already knows: one box, and what you type decides what
-                                 it becomes. It replaced a row of timer chips, a todo field and a
-                                 notes field - three headers and three carets for one gesture. -->
-                            <Grid x:Name="QuickView">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
+                            <!-- The rule under the box is the only chrome it gets, and it takes
+                                 the artwork's colour while the caret is in it: the one place the
+                                 accent marks focus rather than state. -->
+                            <Border x:Name="CaptureBox" BorderThickness="0,0,0,1"
+                                    Padding="2,0,2,8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="BorderBrush"
+                                                Value="{StaticResource PanelBorderBrush}"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                <Setter Property="BorderBrush"
+                                                        Value="{DynamicResource IslandAccentBrush}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
 
-                                <!-- The rule under the box is the only chrome it gets, and it takes
-                                     the artwork's colour while the caret is in it: the one place
-                                     the accent marks focus rather than state. -->
-                                <Border x:Name="CaptureBox" BorderThickness="0,0,0,1"
-                                        Padding="2,0,2,8">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="BorderBrush"
-                                                    Value="{StaticResource PanelBorderBrush}"/>
-                                            <Style.Triggers>
-                                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                                    <Setter Property="BorderBrush"
-                                                            Value="{DynamicResource IslandAccentBrush}"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
 
-                                    <Grid>
-                                        <TextBlock Text="Type a task, 25m, .note or /search"
+                                    <!-- Turns into a magnifier the moment the line becomes a
+                                         search, so the box says which of its two jobs it is
+                                         currently doing without a word. -->
+                                    <TextBlock x:Name="CaptureGlyph" Text="&#xE70F;"
+                                               FontFamily="{StaticResource GlyphFont}" FontSize="12"
+                                               Foreground="{StaticResource TextTertiaryBrush}"
+                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+                                    <Grid Grid.Column="1">
+                                        <TextBlock x:Name="CapturePlaceholder"
+                                                   Text="Type a task, 25m, .note or /search"
                                                    Style="{StaticResource IslandFaintText}"
                                                    FontSize="12.5" IsHitTestVisible="False"
                                                    VerticalAlignment="Center"
@@ -630,31 +710,42 @@
                                                  FontSize="12.5"
                                                  Text="{Binding DraftText, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Grid>
-                                </Border>
-
-                                <!-- What the box has decided this line is, said back before Enter
-                                     commits it. The grammar is four rules; this is how anybody
-                                     finds out about the other three. -->
-                                <Grid Grid.Row="1" Margin="2,8,2,0">
-                                    <TextBlock x:Name="CaptureHint"
-                                               Style="{StaticResource IslandFaintText}"
-                                               FontSize="10" VerticalAlignment="Center"/>
-
-                                    <Border Style="{StaticResource InlineActionHost}"
-                                            HorizontalAlignment="Right" VerticalAlignment="Center"
-                                            Margin="0" MouseLeftButtonUp="OnClearDoneClick"
-                                            Visibility="{Binding HasDone,
-                                                Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Clear done" Style="{StaticResource InlineAction}"/>
-                                    </Border>
                                 </Grid>
+                            </Border>
 
-                                <!-- Tasks and notes in one feed, newest first. They were two lists
-                                     under two headers; they are captured in the same moment and
-                                     re-read in the same moment, and the difference between them is
-                                     one checkbox wide. -->
-                                <ItemsControl Grid.Row="2" Margin="0,10,0,0"
-                                              ItemsSource="{Binding Items}" Focusable="False">
+                            <!-- What the box has decided this line is, said back before Enter
+                                 commits it. The grammar is six rules; this is how anybody finds
+                                 out about the other five. -->
+                            <Grid Grid.Row="1" Margin="2,8,2,0">
+                                <TextBlock x:Name="CaptureHint"
+                                           Style="{StaticResource IslandFaintText}"
+                                           FontSize="10" VerticalAlignment="Center"/>
+
+                                <Border Style="{StaticResource InlineActionHost}"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center"
+                                        Margin="0" MouseLeftButtonUp="OnClearDoneClick"
+                                        Visibility="{Binding HasDone,
+                                            Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Clear done" Style="{StaticResource InlineAction}"/>
+                                </Border>
+                            </Grid>
+                        </Grid>
+
+                        <!-- One host, every section kept alive inside it: switching scopes hides
+                             and shows rather than rebuilding, so a search box keeps its text and a
+                             list its scroll position across a switch. -->
+                        <Grid x:Name="SectionHost" Grid.Row="4" Margin="0,12,0,0">
+                            <!-- Tasks and notes in one feed, newest first. They were two lists
+                                 under two headers; they are captured in the same moment and re-read
+                                 in the same moment, and the difference between them is one checkbox
+                                 wide. -->
+                            <Grid x:Name="QuickView">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <ItemsControl ItemsSource="{Binding Items}" Focusable="False">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,0,0,6">
@@ -723,12 +814,16 @@
                                 <!-- The feed is capped so the island cannot grow off the bottom of
                                      the screen. Whatever is past the cap is counted rather than
                                      silently dropped. -->
-                                <TextBlock Grid.Row="3" Margin="22,2,0,0"
+                                <TextBlock Grid.Row="1" Margin="22,2,0,0"
                                            Style="{StaticResource IslandFaintText}" FontSize="10"
                                            Text="{Binding OverflowCount, StringFormat={}{0} older}"
                                            Visibility="{Binding OverflowCount,
                                                Converter={StaticResource CountToVisibility}}"/>
                             </Grid>
+
+                            <!-- Where a slash goes. The command palette's list, re-hosted: same
+                                 view model, same ranking, same keyboard, one fewer window. -->
+                            <panels:SearchPanel x:Name="SearchView" Visibility="Collapsed"/>
 
                             <!-- The former taskbar panels, re-hosted. Their DataContext is the dock
                                  view model, set once from code-behind on this host's children. -->

@@ -86,7 +86,7 @@ public sealed class WingetService : IWingetService
 
     private static readonly Regex ValidWingetId = new(@"^[A-Za-z0-9_.\-]+$", RegexOptions.Compiled);
 
-    public void Install(WingetResult result)
+    public void Install(WingetResult result, IWingetProgress? report = null)
     {
         // Winget package IDs are always simple tokens (e.g. "Microsoft.VisualStudioCode").
         // Rejecting anything else avoids ever building a shell command line out of an
@@ -94,15 +94,51 @@ public sealed class WingetService : IWingetService
         if (!ValidWingetId.IsMatch(result.Id))
             return;
 
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = "cmd.exe",
-            ArgumentList = { "/k", "winget", "install", "--id", result.Id, "--accept-package-agreements", "--accept-source-agreements" },
-            UseShellExecute = true,
+        report?.Progress($"Installing {result.Name}", null);
 
-            // Same reason as ProcessAppLauncher: a console left open in our own install folder
-            // pins the directory Velopack has to rename to apply an update.
-            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-        });
+        try
+        {
+            var info = new ProcessStartInfo
+            {
+                FileName = "winget",
+                ArgumentList =
+                {
+                    "install", "--id", result.Id,
+                    "--accept-package-agreements", "--accept-source-agreements",
+                    "--disable-interactivity"
+                },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+
+                // Same reason as ProcessAppLauncher: a process left running in our own install
+                // folder pins the directory Velopack has to rename to apply an update.
+                WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            };
+
+            using var process = Process.Start(info);
+            if (process is null)
+            {
+                report?.Finished($"Could not start winget", succeeded: false);
+                return;
+            }
+
+            // Read rather than discard: winget writes a progress bar to stdout and blocks once the
+            // pipe buffer fills, so a caller that ignores the output does not get a silent install,
+            // it gets a stalled one.
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            var ok = process.ExitCode == 0;
+
+            report?.Finished(
+                ok ? $"Installed {result.Name}" : $"{result.Name} failed to install",
+                ok);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        {
+            report?.Finished("winget is not available", succeeded: false);
+        }
     }
 }

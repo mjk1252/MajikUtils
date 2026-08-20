@@ -27,6 +27,7 @@ public partial class DockViewModel : ObservableObject
     private const long MaxClipboardImageBytes = 150L * 1024 * 1024;
 
     private IWingetService? _wingetService;
+    private IWingetProgress? _wingetProgress;
     private IClipboardWriter? _clipboardWriter;
     private readonly ClipboardStore _clipboardStore = new();
     private string _clipboardQuery = "";
@@ -112,9 +113,10 @@ public partial class DockViewModel : ObservableObject
 
     private void SaveStacks() => _stackStore.Save(Stacks.Select(s => s.Folder).ToList());
 
-    public void AttachWingetService(IWingetService wingetService)
+    public void AttachWingetService(IWingetService wingetService, IWingetProgress? progress = null)
     {
         _wingetService = wingetService;
+        _wingetProgress = progress;
     }
 
     /// <summary>
@@ -151,7 +153,7 @@ public partial class DockViewModel : ObservableObject
 
         WingetResults.Clear();
         foreach (var result in results)
-            WingetResults.Add(new WingetResultViewModel(result, wingetService));
+            WingetResults.Add(new WingetResultViewModel(result, wingetService, _wingetProgress));
 
         IsWingetSearching = false;
     }
