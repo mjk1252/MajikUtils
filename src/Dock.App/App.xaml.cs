@@ -117,8 +117,73 @@ public partial class App : System.Windows.Application
             new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
     }
 
+    /// <summary>
+    /// Catches what used to end the process.
+    ///
+    /// Installed before anything else in startup, because everything after this line is capable of
+    /// throwing and none of it was survivable until now. The three handlers cover the three ways an
+    /// exception got out: off the UI thread's message pump, off a plain background thread, and out
+    /// of a fire-and-forget <see cref="Task"/>.
+    /// </summary>
+    private void InstallCrashHandlers()
+    {
+        // The dispatcher's own. This is the one that matters: a throw in a click handler, a
+        // converter, a timer tick or anything else running on the UI thread arrives here, and
+        // marking it handled is the difference between the island vanishing and the island
+        // carrying on with one operation having failed.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            var fatal = CrashLog.IsFatal(args.Exception);
+            CrashLog.Record("dispatcher", args.Exception, fatal);
+            args.Handled = !fatal;
+        };
+
+        // A background thread that throws cannot be rescued -- by the time this runs the runtime
+        // has already decided to tear the process down. Logging is the whole of what is available,
+        // and it is the thing that was missing.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            CrashLog.Record("background thread", args.ExceptionObject as Exception, fatal: true);
+
+        // Fire-and-forget work (the update check, the installed-apps scan) whose exception nobody
+        // ever looked at. These do not kill anything on .NET, which is why they were invisible:
+        // a broken update check simply stopped happening and never said so.
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            CrashLog.Record("unobserved task", args.Exception);
+            args.SetObserved();
+        };
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> on the UI thread on behalf of a background source.
+    ///
+    /// Every hardware and system watcher in this class is raised from a thread that is not ours --
+    /// a WASAPI callback, the clipboard listener's pump, a registry watcher, the thread pool -- and
+    /// each one marshalled with a bare <c>Dispatcher.Invoke</c>. That is a *synchronous* call, so
+    /// an exception thrown inside the delegate is rethrown on the calling thread, and those threads
+    /// have nothing above them to catch anything. A null artwork blob or a device disappearing
+    /// mid-read therefore took the whole app down, on a thread the user has no relationship with,
+    /// at a moment that correlates with plugging in headphones rather than with anything they did.
+    ///
+    /// The catch belongs here rather than at each call site because the failure is the same one
+    /// every time and the answer is the same too: the island skips one update and stays running.
+    /// </summary>
+    private void OnUi(Action action)
+    {
+        try
+        {
+            Dispatcher.Invoke(action);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Record("background callback", ex, CrashLog.IsFatal(ex));
+        }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        InstallCrashHandlers();
+
         base.OnStartup(e);
 
         InstallAccentBrushes();
@@ -178,7 +243,7 @@ public partial class App : System.Windows.Application
         if (e.Args.Any(a => string.Equals(a, "--debug-activity", StringComparison.OrdinalIgnoreCase)))
             StartDebugActivity();
 
-        _singleInstance.StartListening(panel => Dispatcher.Invoke(() => ShowPanel(panel)));
+        _singleInstance.StartListening(panel => OnUi(() => ShowPanel(panel)));
 
         StartupRegistration.SetEnabled(_settingsStore.Load().StartWithWindows);
 
@@ -198,10 +263,10 @@ public partial class App : System.Windows.Application
     private sealed class IslandProgressReporter(App app) : IWingetProgress
     {
         public void Progress(string label, double? fraction) =>
-            app.Dispatcher.Invoke(() => app._progress?.Report(label, fraction));
+            app.OnUi(() => app._progress?.Report(label, fraction));
 
         public void Finished(string label, bool succeeded) =>
-            app.Dispatcher.Invoke(() =>
+            app.OnUi(() =>
             {
                 // A failure is worth a moment of the pill too. It says what happened and goes on
                 // its own, which is more than the console window it replaced ever managed.
@@ -268,7 +333,7 @@ public partial class App : System.Windows.Application
         {
             AllowPillClaim = startupSettings.ShowVolumeMixer
         };
-        _volumeMixerSource.Changed += (_, sessions) => Dispatcher.Invoke(() => _volumeMixer.Apply(sessions));
+        _volumeMixerSource.Changed += (_, sessions) => OnUi(() => _volumeMixer.Apply(sessions));
         _volumeMixerSource.Start();
 
         _activities = new IslandActivityHost();
@@ -299,7 +364,7 @@ public partial class App : System.Windows.Application
         _activityTimer.Start();
 
         // Media notifications arrive on the thread pool, like the system stats below.
-        _mediaSource.Changed += (_, snapshot) => Dispatcher.Invoke(() =>
+        _mediaSource.Changed += (_, snapshot) => OnUi(() =>
         {
             _mediaViewModel.Apply(snapshot);
             RequestLyricsIfTrackChanged(snapshot);
@@ -486,7 +551,7 @@ public partial class App : System.Windows.Application
     private void StartClipboardMonitor()
     {
         _clipboardMonitor = new ClipboardMonitor();
-        _clipboardMonitor.ClipboardChanged += () => Dispatcher.Invoke(CaptureClipboard);
+        _clipboardMonitor.ClipboardChanged += () => OnUi(CaptureClipboard);
         _clipboardMonitor.Start();
     }
 
@@ -501,7 +566,7 @@ public partial class App : System.Windows.Application
         _hotkeys.Register(ClipboardHotkeyId, settings.ClipboardHotkey.Modifiers, settings.ClipboardHotkey.Key);
         _hotkeys.Register(PaletteHotkeyId, settings.PaletteHotkey.Modifiers, settings.PaletteHotkey.Key);
 
-        _hotkeys.HotkeyPressed += id => Dispatcher.Invoke(() =>
+        _hotkeys.HotkeyPressed += id => OnUi(() =>
         {
             if (id == ClipboardHotkeyId)
                 _islandWindow?.ShowSection(IslandSection.Clipboard);
@@ -632,7 +697,7 @@ public partial class App : System.Windows.Application
     private void StartSystemStats()
     {
         _systemStatsSource = new SystemStatsSource();
-        _systemStatsSource.Updated += (_, stats) => Dispatcher.Invoke(() =>
+        _systemStatsSource.Updated += (_, stats) => OnUi(() =>
         {
             _viewModel!.UpdateSystemStats(stats.CpuPercent, stats.GpuPercent);
             _islandWindow?.UpdateStats(stats.CpuPercent, stats.GpuPercent);
@@ -686,7 +751,7 @@ public partial class App : System.Windows.Application
                 if (!t.IsCompletedSuccessfully || t.Result is not { Count: > 0 } lines)
                     return;
 
-                Dispatcher.Invoke(() =>
+                OnUi(() =>
                 {
                     // Playback may have moved on to a different track while this was in flight;
                     // the answer is only worth applying if it is still the one on screen.
@@ -710,7 +775,7 @@ public partial class App : System.Windows.Application
 
         // Raised from the registry watcher's own thread, like the media and stats sources.
         _deviceUsageMonitor.Changed += (_, usages) =>
-            Dispatcher.Invoke(() => _privacyViewModel?.Apply(usages));
+            OnUi(() => _privacyViewModel?.Apply(usages));
 
         _deviceUsageMonitor.Start();
     }
@@ -748,13 +813,13 @@ public partial class App : System.Windows.Application
     // actually reaches the island is AnnouncementActivity.Enabled's business, not this method's --
     // see its doc comment for why the gate lives there instead of on each of these watchers.
     private void OnSystemEvent(object? sender, SystemEvent occurrence) =>
-        Dispatcher.Invoke(() => _announcements?.Announce(
+        OnUi(() => _announcements?.Announce(
             DateTimeOffset.UtcNow, occurrence.Label, occurrence.Glyph, occurrence.Detail));
 
     private void StartSystemConditions()
     {
         _conditions = new SystemConditionSource();
-        _conditions.Changed += (_, conditions) => Dispatcher.Invoke(() =>
+        _conditions.Changed += (_, conditions) => OnUi(() =>
         {
             if (!_showConditions)
                 return;
@@ -778,7 +843,7 @@ public partial class App : System.Windows.Application
     private void StartVolumeWatch()
     {
         _volume = new VolumeSource();
-        _volume.Changed += (_, reading) => Dispatcher.Invoke(() =>
+        _volume.Changed += (_, reading) => OnUi(() =>
             _announcements?.Announce(
                 DateTimeOffset.UtcNow,
                 reading.IsMuted ? "Muted" : $"Volume {reading.Level * 100:0}%",
@@ -787,7 +852,7 @@ public partial class App : System.Windows.Application
         _volume.Start();
 
         _audioDevices = new AudioDeviceSource();
-        _audioDevices.DefaultOutputChanged += (_, name) => Dispatcher.Invoke(() =>
+        _audioDevices.DefaultOutputChanged += (_, name) => OnUi(() =>
             _announcements?.Announce(DateTimeOffset.UtcNow, "Output", "", name));
 
         _audioDevices.Start();
@@ -813,7 +878,7 @@ public partial class App : System.Windows.Application
 
         var charging = (bool?)null;
 
-        _battery.Changed += (_, status) => Dispatcher.Invoke(() =>
+        _battery.Changed += (_, status) => OnUi(() =>
         {
             // The charger going in or out is the moment worth interrupting for. A percentage
             // drifting down on its own is not, so only the transition announces -- and never on the
@@ -892,7 +957,7 @@ public partial class App : System.Windows.Application
     private void WatchStack(StackItemViewModel stack)
     {
         var watcher = new StackFolderWatcher(stack.Path);
-        watcher.Changed += () => Dispatcher.Invoke(() => stack.Refresh(_iconProvider!, _launcher!));
+        watcher.Changed += () => OnUi(() => stack.Refresh(_iconProvider!, _launcher!));
         _stackWatchers[stack] = watcher;
     }
 
@@ -922,7 +987,7 @@ public partial class App : System.Windows.Application
         }).ContinueWith(t =>
         {
             if (t.IsCompletedSuccessfully)
-                Dispatcher.Invoke(() => _viewModel!.SetLauncherItems(t.Result));
+                OnUi(() => _viewModel!.SetLauncherItems(t.Result));
         });
     }
 

@@ -203,9 +203,36 @@ button whose window is long gone.
 - `%LOCALAPPDATA%\MajikUtils\shelf.json`, `stacks.json` — shelf items and stack folders.
 - `%LOCALAPPDATA%\MajikUtils\notes.json`, `todos.json` — the island's scratchpad.
 - `%LOCALAPPDATA%\MajikUtils\icons\*.ico` — generated artwork for the pinned taskbar buttons.
+- `%LOCALAPPDATA%\MajikUtils\crash.log` — every exception the app caught instead of dying to.
+  Appended to, halved past 256 KB, and safe to delete. See *Failure* below.
 - `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations\*.customDestinations-ms` — the shell's
   own copy of each button's jump list. Written by the shell, not by us; listed here because it
   outlives the process and is where to look when a jump list seems stale.
+
+## Failure
+
+`CrashLog` and three handlers installed in `Program.Main` and `App.OnStartup`, which between them
+cover the three ways an exception used to leave the process: off the dispatcher, off a plain
+background thread, and out of a fire-and-forget `Task`. `Main`'s goes up before the `VelopackApp`
+call, so a startup that falls over before WPF is running still leaves a trace.
+
+The dispatcher's is the one that does real work -- it marks the exception handled unless
+`CrashLog.IsFatal` says otherwise, so a throw in a click handler, a converter or a timer tick costs
+one failed operation rather than the whole app. The other two can only write the trace down; by the
+time either runs the runtime has already decided how this ends.
+
+`App.OnUi` is the other half, and it is where most of the crashes actually came from. Every hardware
+and system watcher in `App` is raised from a thread that is not ours -- a WASAPI callback, the
+clipboard pump, a registry watcher, the thread pool -- and `Dispatcher.Invoke` is *synchronous*, so
+an exception inside the delegate is rethrown on that calling thread, where nothing catches anything.
+A null artwork blob or a device disappearing mid-read therefore took the app down at a moment that
+correlates with plugging in headphones rather than with anything the user did. `OnUi` is the guarded
+marshal every one of those sources now goes through; a bare `Dispatcher.Invoke` in `App` is a bug.
+
+The list in `IsFatal` is short on purpose -- out of memory, a corrupted heap, a bad image -- and
+anything not on it is assumed survivable. An `AccessViolationException` out of the audio interop is
+on it, and is not really catchable anyway: .NET fails fast on those, so the honest outcome is a
+crash that has at least been written down.
 
 ## Updates
 
