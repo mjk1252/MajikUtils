@@ -105,8 +105,13 @@ public partial class IslandWindow : Window
     /// <summary>
     /// Notices the island flickering and writes down what drove it. See the type: it exists because
     /// this fault turned up on a machine nobody could debug it on.
+    ///
+    /// Shared between every island rather than one apiece, and that is the point. The first version
+    /// was per-window and went silent on a machine that was visibly flickering -- because with an
+    /// island on each monitor, two of them flipping three times each is six changes on screen and
+    /// three in each watch, under the threshold in both. What a person sees is all of them at once.
     /// </summary>
-    private readonly FlickerWatch _flicker = new();
+    private static readonly FlickerWatch Flicker = new();
     private readonly TimerActivity _timer;
     private readonly CaptureViewModel _capture;
     private readonly CommandPaletteViewModel _palette;
@@ -516,7 +521,11 @@ public partial class IslandWindow : Window
     /// </summary>
     private void NoteTransition(string what)
     {
-        if (_flicker.Record(DateTimeOffset.UtcNow, what) is { } report)
+        // Named with the monitor, since a shared watch pools every island's transitions and the
+        // report is unreadable without knowing which one each came from.
+        var where = string.IsNullOrEmpty(_monitor) ? "primary" : _monitor;
+
+        if (Flicker.Record(DateTimeOffset.UtcNow, $"[{where}] {what}") is { } report)
             CrashLog.Note("island flicker", report);
     }
 
@@ -533,7 +542,19 @@ public partial class IslandWindow : Window
         if (_hwnd == IntPtr.Zero)
             return;
 
+        var previous = _work;
         _work = MonitorPlacement.FromDeviceName(_monitor);
+
+        // Written down once per placement, because "how many islands are there and where" turned
+        // out to be the question nobody could answer about a machine they could not see. Two of
+        // them resolving to the same work area is two islands drawn on top of each other, which
+        // looks exactly like flicker and produces no other evidence at all.
+        if (previous != _work)
+        {
+            CrashLog.Note("island placed",
+                $"{(string.IsNullOrEmpty(_monitor) ? "primary" : _monitor)} -> " +
+                $"[{_work.Left},{_work.Top} {_work.Width}x{_work.Height} @{_work.Scale:0.##}x]");
+        }
 
         var width = (int)Math.Round(Width * _work.Scale);
         var height = (int)Math.Round(Height * _work.Scale);

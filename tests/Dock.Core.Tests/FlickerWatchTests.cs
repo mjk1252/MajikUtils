@@ -122,6 +122,32 @@ public class FlickerWatchTests
         Assert.NotNull(Burst());
     }
 
+    /// <summary>
+    /// The watch is shared between islands, and that is why. Per-window, two islands flipping
+    /// three times each is six changes on screen and three in each watch -- under the threshold in
+    /// both, so a visibly flickering machine produced no log at all. Pooled, it trips.
+    /// </summary>
+    [Fact]
+    public void Record_TripsOnTwoIslandsFlickeringTogether()
+    {
+        var watch = new FlickerWatch();
+        string? report = null;
+        var at = Start;
+
+        for (var i = 0; i < 3; i++)
+        {
+            report ??= watch.Record(at, @"[\.\DISPLAY1] expanded (pointer on it)");
+            at += TimeSpan.FromMilliseconds(100);
+
+            report ??= watch.Record(at, @"[\.\DISPLAY2] expanded (pointer on it)");
+            at += TimeSpan.FromMilliseconds(100);
+        }
+
+        Assert.NotNull(report);
+        Assert.Contains("DISPLAY1", report);
+        Assert.Contains("DISPLAY2", report);
+    }
+
     /// <summary>The list cannot grow without bound on an app left running for weeks.</summary>
     [Fact]
     public void Record_DoesNotAccumulate()
