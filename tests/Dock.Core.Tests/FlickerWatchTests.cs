@@ -42,6 +42,30 @@ public class FlickerWatchTests
     /// The reasons are the whole point. A report saying only that it flickered would leave whoever
     /// reads it exactly where they started.
     /// </summary>
+    /// <summary>
+    /// The reasons carry pointer coordinates, so every one of them is a unique string. Tallying
+    /// them literally would report six groups of one and say less than no tally at all.
+    /// </summary>
+    [Fact]
+    public void Record_TalliesByKindRatherThanByExactReason()
+    {
+        var watch = new FlickerWatch();
+        string? report = null;
+
+        for (var i = 0; i < FlickerWatch.Threshold; i++)
+        {
+            report ??= watch.Record(
+                Start + TimeSpan.FromMilliseconds(i * 100),
+                $"collapsed (pointer away @{1200 + i},{4 + i} outside [0,0 588x42])");
+        }
+
+        Assert.NotNull(report);
+        Assert.Contains("collapsed (pointer away x6", report);
+
+        // And the particulars survive underneath, which is the whole reason they are collected.
+        Assert.Contains("@1203,7", report);
+    }
+
     [Fact]
     public void Record_NamesWhatDroveEachChange()
     {
@@ -57,7 +81,7 @@ public class FlickerWatchTests
         Assert.NotNull(report);
         Assert.Contains("shown (poll: activity) x3", report);
         Assert.Contains("hidden (poll: nothing) x3", report);
-        Assert.Contains("->", report);
+        Assert.Contains("19:00:00", report);
     }
 
     /// <summary>Transitions spread out past the window are not a flicker, however many there are.</summary>

@@ -67,19 +67,41 @@ public sealed class FlickerWatch
 
         _lastReport = now;
 
+        // Grouped on the kind of change rather than the whole reason, because the reasons carry
+        // coordinates and every one of them is therefore unique -- a tally of six ones says less
+        // than no tally at all.
         var counts = _recent
-            .GroupBy(r => r.Reason)
+            .GroupBy(r => Kind(r.Reason))
             .OrderByDescending(g => g.Count())
             .Select(g => $"{g.Key} x{g.Count()}");
 
+        // One per line rather than arrow-separated. The reasons carry coordinates now, and a
+        // single line of six of those is unreadable exactly when somebody is trying to read it.
+        var sequence = string.Join(
+            Environment.NewLine,
+            _recent.Select(r => $"  {r.At:HH:mm:ss.fff}  {r.Reason}"));
+
         var report =
             $"The island changed state {_recent.Count} times in {Window.TotalSeconds:0} seconds, " +
-            $"which no deliberate use accounts for. Reasons: {string.Join(", ", counts)}. " +
-            $"Sequence: {string.Join(" -> ", _recent.Select(r => r.Reason))}";
+            $"which no deliberate use accounts for.{Environment.NewLine}" +
+            $"Reasons: {string.Join(", ", counts)}.{Environment.NewLine}" +
+            sequence;
 
         // Cleared, so the next report describes the next burst rather than this one again.
         _recent.Clear();
 
         return report;
+    }
+
+    /// <summary>
+    /// A reason with its particulars trimmed off: "collapsed (pointer away @1200,4 outside ...)"
+    /// becomes "collapsed (pointer away". Crude on purpose -- this only has to group like with
+    /// like, and the untrimmed reason is still printed in full underneath.
+    /// </summary>
+    private static string Kind(string reason)
+    {
+        var at = reason.IndexOf(" @", StringComparison.Ordinal);
+
+        return at > 0 ? reason[..at] : reason;
     }
 }

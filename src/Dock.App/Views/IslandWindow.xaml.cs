@@ -504,6 +504,12 @@ public partial class IslandWindow : Window
     }
 
     /// <summary>
+    /// A hit region in the form a log entry can be read back from, physical pixels and all.
+    /// </summary>
+    private static string Describe(Rect region) =>
+        $"[{region.Left:0},{region.Top:0} {region.Width:0}x{region.Height:0}]";
+
+    /// <summary>
     /// Offers one transition to the watch, and writes the report down if this was the one that
     /// tipped it. Called from the three setters rather than from their callers, so nothing new can
     /// change the island's state without being counted.
@@ -587,7 +593,8 @@ public partial class IslandWindow : Window
         }
 
         var (x, y) = CursorInfo.GetPosition();
-        var hovering = ActiveHitRect().Contains(x, y);
+        var region = ActiveHitRect();
+        var hovering = region.Contains(x, y);
 
         // The pointer alone is enough to expand now: the scratchpad and the tab strip live in this
         // panel too, and those have to be reachable even with nothing playing.
@@ -605,7 +612,14 @@ public partial class IslandWindow : Window
         SetShown(_activities.HasActivity || _clock.IsEnabled || _badges.HasCount || hovering,
             $"poll: {keeping}");
 
-        SetExpanded(hovering, hovering ? "pointer on it" : "pointer away");
+        // The coordinates go in the reason, because "the pointer was on it, then it was not" is
+        // where the first round of this stopped being useful. A region that moves out from under a
+        // stationary pointer and a pointer genuinely crossing its edge produce the same words and
+        // very different numbers, and only the numbers say which happened.
+        SetExpanded(hovering,
+            hovering
+                ? $"pointer on it @{x},{y} in {Describe(region)}"
+                : $"pointer away @{x},{y} outside {Describe(region)}");
     }
 
     /// <summary>
