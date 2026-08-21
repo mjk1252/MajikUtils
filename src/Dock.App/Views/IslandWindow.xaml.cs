@@ -101,6 +101,12 @@ public partial class IslandWindow : Window
     private readonly IslandActivityHost _activities;
     private readonly ClockViewModel _clock;
     private readonly BadgeCountViewModel _badges;
+
+    /// <summary>
+    /// Notices the island flickering and writes down what drove it. See the type: it exists because
+    /// this fault turned up on a machine nobody could debug it on.
+    /// </summary>
+    private readonly FlickerWatch _flicker = new();
     private readonly TimerActivity _timer;
     private readonly CaptureViewModel _capture;
     private readonly CommandPaletteViewModel _palette;
@@ -497,6 +503,17 @@ public partial class IslandWindow : Window
         Animate(BubbleScale, ScaleTransform.ScaleYProperty, wanted ? 1 : BubbleSeedScale, ShapeDuration);
     }
 
+    /// <summary>
+    /// Offers one transition to the watch, and writes the report down if this was the one that
+    /// tipped it. Called from the three setters rather than from their callers, so nothing new can
+    /// change the island's state without being counted.
+    /// </summary>
+    private void NoteTransition(string what)
+    {
+        if (_flicker.Record(DateTimeOffset.UtcNow, what) is { } report)
+            CrashLog.Note("island flicker", report);
+    }
+
     /// <summary>How far above its resting place the pill sits while hidden.</summary>
     private double HiddenOffset =>
         CollapsedHeight + 6 + (_shape == IslandShape.Pill ? PillTopGap : 0);
@@ -564,8 +581,8 @@ public partial class IslandWindow : Window
         // drawing straight across it.
         if (ForegroundWindow.IsFullScreenOn(_monitor))
         {
-            SetExpanded(false);
-            SetShown(false);
+            SetExpanded(false, "full-screen app");
+            SetShown(false, "full-screen app");
             return;
         }
 
@@ -577,8 +594,18 @@ public partial class IslandWindow : Window
         // The clock and a waiting count both count as something to show. Anyone who has turned
         // either on has most likely auto-hidden their taskbar, and a notice that waited to be
         // hovered would be exactly the notice they hid the taskbar and then missed.
-        SetShown(_activities.HasActivity || _clock.IsEnabled || _badges.HasCount || hovering);
-        SetExpanded(hovering);
+        // Spelled out rather than passed as one string, because which of the four is keeping the
+        // island alive is exactly the question a flicker report has to answer.
+        var keeping =
+            _activities.HasActivity ? "activity" :
+            _clock.IsEnabled ? "clock" :
+            _badges.HasCount ? "waiting" :
+            hovering ? "pointer" : "nothing";
+
+        SetShown(_activities.HasActivity || _clock.IsEnabled || _badges.HasCount || hovering,
+            $"poll: {keeping}");
+
+        SetExpanded(hovering, hovering ? "pointer on it" : "pointer away");
     }
 
     /// <summary>
@@ -598,12 +625,13 @@ public partial class IslandWindow : Window
     /// <summary>The chosen monitor, in the plain shape the geometry takes.</summary>
     private IslandScreen Screen => new(_work.Left, _work.Top, _work.Width, _work.Scale);
 
-    private void SetShown(bool shown)
+    private void SetShown(bool shown, string reason = "unspecified")
     {
         if (_shown == shown)
             return;
 
         _shown = shown;
+        NoteTransition(shown ? $"shown ({reason})" : $"hidden ({reason})");
 
         if (!shown)
             SetExpanded(false);
@@ -614,12 +642,13 @@ public partial class IslandWindow : Window
         UpdateCollapsedShowing();
     }
 
-    private void SetExpanded(bool expanded)
+    private void SetExpanded(bool expanded, string reason = "unspecified")
     {
         if (_expanded == expanded)
             return;
 
         _expanded = expanded;
+        NoteTransition(expanded ? $"expanded ({reason})" : $"collapsed ({reason})");
 
         // A hover that ends takes the island back to the scratchpad: a section is something the
         // user opened deliberately, and leaving it showing behind a collapsed pill means the next
@@ -678,12 +707,13 @@ public partial class IslandWindow : Window
     /// never be activated can never hold keyboard focus either, and every section here has
     /// something to type into.
     /// </summary>
-    private void SetPinned(bool pinned)
+    private void SetPinned(bool pinned, string reason = "unspecified")
     {
         if (_pinned == pinned)
             return;
 
         _pinned = pinned;
+        NoteTransition(pinned ? $"pinned ({reason})" : $"unpinned ({reason})");
 
         OverlayWindowStyles.SetActivatable(_hwnd, pinned);
 

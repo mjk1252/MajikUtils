@@ -65,6 +65,38 @@ public static class CrashLog
     }
 
     /// <summary>
+    /// Records something that is not an exception but is worth knowing after the fact.
+    ///
+    /// The log was built for the silent exits and is the only file the app writes that anybody
+    /// ever reads back, which makes it the right place for a fault that shows itself as behaviour
+    /// rather than as a stack -- a machine you cannot get your hands on can still send the file.
+    /// </summary>
+    public static void Note(string origin, string detail)
+    {
+        try
+        {
+            var entry = new StringBuilder()
+                .Append("===== ")
+                .Append(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"))
+                .Append("  [note]  ")
+                .AppendLine(origin)
+                .AppendLine(detail)
+                .AppendLine()
+                .ToString();
+
+            lock (Gate)
+            {
+                Trim();
+                File.AppendAllText(Path, entry, Encoding.UTF8);
+            }
+        }
+        catch
+        {
+            // Same as above: nothing written down here is worth a crash.
+        }
+    }
+
+    /// <summary>
     /// Whether an exception is one the app has any business continuing after.
     ///
     /// A binding failure or a null on a media snapshot leaves everything else intact and is exactly

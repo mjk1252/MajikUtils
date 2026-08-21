@@ -367,6 +367,21 @@ anything not on it is assumed survivable. An `AccessViolationException` out of t
 on it, and is not really catchable anyway: .NET fails fast on those, so the honest outcome is a
 crash that has at least been written down.
 
+**When it flickers.** The island was reported flickering open and closed on a machine nobody
+debugging it could reach, with the pointer nowhere near it. Reading the code produced four
+plausible causes and no way to tell which was real, which is how an afternoon goes into fixing
+things that were never broken.
+
+So the island diagnoses itself. `SetShown`, `SetExpanded` and `SetPinned` each take a reason and
+offer the transition to `FlickerWatch`; when transitions arrive faster than a person could be
+causing them -- six inside three seconds -- one entry goes to `crash.log` naming the last several
+and what asked for them, then it stays quiet for five minutes. The reasons are the whole value:
+the pointer poll reports *which* of activity, clock, waiting notifications or pointer is keeping
+the island alive, so a report says not merely that it flickered but what kept deciding it should.
+
+The three setters are instrumented rather than their callers, so nothing new can change the
+island's state without being counted.
+
 ## Updates
 
 Velopack, checking GitHub Releases. Two things make that possible:
