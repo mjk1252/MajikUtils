@@ -7,7 +7,7 @@
 ; Then compile this script with ISCC.exe (installed via Inno Setup).
 
 #define AppName "MajikUtils"
-#define AppVersion "2.7.1"
+#define AppVersion "2.9.0"
 #define AppPublisher "Majik"
 #define AppExeName "MajikUtils.exe"
 

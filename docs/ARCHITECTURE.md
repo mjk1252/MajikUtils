@@ -214,7 +214,42 @@ what `SetShown` reads it for. It rides the same 250ms tick as everything else an
 only when the minute turns, and it formats through `CultureInfo.CurrentCulture.ShortTimePattern`
 rather than a setting of its own, since Windows has already asked that question.
 
-The badges are the harder half, because there is no API for them. `ITaskbarList3::SetOverlayIcon`
+The badges come from **three sources**, and the number of them is the story. Reading the taskbar's
+buttons was the obvious route and the wrong one twice over: the shell virtualizes those buttons
+away while the taskbar is auto-hidden -- which is precisely the case the feature exists for, so it
+answered correctly only when it was not needed -- and even on screen a badge is whatever the app
+felt like putting there rather than a count of anything. Four separate string formats were parsed
+wrong on the way to learning that; text written for screen readers is not an interface.
+
+So the taskbar reader is now the least of the three:
+
+`NotificationCentreSource` asks Windows through `UserNotificationListener`. Real notifications,
+real app identity, real counts, no string parsing, and indifferent to whether the taskbar is drawn.
+Documented as requiring package identity and the `userNotificationListener` capability, which this
+application has neither of, and it returns `Allowed` regardless -- measured rather than assumed,
+and re-measured at runtime, so a machine that says no leaves the source quiet. It is polled;
+`NotificationChanged` is the obvious thing to use and genuinely does need package identity, and an
+event that silently never fires is worse than a poll that plainly works. It sees only what raises
+a Windows toast, which is not everything -- an app drawing its own notifications is invisible here,
+and correctly so, since Windows does not know about it either.
+
+`WindowAttentionSource` catches exactly that gap. Most chat applications raise no toast and badge
+nothing, but they *flash* -- and a flash is `FlashWindowEx`, a window-manager event, so
+`RegisterShellHookWindow` hears about it with the taskbar hidden and with no string parsed. It is
+the only pushed source of the three. It answers a narrower question, that an app wants you rather
+than how many things wait, because a flash carries no number and Windows knows none either. A
+flash has a beginning and no end: the shell never says one stopped, so the window being activated
+is what clears it, that being what actually stops it mattering.
+
+The three merge in `BadgeCountViewModel` by AppUserModelID. Counted sources take the higher rather
+than the sum, since an app with three in the centre usually also badges its button with a three and
+adding would say six; attention goes last and only where nothing else knows the app, since letting
+a numberless flash in beside "Outlook 3" would replace the three and lose the part worth reading.
+
+The taskbar reader is kept because it is the one that works for an app badging numerically while
+the taskbar is up, and because it was already written and costs a poll.
+
+The badges were the harder half, because there is no API for them. `ITaskbarList3::SetOverlayIcon`
 is a setter, and nothing reads an overlay icon back out of another process. What the shell *does*
 publish is what each taskbar button tells an accessibility client about itself. So
 `TaskbarBadgeSource` walks explorer's UI Automation tree -- `Shell_TrayWnd` and every

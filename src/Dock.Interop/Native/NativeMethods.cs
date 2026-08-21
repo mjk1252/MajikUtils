@@ -154,6 +154,42 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
+    /// <summary>
+    /// Signs this window up for the shell's running commentary on every top-level window: created,
+    /// destroyed, activated, and -- the one that matters here -- flashing for attention.
+    ///
+    /// The messages arrive under an id from <see cref="RegisterWindowMessage"/> with "SHELLHOOK",
+    /// rather than a fixed WM_ constant, which is why the id has to be looked up at runtime.
+    /// </summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool RegisterShellHookWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DeregisterShellHookWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern uint RegisterWindowMessage(string message);
+
+    /// <summary>
+    /// A window asking for attention: <c>FlashWindowEx</c>, underneath, which is what a chat
+    /// application does when a message arrives while it is in the background.
+    ///
+    /// The value is <c>HSHELL_REDRAW</c> with the high bit set, and the high bit is the whole
+    /// distinction -- plain redraw is a title change and means nothing.
+    /// </summary>
+    internal const int HSHELL_FLASH = 0x8006;
+
+    /// <summary>A window came to the foreground, which is how a flash stops mattering.</summary>
+    internal const int HSHELL_WINDOWACTIVATED = 4;
+
+    /// <summary>The same, from an application that took the foreground for itself.</summary>
+    internal const int HSHELL_RUDEAPPACTIVATED = 0x8004;
+
+    /// <summary>A window went away, taking any flashing it was doing with it.</summary>
+    internal const int HSHELL_WINDOWDESTROYED = 2;
+
     [DllImport("user32.dll")]
     internal static extern IntPtr GetForegroundWindow();
 

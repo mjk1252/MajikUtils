@@ -177,7 +177,12 @@ public class BadgeCountViewModelTests
         var exception = Record.Exception(() => badges.Apply(duplicated, Start + TimeSpan.FromSeconds(2)));
 
         Assert.Null(exception);
-        Assert.Equal(2, badges.Count);
+
+        // One, not two: merging the sources keys on the AppUserModelID, so a duplicate collapses
+        // on the way in rather than being counted twice. The walk deduplicates as well, and both
+        // are worth having -- this is the one that holds if the walk ever stops.
+        Assert.Single(badges.Badges);
+        Assert.Equal(1, badges.Count);
     }
 
     [Fact]
@@ -266,5 +271,160 @@ public class BadgeCountViewModelTests
 
         Assert.Same(chip, badges.Badges[0]);
         Assert.Equal("2", chip.CountText);
+    }
+
+    private static AppNotifications[] Centre(params (string App, int Count)[] apps) =>
+        [.. apps.Select(a => new AppNotifications($"Appid.{a.App}", a.App, a.Count, $"latest from {a.App}"))];
+
+    [Fact]
+    public void Apply_NotificationCentre_ShowsWhatIsWaiting()
+    {
+        var badges = new BadgeCountViewModel();
+
+        badges.Apply(Centre(("Outlook", 3)), Start);
+
+        Assert.Equal(3, badges.Count);
+        Assert.Equal("Outlook", badges.Badges[0].AppName);
+    }
+
+    /// <summary>
+    /// The two sources usually describe the same thing -- an app with three in the centre normally
+    /// badges its taskbar button with a three -- so they merge by taking the higher rather than
+    /// adding, which would say six.
+    /// </summary>
+    [Fact]
+    public void Apply_MergesTheTwoSourcesByTakingTheHigherCount()
+    {
+        var badges = new BadgeCountViewModel();
+
+        badges.Apply(Snapshot(0, ("Outlook", 3)), Start);
+        badges.Apply(Centre(("Outlook", 3)), Start + TimeSpan.FromSeconds(1));
+
+        Assert.Single(badges.Badges);
+        Assert.Equal(3, badges.Count);
+    }
+
+    [Fact]
+    public void Apply_TakesTheHigherWhenTheSourcesDisagree()
+    {
+        var badges = new BadgeCountViewModel();
+
+        badges.Apply(Snapshot(0, ("Outlook", 1)), Start);
+        badges.Apply(Centre(("Outlook", 5)), Start + TimeSpan.FromSeconds(1));
+
+        Assert.Equal(5, badges.Count);
+    }
+
+    /// <summary>
+    /// Each source sees things the other cannot -- a badge Windows never raised a toast for, a
+    /// toast from an app with no taskbar button -- so an app known to only one stands unopposed.
+    /// </summary>
+    [Fact]
+    public void Apply_KeepsAppsOnlyOneSourceKnowsAbout()
+    {
+        var badges = new BadgeCountViewModel();
+
+        badges.Apply(Snapshot(0, ("Discord", 0)), Start);
+        badges.Apply(Centre(("Outlook", 2)), Start + TimeSpan.FromSeconds(1));
+
+        Assert.Equal(2, badges.Badges.Count);
+        Assert.Equal(3, badges.Count);
+    }
+
+    /// <summary>
+    /// One source reporting must not blank what the other last said. They arrive on their own
+    /// timers and never together.
+    /// </summary>
+    [Fact]
+    public void Apply_OneSourceReportingDoesNotWipeTheOther()
+    {
+        var badges = new BadgeCountViewModel();
+        badges.Apply(Centre(("Outlook", 4)), Start);
+
+        badges.Apply(TaskbarBadgeSnapshot.Empty, Start + TimeSpan.FromSeconds(1));
+
+        Assert.Equal(4, badges.Count);
+        Assert.Single(badges.Badges);
+    }
+
+    [Fact]
+    public void Clear_ForgetsBothSources()
+    {
+        var badges = new BadgeCountViewModel();
+        badges.Apply(Snapshot(0, ("Discord", 1)), Start);
+        badges.Apply(Centre(("Outlook", 2)), Start + TimeSpan.FromSeconds(1));
+
+        badges.Clear();
+        Assert.Equal(0, badges.Count);
+
+        // And a later reading from one source does not resurrect the other's.
+        badges.Apply(Centre(("Outlook", 2)), Start + TimeSpan.FromSeconds(2));
+        Assert.Equal(2, badges.Count);
+    }
+
+    private static AttentionRequest[] Attention(params string[] apps) =>
+        [.. apps.Select(a => new AttentionRequest($"Appid.{a}", a))];
+
+    /// <summary>
+    /// The case the other two sources cannot see: an app that raises no toast and badges nothing,
+    /// but flashes. Most chat applications, and the reason this source exists.
+    /// </summary>
+    [Fact]
+    public void Apply_Attention_ShowsAnAppNothingElseKnowsAbout()
+    {
+        var badges = new BadgeCountViewModel();
+
+        badges.Apply(Attention("Discord"), Start);
+
+        Assert.Single(badges.Badges);
+        Assert.Equal("Discord", badges.Badges[0].AppName);
+        Assert.Equal(1, badges.Count);
+
+        // A flash carries no number, so the chip draws the icon alone.
+        Assert.False(badges.Badges[0].HasNumber);
+    }
+
+    /// <summary>
+    /// A flash must not displace a real count. Letting it in beside "Outlook 3" would replace the
+    /// three with a numberless chip and lose the part worth reading.
+    /// </summary>
+    [Fact]
+    public void Apply_Attention_NeverReplacesARealCount()
+    {
+        var badges = new BadgeCountViewModel();
+
+        badges.Apply(Centre(("Outlook", 3)), Start);
+        badges.Apply(Attention("Outlook"), Start + TimeSpan.FromSeconds(1));
+
+        Assert.Single(badges.Badges);
+        Assert.Equal(3, badges.Count);
+        Assert.Equal("3", badges.Badges[0].CountText);
+    }
+
+    [Fact]
+    public void Apply_Attention_ClearsWhenTheFlashingStops()
+    {
+        var badges = new BadgeCountViewModel();
+        badges.Apply(Attention("Discord"), Start);
+        Assert.True(badges.HasCount);
+
+        badges.Apply(Array.Empty<AttentionRequest>(), Start + TimeSpan.FromSeconds(1));
+
+        Assert.Equal(0, badges.Count);
+        Assert.False(badges.HasCount);
+    }
+
+    /// <summary>All three arrive on their own schedule and none may wipe the others.</summary>
+    [Fact]
+    public void Apply_ThreeSourcesCoexist()
+    {
+        var badges = new BadgeCountViewModel();
+
+        badges.Apply(Snapshot(0, ("Spark", 2)), Start);
+        badges.Apply(Centre(("Outlook", 3)), Start + TimeSpan.FromSeconds(1));
+        badges.Apply(Attention("Discord"), Start + TimeSpan.FromSeconds(2));
+
+        Assert.Equal(3, badges.Badges.Count);
+        Assert.Equal(6, badges.Count);
     }
 }

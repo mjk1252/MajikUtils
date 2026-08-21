@@ -85,6 +85,14 @@ public sealed partial class BadgeCountViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private string _summary = string.Empty;
 
+    /// <summary>
+    /// The last reading from each of the two sources, kept apart so either can arrive on its own
+    /// without wiping what the other last said. They are merged at every apply.
+    /// </summary>
+    private TaskbarBadgeSnapshot _taskbar = TaskbarBadgeSnapshot.Empty;
+    private IReadOnlyList<AppNotifications> _centre = [];
+    private IReadOnlyList<AttentionRequest> _attention = [];
+
     /// <summary>When the arrival stops reading as new. Null whenever it already has.</summary>
     private DateTimeOffset? _highlightUntil;
 
@@ -102,26 +110,91 @@ public sealed partial class BadgeCountViewModel : ObservableObject
     /// </summary>
     public ObservableCollection<BadgeItemViewModel> Badges { get; } = [];
 
-    /// <summary>Takes a reading.</summary>
+    /// <summary>Takes a reading from the taskbar's badges.</summary>
     public void Apply(TaskbarBadgeSnapshot snapshot, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        var ranked = snapshot.Badges
+        _taskbar = snapshot;
+        Rebuild(now);
+    }
+
+    /// <summary>Takes a reading from Windows' notification centre.</summary>
+    public void Apply(IReadOnlyList<AppNotifications> notifications, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(notifications);
+
+        _centre = notifications;
+        Rebuild(now);
+    }
+
+    /// <summary>
+    /// Takes a reading from the windows currently asking for attention.
+    ///
+    /// Narrower than the other two and worth having anyway: an application that draws its own
+    /// notifications raises no toast and may badge nothing, but it still flashes -- and a flash is
+    /// a window-manager event, so it arrives with the taskbar hidden. It says *that* something
+    /// wants you and never how many, which is all Windows knows.
+    /// </summary>
+    public void Apply(IReadOnlyList<AttentionRequest> attention, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(attention);
+
+        _attention = attention;
+        Rebuild(now);
+    }
+
+    /// <summary>
+    /// Merges the three sources into one set of chips.
+    ///
+    /// Highest count per app rather than the sum, because the two frequently describe the same
+    /// thing: an app with three notifications in the centre usually also badges its taskbar button
+    /// with a three, and adding them would say six. Where only one source knows about an app --
+    /// which is the common case, since each sees things the other cannot -- its answer stands
+    /// unopposed.
+    /// </summary>
+    private void Rebuild(DateTimeOffset now)
+    {
+
+        var merged = new Dictionary<string, TaskbarBadge>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var badge in _taskbar.Badges)
+            merged[badge.AppUserModelId] = badge;
+
+        foreach (var app in _centre)
+        {
+            var count = merged.TryGetValue(app.AppUserModelId, out var badge)
+                ? Math.Max(badge.Count, app.Count)
+                : app.Count;
+
+            merged[app.AppUserModelId] = new TaskbarBadge(app.AppUserModelId, app.AppName, count);
+        }
+
+        // Attention last, and only where nothing else already knows about the app: a flash carries
+        // no number, so letting it in beside a real count would replace "Outlook 3" with a
+        // numberless Outlook chip and lose the part worth reading.
+        foreach (var app in _attention)
+        {
+            if (!merged.ContainsKey(app.AppUserModelId))
+                merged[app.AppUserModelId] = new TaskbarBadge(app.AppUserModelId, app.AppName, 0);
+        }
+
+        var ranked = merged.Values
             .OrderByDescending(b => b.Count)
+            .ThenBy(b => b.AppName, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
         Sync(ranked.Take(MaxChips).ToList());
 
         Overflow = Math.Max(0, ranked.Count - MaxChips);
         HasOverflow = Overflow > 0;
-        Summary = BuildSummary(snapshot);
+        Summary = BuildSummary(ranked, _taskbar.NotificationCentreCount);
 
-        var total = snapshot.NotificationCentreCount;
+        var total = _taskbar.NotificationCentreCount;
 
         // A badge with no number on it is still one thing waiting. Counting it as zero would make
         // an app going from nothing to a bare dot read as no change at all.
-        foreach (var badge in snapshot.Badges)
+        foreach (var badge in ranked)
             total += Math.Max(1, badge.Count);
 
         // Only an increase reads as an arrival. A count falling means the user has read something,
@@ -149,6 +222,9 @@ public sealed partial class BadgeCountViewModel : ObservableObject
     /// <summary>Wipes the reading, for the setting being switched off.</summary>
     public void Clear()
     {
+        _taskbar = TaskbarBadgeSnapshot.Empty;
+        _centre = [];
+        _attention = [];
         _highlightUntil = null;
         IsNew = false;
         Count = 0;
@@ -159,14 +235,14 @@ public sealed partial class BadgeCountViewModel : ObservableObject
         Badges.Clear();
     }
 
-    private static string BuildSummary(TaskbarBadgeSnapshot snapshot)
+    private static string BuildSummary(IReadOnlyList<TaskbarBadge> badges, int centreTotal)
     {
-        var parts = snapshot.Badges
+        var parts = badges
             .Select(b => b.Count > 0 ? $"{b.AppName} {b.Count}" : b.AppName)
             .ToList();
 
-        if (snapshot.NotificationCentreCount > 0)
-            parts.Add($"{snapshot.NotificationCentreCount} in notifications");
+        if (centreTotal > 0)
+            parts.Add($"{centreTotal} in notifications");
 
         return string.Join(" · ", parts);
     }

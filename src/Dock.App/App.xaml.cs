@@ -95,6 +95,18 @@ public partial class App : System.Windows.Application
     /// <summary>What the taskbar's buttons are badged with, and the poll that reads them.</summary>
     private BadgeCountViewModel _badges = new();
     private TaskbarBadgeSource? _badgeSource;
+
+    /// <summary>
+    /// Windows' own notification centre, which is the source the taskbar's badges should have been
+    /// all along -- structured, app-identified, and indifferent to whether the taskbar is drawn.
+    /// </summary>
+    private NotificationCentreSource? _notificationSource;
+
+    /// <summary>
+    /// Windows flashing for attention. The only pushed source of the three, and the only one that
+    /// hears about an app which raises no toast and badges nothing -- which is most chat apps.
+    /// </summary>
+    private WindowAttentionSource? _attentionSource;
     private NotesViewModel? _notesViewModel;
     private TodosViewModel? _todosViewModel;
     private AudioLoopbackSource? _audioSource;
@@ -361,8 +373,23 @@ public partial class App : System.Windows.Application
         _badgeSource.Changed += (_, snapshot) =>
             OnUi(() => _badges.Apply(snapshot, DateTimeOffset.UtcNow));
 
+        _notificationSource = new NotificationCentreSource();
+        _notificationSource.Changed += (_, apps) =>
+            OnUi(() => _badges.Apply(apps, DateTimeOffset.UtcNow));
+
+        // Raised on the UI thread already -- it is a window message, and the window belongs to this
+        // thread -- but routed through OnUi anyway so every source reaches the view model the same
+        // way and none of them has to be reasoned about separately.
+        _attentionSource = new WindowAttentionSource();
+        _attentionSource.Changed += (_, apps) =>
+            OnUi(() => _badges.Apply(apps, DateTimeOffset.UtcNow));
+
         if (startupSettings.ShowTaskbarBadges)
+        {
             _badgeSource.Start();
+            _notificationSource.Start();
+            _attentionSource.Start();
+        }
 
         _activities = new IslandActivityHost();
         _activities.Tick(DateTimeOffset.UtcNow);
@@ -1161,6 +1188,8 @@ public partial class App : System.Windows.Application
             {
                 _badges.IsEnabled = true;
                 _badgeSource.Start();
+                _notificationSource?.Start();
+                _attentionSource?.Start();
                 return;
             }
 
@@ -1168,6 +1197,8 @@ public partial class App : System.Windows.Application
             // correct it, the same trap the conditions toggle has -- so the activity is cleared by
             // hand rather than waited on.
             _badgeSource.Stop();
+            _notificationSource?.Stop();
+            _attentionSource?.Stop();
             _badges.Clear();
             _badges.IsEnabled = false;
         };
@@ -1208,6 +1239,8 @@ public partial class App : System.Windows.Application
         _audioDevices?.Dispose();
         _volumeMixerSource?.Dispose();
         _badgeSource?.Dispose();
+        _notificationSource?.Dispose();
+        _attentionSource?.Dispose();
 
         _activityTimer.Stop();
         _debugTimer?.Stop();

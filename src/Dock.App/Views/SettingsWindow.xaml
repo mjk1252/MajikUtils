@@ -81,7 +81,7 @@
                           Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
 
                 <TextBlock Style="{StaticResource SettingNote}"
-                           Text="Puts the apps with something waiting just right of the clock, each as its own icon with a count beside it -- Outlook's unread, a chat app's messages, the notification centre. Something arriving with nothing playing brings the island out and keeps it there, and reading it takes the icon away again. Three at a time, then a plus for the rest. Apps that badge with a plain dot rather than a count, as most chat apps do, show just the icon: Windows does not say how many are behind it."/>
+                           Text="Puts the apps with something waiting just right of the clock, each as its own icon with a count beside it. Read from three places at once: Windows' notification centre, the badges on your taskbar buttons, and any app flashing for attention -- so an app that only does one of the three still shows up, with the taskbar hidden or not. Something arriving with nothing playing brings the island out and keeps it there. Three at a time, then a plus for the rest. An app that flashes without saying how many shows just its icon: Windows does not know the number either."/>
 
                 <CheckBox x:Name="PrivacyIndicatorCheckBox" Style="{StaticResource SettingToggle}"
                           Content="Show when an app is using the camera"
