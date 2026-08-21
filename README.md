@@ -30,6 +30,7 @@ Everything you type goes in one place, and what you type decides what it becomes
 | `25m` or `1h30` | a countdown |
 | `@9am call Tom` | a countdown to that time, which says *call Tom* when it fires |
 | `2 + 2` | works it out; Enter copies the answer |
+| `pom` | a focus cycle: 25 on, 5 off, a long break every fourth |
 | `.wifi is on the router` | a note |
 | `/firefox` | searches your apps, stacks, recent files and clipboard |
 
@@ -41,7 +42,8 @@ without your hands leaving the keyboard. `Ctrl+Alt+Space` opens the island strai
 
 ### The scopes
 
-- **Capture** — the box above, and a feed of what you have put through it.
+- **Capture** — the box above, and a feed of what you have put through it. A running pomodoro or
+  timer shows here too, with the phase, the time left and how much of the set is done.
 - **Shelf** — a holding area for files. **Drag a file to the island** and it opens the shelf ready to
   drop into. Drag items back out whenever you need them.
 - **Clipboard** — text, images and copied files, captured in the background. Search it, and **pin**
