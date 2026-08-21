@@ -1067,12 +1067,14 @@ public partial class IslandWindow : Window
             // Start menu, and this line is already where the box says what it thinks.
             CaptureKind.Math => $"= {intent.Text}   ·   Enter copies it",
 
+            CaptureKind.Pomodoro => "Enter starts a pomodoro - 25 on, 5 off, a long break every fourth",
+
             CaptureKind.Search => intent.Text.Length == 0
                 ? "Search apps, stacks, recent files and clipboard"
                 : "Up and down to choose, Enter to open",
             CaptureKind.Note => "Enter files this as a note",
             CaptureKind.Todo => "Enter adds this as a task",
-            _ => "25m timer     @9am reminder     2+2     .note     /search"
+            _ => "25m timer     @9am reminder     pom     2+2     .note     /search"
         };
     }
 

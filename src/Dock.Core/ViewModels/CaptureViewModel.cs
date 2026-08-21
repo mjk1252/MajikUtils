@@ -27,6 +27,9 @@ public enum CaptureKind
     /// <summary>A countdown to a clock time rather than a length, with a name on it.</summary>
     Reminder,
 
+    /// <summary>The focus cycle: 25 on, 5 off, a longer break every fourth round.</summary>
+    Pomodoro,
+
     Note,
     Todo
 }
@@ -100,6 +103,12 @@ public partial class CaptureViewModel : ObservableObject
     /// </summary>
     private readonly IClipboardWriter? _clipboard;
 
+    /// <summary>
+    /// The focus cycle, if the island has one. Optional in the same way the clipboard is, so the
+    /// grammar can still be exercised without either.
+    /// </summary>
+    private readonly PomodoroActivity? _pomodoro;
+
     [ObservableProperty] private string _draftText = string.Empty;
 
     /// <summary>
@@ -121,11 +130,13 @@ public partial class CaptureViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private bool _hasDone;
 
-    public CaptureViewModel(TodosViewModel todos, NotesViewModel notes, IClipboardWriter? clipboard = null)
+    public CaptureViewModel(TodosViewModel todos, NotesViewModel notes,
+        IClipboardWriter? clipboard = null, PomodoroActivity? pomodoro = null)
     {
         _todos = todos;
         _notes = notes;
         _clipboard = clipboard;
+        _pomodoro = pomodoro;
 
         _todos.Todos.CollectionChanged += OnSourceChanged;
         _notes.Notes.CollectionChanged += OnSourceChanged;
@@ -218,6 +229,10 @@ public partial class CaptureViewModel : ObservableObject
                 timer.StartAt(now, intent.When, intent.Text);
                 break;
 
+            case CaptureKind.Pomodoro:
+                _pomodoro?.Start(now);
+                break;
+
             case CaptureKind.Math:
                 // Straight to the clipboard, which is where an answer is wanted: nobody works a sum
                 // out in order to read it. It lands in the clipboard history on the way past, so it
@@ -277,6 +292,17 @@ public partial class CaptureViewModel : ObservableObject
 
         if (text[0] == '@' && ReminderTime.TryParse(text[1..], now, out var when, out var label))
             return new CaptureIntent(CaptureKind.Reminder, label, when - now) { When = when };
+
+        // The one rule triggered by a word rather than a mark, and the only place the grammar could
+        // plausibly swallow something somebody meant as a task. It is safe here for a reason that is
+        // not obvious: the hint line under the box says what Enter will do *before* it does it, so a
+        // person typing "pomodoro" as a task sees "Enter starts a pomodoro" and can add a word.
+        // Exact match only -- "pomodoro timer for the kitchen" stays a task.
+        if (text.Equals("pom", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("pomodoro", StringComparison.OrdinalIgnoreCase))
+        {
+            return new CaptureIntent(CaptureKind.Pomodoro, text, PomodoroActivity.FocusLength);
+        }
 
         var duration = ParseDuration(text);
         if (duration > TimeSpan.Zero)

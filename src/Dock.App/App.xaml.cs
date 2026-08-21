@@ -51,6 +51,9 @@ public partial class App : System.Windows.Application
     /// deciding which of them gets to be drawn.
     /// </summary>
     private ProgressActivity? _progress;
+
+    /// <summary>The focus cycle. Registered like any other activity; started from the capture box.</summary>
+    private PomodoroActivity? _pomodoro;
     private VolumeMixerActivity? _volumeMixer;
 
     private readonly UpdateService _updates = new();
@@ -239,6 +242,7 @@ public partial class App : System.Windows.Application
         _announcements = new AnnouncementActivity();
         _timer = new TimerActivity();
         _progress = new ProgressActivity();
+        _pomodoro = new PomodoroActivity();
 
         // Two instances of one class: what separates these is a label and a glyph.
         _doNotDisturb = new ConditionActivity
@@ -274,6 +278,7 @@ public partial class App : System.Windows.Application
         _activities.Register(_announcements);
         _activities.Register(_timer);
         _activities.Register(_progress);
+        _activities.Register(_pomodoro);
         _activities.Register(_doNotDisturb);
         _activities.Register(_restartPending);
         _activities.Register(_lowDisk);
@@ -287,6 +292,7 @@ public partial class App : System.Windows.Application
             _announcements.Tick(now);
             _timer.Tick(now);
             _progress!.Tick(now);
+            _pomodoro!.Tick(now);
             _activities.Tick(now);
         };
 
@@ -305,7 +311,8 @@ public partial class App : System.Windows.Application
 
         // Notes and todos are still two stores and two view models -- they are genuinely different
         // things and they persist differently. They are merged into one surface, not one model.
-        var capture = new CaptureViewModel(_todosViewModel!, _notesViewModel!, new ClipboardWriter());
+        var capture = new CaptureViewModel(
+            _todosViewModel!, _notesViewModel!, new ClipboardWriter(), _pomodoro);
 
         _islandWindow = new IslandWindow(
             _mediaViewModel, _activities, _privacyViewModel, _timer, capture, CreatePalette(),
@@ -443,6 +450,15 @@ public partial class App : System.Windows.Application
         {
             case "exit":
                 Shutdown();
+                break;
+
+            // An action rather than a place, which "exit" above already establishes as something
+            // this switch does. It earns its line: starting a focus cycle is the one thing here
+            // somebody would plausibly pin to the taskbar and click every morning, and reaching it
+            // otherwise means opening the island and typing.
+            case "pomodoro":
+                _pomodoro?.Start(DateTimeOffset.UtcNow);
+                _islandWindow?.ShowSection(IslandSection.Quick);
                 break;
 
             case "launch":

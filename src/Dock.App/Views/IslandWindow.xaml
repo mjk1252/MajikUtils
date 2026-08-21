@@ -320,6 +320,127 @@
             </Grid>
         </DataTemplate>
 
+        <!-- Tomato, because that is what a pomodoro is: the technique is named after the kitchen
+             timer shaped like one. The break is the colour of not being at your desk. -->
+        <SolidColorBrush x:Key="PomodoroFocusBrush" Color="#FF6347"/>
+        <SolidColorBrush x:Key="PomodoroBreakBrush" Color="#3ECF8E"/>
+
+        <!-- One style, two colours, switched on the phase: every pomodoro template needs exactly
+             this and nothing would be gained by writing it three times. -->
+        <Style x:Key="PomodoroMark" TargetType="Shape">
+            <Setter Property="Stroke" Value="{StaticResource PomodoroFocusBrush}"/>
+            <Setter Property="Fill" Value="Transparent"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsBreak}" Value="True">
+                    <Setter Property="Stroke" Value="{StaticResource PomodoroBreakBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The same pair again, as a fill rather than a stroke. -->
+        <Style x:Key="PomodoroDot" TargetType="Shape">
+            <Setter Property="Fill" Value="{StaticResource PomodoroFocusBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsBreak}" Value="True">
+                    <Setter Property="Fill" Value="{StaticResource PomodoroBreakBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PomodoroText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource PomodoroFocusBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsBreak}" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource PomodoroBreakBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Beside the pill: the phase as an arc, and nothing else. A cycle that runs for two hours
+             has to be readable at a glance and silent the rest of the time. -->
+        <DataTemplate x:Key="Compact.PomodoroActivity">
+            <Grid Width="26" Height="26" ToolTip="{Binding PhaseLabel}">
+                <Ellipse Width="26" Height="26" Stroke="#33FFFFFF" StrokeThickness="2.5"/>
+                <Path Data="{Binding Progress, Converter={StaticResource ProgressToArc}}"
+                      Style="{StaticResource PomodoroMark}" StrokeThickness="2.5"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- With nothing playing it takes the pill, and then it can spell the phase out. -->
+        <DataTemplate DataType="{x:Type vm:PomodoroActivity}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- A mark, not a shrunk ring. ProgressToArc draws at a fixed radius of 11, so
+                     fitting it into the pill's 22px row would mean a scale transform on a path -
+                     and the island already has a vocabulary for exactly this: a coloured dot, a
+                     label, the particulars. The camera indicator uses it too. -->
+                <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
+                         Style="{StaticResource PomodoroDot}"/>
+
+                <TextBlock Text="{Binding PhaseLabel}" Style="{StaticResource IslandBodyText}"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding RemainingText}" Style="{StaticResource IslandBodyText}"
+                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+
+                <!-- Four marks, filled as they are earned. Letter-spaced because the glyphs sit
+                     tight together and a run of them reads as one blob otherwise. -->
+                <TextBlock Text="{Binding RoundDots}" Style="{StaticResource PomodoroText}"
+                           FontSize="9" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- The expanded row, where there is room for the controls. -->
+        <DataTemplate x:Key="Expanded.PomodoroActivity">
+            <Grid Margin="4,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="{Binding PhaseLabel}" Style="{StaticResource PomodoroText}"
+                           FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                           Margin="0,0,12,0"/>
+
+                <TextBlock Grid.Column="1" Text="{Binding RemainingText}"
+                           Style="{StaticResource IslandTitleText}" VerticalAlignment="Center"/>
+
+                <TextBlock Grid.Column="2" Text="{Binding RoundDots}"
+                           Style="{StaticResource PomodoroText}" FontSize="11"
+                           VerticalAlignment="Center" Margin="14,0,0,0"/>
+
+                <Button Grid.Column="3" Content="Skip" Style="{StaticResource ChipButton}"
+                        Command="{Binding SkipCommand}" VerticalAlignment="Center"
+                        ToolTip="Go to the next phase now"/>
+
+                <Button Grid.Column="4" Content="Stop" Style="{StaticResource ChipButton}"
+                        Command="{Binding StopCommand}" VerticalAlignment="Center"/>
+
+                <!-- The phase as a bar as well as an arc: the row has the width for it, and a bar
+                     is the readout you can check without focusing on it. -->
+                <ProgressBar Grid.Row="1" Grid.ColumnSpan="5" Height="3" Margin="0,8,0,0"
+                             Minimum="0" Maximum="1" Background="#2EFFFFFF"
+                             Value="{Binding Progress, Mode=OneWay}">
+                    <ProgressBar.Style>
+                        <Style TargetType="ProgressBar">
+                            <Setter Property="Foreground" Value="{StaticResource PomodoroFocusBrush}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsBreak}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource PomodoroBreakBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ProgressBar.Style>
+                </ProgressBar>
+            </Grid>
+        </DataTemplate>
+
         <DataTemplate x:Key="Compact.AnnouncementActivity">
             <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
                        FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"
