@@ -114,7 +114,5 @@ public class PrivacyViewModelTests
     private sealed class FakeIcons : IIconProvider
     {
         public byte[]? GetIconPng(string path, int size) => [1, 2, 3];
-
-        public byte[]? GetAppIconPng(string appUserModelId, int size) => [1, 2, 3];
     }
 }

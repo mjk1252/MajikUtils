@@ -92,20 +92,8 @@ public partial class App : System.Windows.Application
     /// <summary>The time on the collapsed pill. Chrome rather than an activity -- see the type.</summary>
     private ClockViewModel _clock = new();
 
-    /// <summary>What the taskbar's buttons are badged with, and the poll that reads them.</summary>
-    private BadgeCountViewModel _badges = new();
 
-    /// <summary>
-    /// Windows' own notification centre, which is the source the taskbar's badges should have been
-    /// all along -- structured, app-identified, and indifferent to whether the taskbar is drawn.
-    /// </summary>
-    private NotificationCentreSource? _notificationSource;
 
-    /// <summary>
-    /// Windows flashing for attention. The only pushed source of the three, and the only one that
-    /// hears about an app which raises no toast and badges nothing -- which is most chat apps.
-    /// </summary>
-    private WindowAttentionSource? _attentionSource;
     private NotesViewModel? _notesViewModel;
     private TodosViewModel? _todosViewModel;
     private AudioLoopbackSource? _audioSource;
@@ -366,24 +354,6 @@ public partial class App : System.Windows.Application
             OnUi(() => _volumeMixer.Apply(sessions, DateTimeOffset.UtcNow));
         _volumeMixerSource.Start();
 
-        // Two sources for what is waiting, and neither is the taskbar: its buttons vanish from the
-        // accessibility tree the moment it auto-hides, which is the case this exists for.
-        _notificationSource = new NotificationCentreSource();
-        _notificationSource.Changed += (_, apps) =>
-            OnUi(() => _badges.Apply(apps, DateTimeOffset.UtcNow));
-
-        // Raised on the UI thread already -- it is a window message, and the window belongs to this
-        // thread -- but routed through OnUi anyway so every source reaches the view model the same
-        // way and none of them has to be reasoned about separately.
-        _attentionSource = new WindowAttentionSource();
-        _attentionSource.Changed += (_, apps) =>
-            OnUi(() => _badges.Apply(apps, DateTimeOffset.UtcNow));
-
-        if (startupSettings.ShowTaskbarBadges)
-        {
-            _notificationSource.Start();
-            _attentionSource.Start();
-        }
 
         _activities = new IslandActivityHost();
         _activities.Tick(DateTimeOffset.UtcNow);
@@ -412,7 +382,6 @@ public partial class App : System.Windows.Application
             _timer.Tick(now);
             _progress!.Tick(now);
             _pomodoro!.Tick(now);
-            _badges.Tick(now);
             _activities.Tick(now);
             _clock.Tick(DateTime.Now);
         };
@@ -478,7 +447,7 @@ public partial class App : System.Windows.Application
             var island = new IslandWindow(
                 _mediaViewModel!, _activities!, _privacyViewModel!, _timer!, parts.Capture,
                 CreatePalette(), _viewModel!, parts.Winget, _audioSource!, _volumeMixer!,
-                _clock, _badges, settings);
+                _clock, settings);
 
             island.SettingsRequested += ShowSettingsWindow;
             island.ExitRequested += Shutdown;
@@ -1173,24 +1142,6 @@ public partial class App : System.Windows.Application
             }
         };
 
-        _settingsWindow.TaskbarBadgesToggled += show =>
-        {
-            if (show)
-            {
-                _badges.IsEnabled = true;
-                _notificationSource?.Start();
-                _attentionSource?.Start();
-                return;
-            }
-
-            // Stopping the sources on their own would leave the last reading lit with nothing
-            // coming to correct it, the same trap the conditions toggle has -- so the chips are
-            // cleared by hand rather than waited on.
-            _notificationSource?.Stop();
-            _attentionSource?.Stop();
-            _badges.Clear();
-            _badges.IsEnabled = false;
-        };
 
         _settingsWindow.VolumeMixerToggled += show =>
         {
@@ -1227,8 +1178,6 @@ public partial class App : System.Windows.Application
         _battery?.Dispose();
         _audioDevices?.Dispose();
         _volumeMixerSource?.Dispose();
-        _notificationSource?.Dispose();
-        _attentionSource?.Dispose();
 
         _activityTimer.Stop();
         _debugTimer?.Stop();

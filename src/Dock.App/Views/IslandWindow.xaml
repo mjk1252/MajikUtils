@@ -605,7 +605,7 @@
                  out into the screen edge. Its size is animated in step with the content host
                  below, which is the one that clips. -->
             <views:NotchShape x:Name="Notch"
-                              PillWidth="330" PillHeight="34" BottomRadius="17" Fillet="14"
+                              PillWidth="260" PillHeight="34" BottomRadius="17" Fillet="14"
                               HorizontalAlignment="Center" VerticalAlignment="Top"
                               Fill="#F2101010"
                               Stroke="{StaticResource PanelBorderBrush}" StrokeThickness="1">
@@ -656,7 +656,7 @@
 
             <Border x:Name="PillContent"
                     HorizontalAlignment="Center" VerticalAlignment="Top"
-                    Width="330" Height="34"
+                    Width="260" Height="34"
                     Background="Transparent"
                     ClipToBounds="True"
                     MouseLeftButtonDown="OnPillClick">
@@ -664,7 +664,7 @@
                     <!-- Collapsed: whichever activity currently holds the pill, at a glance. Its
                          DataContext is the activity host, set in the constructor; the form each
                          activity takes here is a DataTemplate up in Window.Resources. -->
-                    <Grid x:Name="CollapsedLayer" Width="306" Height="22"
+                    <Grid x:Name="CollapsedLayer" Width="236" Height="22"
                           HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -734,57 +734,6 @@
                                 <TextBlock Text="{Binding TimeText}" VerticalAlignment="Center"
                                            Style="{StaticResource IslandBodyText}"
                                            Typography.NumeralAlignment="Tabular"/>
-                            </StackPanel>
-
-                            <!-- The badged apps, at the far end of the pill past the clock. The
-                                 right-hand group is everything the island shows regardless of whose
-                                 turn it is to hold the pill, and these belong with it: one end of
-                                 the strip to look at for the time and for what is waiting. -->
-                            <StackPanel x:Name="BadgeBlock" Orientation="Horizontal"
-                                        VerticalAlignment="Center" Margin="10,0,0,0"
-                                        ToolTip="{Binding Summary}"
-                                        Visibility="{Binding HasCount,
-                                                     Converter={StaticResource BoolToVisibility}}">
-                                <ItemsControl ItemsSource="{Binding Badges}" VerticalAlignment="Center">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal" Margin="6,0,0,0"
-                                                        VerticalAlignment="Center"
-                                                        ToolTip="{Binding AppName}">
-                                                <!-- The icon, at about the size the taskbar draws
-                                                     it, so it is recognised rather than decoded. -->
-                                                <Image Width="14" Height="14" VerticalAlignment="Center"
-                                                       RenderOptions.BitmapScalingMode="HighQuality"
-                                                       Source="{Binding IconPng,
-                                                                Converter={StaticResource PngToImage}}"/>
-
-                                                <!-- Absent for a wordless badge. The icon has
-                                                     already said the app has something, and a
-                                                     made-up 1 beside it would claim a precision
-                                                     Windows never gave. -->
-                                                <TextBlock Text="{Binding CountText}" Margin="2,0,0,0"
-                                                           VerticalAlignment="Top" FontSize="9"
-                                                           Style="{StaticResource IslandMetaText}"
-                                                           Typography.NumeralAlignment="Tabular"
-                                                           Visibility="{Binding HasNumber,
-                                                                        Converter={StaticResource BoolToVisibility}}"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <!-- Whatever did not fit. Rare, and still has to say something. -->
-                                <TextBlock Margin="6,0,0,0" FontSize="9" VerticalAlignment="Center"
-                                           Style="{StaticResource IslandFaintText}"
-                                           Text="{Binding Overflow, StringFormat={}+{0}}"
-                                           Visibility="{Binding HasOverflow,
-                                                        Converter={StaticResource BoolToVisibility}}"/>
                             </StackPanel>
                         </StackPanel>
                     </Grid>

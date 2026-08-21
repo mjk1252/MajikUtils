@@ -76,13 +76,6 @@
                 <TextBlock Style="{StaticResource SettingNote}"
                            Text="Puts the time on the collapsed island, in whatever format the rest of Windows uses, with the date beside it when nothing is playing. This is for anyone who auto-hides the taskbar: with it on, the island stays on screen instead of waiting to be pointed at, so the time is always there to read."/>
 
-                <CheckBox x:Name="TaskbarBadgeCheckBox" Style="{StaticResource SettingToggle}"
-                          Content="Show which apps have notifications"
-                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
-
-                <TextBlock Style="{StaticResource SettingNote}"
-                           Text="Puts the apps with something waiting just right of the clock, each as its own icon with a count beside it. Read from Windows itself -- its notification centre, plus any app flashing for attention -- so it works exactly the same whether your taskbar is on screen or hidden. Something arriving with nothing playing brings the island out and keeps it there. Three at a time, then a plus for the rest. An app that flashes without saying how many shows just its icon: Windows does not know the number either, and a made-up one would be worse than none."/>
-
                 <CheckBox x:Name="PrivacyIndicatorCheckBox" Style="{StaticResource SettingToggle}"
                           Content="Show when an app is using the camera"
                           Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>

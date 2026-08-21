@@ -54,12 +54,6 @@ public partial class SettingsWindow : Window
     /// <summary>Raised the instant a new clipboard-history shortcut is recorded.</summary>
     public event Action<HotkeyBinding>? ClipboardHotkeyChanged;
 
-    /// <summary>
-    /// Raised when the taskbar badge readout is switched on or off. An event of its own rather than
-    /// a flag read out of the settings object, because there is a poll of another process to stop:
-    /// turned off, nothing should be walking explorer's tree every two seconds.
-    /// </summary>
-    public event Action<bool>? TaskbarBadgesToggled;
 
     /// <summary>Raised the instant a new command-palette shortcut is recorded.</summary>
     public event Action<HotkeyBinding>? PaletteHotkeyChanged;
@@ -75,7 +69,6 @@ public partial class SettingsWindow : Window
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
         MediaIslandCheckBox.IsChecked = settings.ShowMediaIsland;
         ClockCheckBox.IsChecked = settings.ShowClock;
-        TaskbarBadgeCheckBox.IsChecked = settings.ShowTaskbarBadges;
         PrivacyIndicatorCheckBox.IsChecked = settings.ShowPrivacyIndicator;
         AnnouncementsCheckBox.IsChecked = settings.ShowAnnouncements;
         ConditionsCheckBox.IsChecked = settings.ShowConditions;
@@ -175,9 +168,6 @@ public partial class SettingsWindow : Window
         var volumeMixerChanged = settings.ShowVolumeMixer != showVolumeMixer;
         settings.ShowVolumeMixer = showVolumeMixer;
 
-        var showBadges = TaskbarBadgeCheckBox.IsChecked == true;
-        var badgesChanged = settings.ShowTaskbarBadges != showBadges;
-        settings.ShowTaskbarBadges = showBadges;
 
         // No event of its own: the clock is a flag the island reads out of the settings object,
         // and MediaIslandAppearanceChanged below already hands it the whole thing.
@@ -218,8 +208,6 @@ public partial class SettingsWindow : Window
         if (volumeMixerChanged)
             VolumeMixerToggled?.Invoke(showVolumeMixer);
 
-        if (badgesChanged)
-            TaskbarBadgesToggled?.Invoke(showBadges);
 
         MediaIslandAppearanceChanged?.Invoke(settings);
     }

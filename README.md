@@ -22,21 +22,14 @@ box, a strip of scopes, and whichever scope is open.
 
 ### If you hide your taskbar
 
-Auto-hiding the taskbar costs you two things. The island gives both back, since it hangs off the
+Auto-hiding the taskbar takes the clock with it. The island gives that back, since it hangs off the
 same edge anyway:
 
 - **The time** sits on the collapsed island, in whatever format the rest of Windows uses, with the
   date beside it when nothing is playing. With this on the island stays on screen rather than
   waiting to be pointed at — a clock you have to go looking for is not a clock.
-- **The apps with something waiting** appear as icons just right of the clock, each with its count
-  beside it. It reads Windows itself — the notification centre, plus any app flashing for
-  attention — so it works the same whether your taskbar is on screen or hidden. Something arriving
-  with nothing playing brings the island out and holds it there; reading it takes the icon away
-  again. Three at a time, then a `+2` for the rest. An app that flashes without saying how many
-  shows just its icon: Windows does not know the number either, and a made-up one would be worse
-  than none.
 
-Both are toggles in *Settings*.
+It is a toggle in *Settings*.
 
 ### The box
 

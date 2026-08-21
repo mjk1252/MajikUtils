@@ -162,7 +162,6 @@ public class VolumeMixerActivityTests
     private sealed class FakeIcons : IIconProvider
     {
         public byte[]? GetIconPng(string path, int size) => [1];
-        public byte[]? GetAppIconPng(string appUserModelId, int size) => [1];
     }
 
     private sealed class FakeSource : IVolumeMixerSource

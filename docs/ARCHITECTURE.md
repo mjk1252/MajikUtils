@@ -214,158 +214,24 @@ what `SetShown` reads it for. It rides the same 250ms tick as everything else an
 only when the minute turns, and it formats through `CultureInfo.CurrentCulture.ShortTimePattern`
 rather than a setting of its own, since Windows has already asked that question.
 
-What is waiting comes from **two sources**, and the number of them used to be three. Reading the
-taskbar's own badges was the original design and is now deleted, because it was wrong twice over:
-the shell virtualizes those buttons out of the accessibility tree the moment the taskbar
-auto-hides -- so it answered correctly only when it was not needed, which is exactly backwards for
-a feature whose premise is a hidden taskbar -- and even on screen, a badge is whatever an app felt
-like putting there rather than a count of anything. Four separate string formats were parsed wrong
-before that was clear. Text written for screen readers is not an interface.
+The other half -- showing which applications had something waiting -- was built, shipped and then
+taken out again. It is worth a paragraph because the reason is not that it was hard.
 
-`NotificationCentreSource` asks Windows through `UserNotificationListener`. Real notifications,
-real app identity, real counts, no string parsing, and indifferent to whether the taskbar is drawn.
-Documented as requiring package identity and the `userNotificationListener` capability, which this
-application has neither of, and it returns `Allowed` regardless -- measured rather than assumed,
-and re-measured at runtime, so a machine that says no leaves the source quiet instead of broken.
-It is polled; `NotificationChanged` is the obvious thing to use and genuinely does need package
-identity, and an event that silently never fires is worse than a poll that plainly works. It sees
-only what raises a Windows toast, which is not everything.
+It was tried three ways. Reading the taskbar's own badges failed twice over: the shell virtualizes
+those buttons out of the accessibility tree the moment the taskbar auto-hides, which is precisely
+the case the feature existed for, and a badge is whatever an app felt like putting there rather
+than a count of anything -- four separate string formats were parsed wrong before that was clear.
+Windows' notification centre worked and told the truth, but only about applications that raise a
+toast, which most chat applications do not. The shell's flash notifications caught those, but a
+flash carries no number, so it could say that something wanted you and never how much.
 
-`WindowAttentionSource` covers exactly that gap. Most chat applications raise no toast, but they
-*flash* -- and a flash is `FlashWindowEx`, a window-manager event, so `RegisterShellHookWindow`
-hears about it with the taskbar hidden and with nothing parsed. The only pushed source of the two.
-It answers a narrower question, that an app wants you rather than how many things wait, because a
-flash carries no number and Windows knows none either. A flash has a beginning and no end -- the
-shell never says one stopped -- so the window being activated is what clears it, that being what
-actually stops it mattering.
+Three sources, each covering a different hole in the others, none of them able to answer the
+question the same way twice. What reached the screen was an icon strip that was right often enough
+to be trusted and wrong often enough not to be, which is the worst thing a notification can be. It
+was removed rather than kept, and if it comes back it should come back on one source that answers
+completely.
 
-The two merge in `BadgeCountViewModel` by AppUserModelID, **falling back to display name**, and
-that fallback is not a nicety: the sources disagree about what identifies an application. The
-notification centre carries an AppUserModelID (`com.squirrel.Discord.Discord`); a flashing window
-carries only the executable behind it, because that is all a window has. Keyed on the identifier
-alone, one Discord arrived as two and drew two chips on screen. Counted readings take the higher
-rather than the sum; attention goes last and only where the centre does not already know the app,
-since letting a numberless flash in beside "Outlook 3" would replace the three and lose the part
-worth reading.
-
-`BadgeCountViewModel` turns all of that into a single number, and is chrome rather than an
-activity for the same reason the clock is: it stands next to the clock in the collapsed layer, and
-something you hid your taskbar to keep cannot afford to lose its turn on the pill.
-
-What it shows is the **live total** -- everything the taskbar says is waiting, summed. It counted
-arrivals against a baseline for two releases, and that was wrong. The idea was to spare anyone
-permanently sitting on three unread mails a permanent three on the island. What it bought instead
-was a number that could read zero while things were genuinely waiting, because badge semantics are
-not consistent enough to difference: a dot floors to one waiting thing, a real count of one is also
-one, and a genuine arrival between those two states produced no change at all. Counting `9+` as
-nine has the same shape of problem one level up.
-
-A count that is occasionally wrong in the direction of *missing something* is the one failure this
-must not have, so it reports the standing total and lets the clutter fall where it may. The taskbar
-showed exactly that; this stands in for the taskbar.
-
-The bug that took three releases to find was in none of that. `Sync` reconciled the badge list with
-`ObservableCollection.Move`, and the walk was returning the same pinned app twice -- so it computed
-a `Move` past the end of a collection with one item in it, threw, and the exception landed on the
-UI thread inside `OnUi`, which swallows them. `Apply` died before assigning the count, on every
-poll, in silence, while three rounds of parser fixes went looking for a parsing problem. The walk
-now deduplicates by AppUserModelID, and `Sync` is a positional reconcile that cannot throw whatever
-it is handed. The second of those is the one that matters: a display path that fails silently is
-worse than one that fails loudly, and this one had no way to notice.
-
-What it draws is a chip per badged app -- the app's own icon, and the number beside it -- at the far
-right of the pill past the clock, loudest first, capped at three with a `+N` for the rest. Beside
-the clock rather than at the other end, because the right-hand group is everything the island shows
-regardless of whose turn it is to hold the pill, and there is one place to look for both. The icon rather than a
-colour swatch, which was the other idea and the worse one: Discord and Outlook are both blue, and
-at the eight pixels a chip can spare there is no telling a blurple dot from a blue one. An icon is
-unambiguous at that size because it is what the eye already learned to read off the taskbar. The
-chips are why `CollapsedWidth` went from 260 to 330.
-
-Resolving an icon from a taskbar button means resolving it from an AppUserModelID, which
-`SHGetFileInfo` cannot do directly -- most of them are not paths, and a packaged app has no path at
-all. `ShellIconProvider.GetAppIconPng` parses `shell:AppsFolder\<id>` into a PIDL and asks about
-that instead, which reaches every kind of app the taskbar shows a button for. Not quite every id
-resolves (Steam's does not), so a chip without an icon falls back to a glyph. Icons are cached for
-the life of the app, misses included: an id the Applications folder cannot resolve this minute will
-not resolve next minute either.
-
-A wordless badge draws no number at all. The icon has already said the app has something, and
-printing a "1" beside it would claim a precision Windows never gave -- it could be thirty.
-
-Because the count keeps the pill on screen through `SetShown`, a notification arriving with nothing
-playing brings the island out and holds it there. The full-screen check still runs first and still
-wins: the count exists so a notification is not missed, but a topmost strip drawn across a game is
-not the way to say so, and it will still be waiting afterwards.
-
-## Jump lists
-
-`JumpListBuilder` drives `ICustomDestinationList` directly rather than using WPF's
-`System.Windows.Shell.JumpList`, which targets the *process* AppUserModelID and so can only ever
-describe one list. `SetAppID` -- the call WPF does not expose -- is what gives each button its own.
-
-Jump-list entries are shortcuts: they start a new process and cannot call into the running one, so
-anything that must reach it goes through `--panel` (or `--exit`) and the single-instance pipe.
-`--exit` with nothing running exits immediately rather than starting a UI just to close it.
-
-Entries persist in the shell, not the process, which is why *Exit MajikUtils* still works on a pinned
-button whose window is long gone.
-
-## State
-
-Everything lives under `%LOCALAPPDATA%\Majik\MajikUtils`, and the vendor folder in the middle is
-load-bearing rather than tidiness. **The data directory must never be one an installer believes it
-owns.**
-
-State used to live in `%LOCALAPPDATA%\MajikUtils`, which is the exact directory Velopack installs
-the application into. A delta update leaves the contents alone, so it worked for months. A full
-update cleans the directory before writing, and took every note, todo, stack, shelf entry, pinned
-clipboard item and setting with it -- unrecycled, because an installer tidying its own install
-directory has no reason to think it is deleting user data. It is a sibling of the install directory
-now, not the same folder, and `AppPathsTests` asserts that it stays one.
-
-`AppPaths.AdoptDataFrom` migrates from both older layouts on first run, newest first, copying only
-the files the app owns -- a list, not the folder's contents, because one of the folders it reads
-*is* the install directory and copying everything would drag the runtime along with the settings.
-It copies and never moves: the source is a directory an updater may delete without warning, so
-leaving the original costs nothing and taking it costs everything.
-
-- `settings.json` -- start-with-Windows, whether now-playing shows in the island, whether the
-  camera indicator does, its shape/alignment/monitors, per-panel window placement.
-- `shelf.json`, `stacks.json` -- shelf items and stack folders.
-- `notes.json`, `todos.json` -- the island's scratchpad.
-- `clipboard-pinned.json` -- pinned clipboard entries, the only part of clipboard history on disk.
-- `icons\*.ico` -- generated artwork for the pinned taskbar buttons.
-- `crash.log` -- every exception the app caught instead of dying to. Appended to, halved past
-  256 KB, and safe to delete. See *Failure* below.
-- `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations\*.customDestinations-ms` -- the shell's
-  own copy of each button's jump list. Written by the shell, not by us; listed here because it
-  outlives the process and is where to look when a jump list seems stale.
-
-## Failure
-
-`CrashLog` and three handlers installed in `Program.Main` and `App.OnStartup`, which between them
-cover the three ways an exception used to leave the process: off the dispatcher, off a plain
-background thread, and out of a fire-and-forget `Task`. `Main`'s goes up before the `VelopackApp`
-call, so a startup that falls over before WPF is running still leaves a trace.
-
-The dispatcher's is the one that does real work -- it marks the exception handled unless
-`CrashLog.IsFatal` says otherwise, so a throw in a click handler, a converter or a timer tick costs
-one failed operation rather than the whole app. The other two can only write the trace down; by the
-time either runs the runtime has already decided how this ends.
-
-`App.OnUi` is the other half, and it is where most of the crashes actually came from. Every hardware
-and system watcher in `App` is raised from a thread that is not ours -- a WASAPI callback, the
-clipboard pump, a registry watcher, the thread pool -- and `Dispatcher.Invoke` is *synchronous*, so
-an exception inside the delegate is rethrown on that calling thread, where nothing catches anything.
-A null artwork blob or a device disappearing mid-read therefore took the app down at a moment that
-correlates with plugging in headphones rather than with anything the user did. `OnUi` is the guarded
-marshal every one of those sources now goes through; a bare `Dispatcher.Invoke` in `App` is a bug.
-
-The list in `IsFatal` is short on purpose -- out of memory, a corrupted heap, a bad image -- and
-anything not on it is assumed survivable. An `AccessViolationException` out of the audio interop is
-on it, and is not really catchable anyway: .NET fails fast on those, so the honest outcome is a
-crash that has at least been written down.
+The clock stayed, because the clock always knows what time it is.
 
 **Why it flickered.** `VolumeMixerActivity` read Core Audio's session state literally, and Core
 Audio marks a session Inactive whenever the application stops *rendering* -- which the gaps between

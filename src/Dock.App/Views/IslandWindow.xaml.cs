@@ -100,7 +100,6 @@ public partial class IslandWindow : Window
     private readonly MediaViewModel _media;
     private readonly IslandActivityHost _activities;
     private readonly ClockViewModel _clock;
-    private readonly BadgeCountViewModel _badges;
 
     /// <summary>
     /// Notices the island flickering and writes down what drove it. See the type: it exists because
@@ -247,13 +246,11 @@ public partial class IslandWindow : Window
         IAudioLevelSource audio,
         VolumeMixerActivity mixer,
         ClockViewModel clock,
-        BadgeCountViewModel badges,
         AppSettings settings)
     {
         _media = media;
         _activities = activities;
         _clock = clock;
-        _badges = badges;
         _timer = timer;
         _capture = capture;
         _palette = palette;
@@ -266,11 +263,10 @@ public partial class IslandWindow : Window
         DataContext = media;
         CollapsedLayer.DataContext = activities;
 
-        // The two parts of the collapsed layer that do not speak to the host. Both are chrome
-        // rather than activities, so each has its own source, and the layer's two clock-aware
-        // bindings reach across to the clock by element name.
+        // The one part of the collapsed layer that does not speak to the host. The clock is chrome
+        // rather than an activity, so it has its own source, and the layer's two clock-aware
+        // bindings reach across to it by element name.
         ClockBlock.DataContext = clock;
-        BadgeBlock.DataContext = badges;
         Bubble.DataContext = activities;
         ActivityRows.DataContext = activities;
         QuickView.DataContext = capture;
@@ -411,7 +407,6 @@ public partial class IslandWindow : Window
         // or stop -- it is a flag two bindings and SetShown read. Settings already calls this on
         // every change, and the pointer poll picks the pill up or puts it away on the next tick.
         _clock.IsEnabled = settings.ShowClock;
-        _badges.IsEnabled = settings.ShowTaskbarBadges;
 
         var detached = _shape == IslandShape.Pill;
 
@@ -590,12 +585,10 @@ public partial class IslandWindow : Window
     /// <summary>
     /// The whole behaviour, decided once per poll: something playing keeps the pill on screen,
     /// the pointer reaching it opens the controls, and with nothing playing only the top-edge
-    /// strip brings it out at all -- unless the clock or a waiting count is on it, either of which
-    /// holds it there on its own.
+    /// strip brings it out at all -- unless the clock is on it, which holds it there on its own.
     ///
-    /// A full-screen app still wins over all of that, and deliberately: the count is there so a
-    /// notification is not missed, but a topmost strip drawn across a game is not the way to say
-    /// so, and it will still be waiting when the game is not.
+    /// A full-screen app still wins over all of that: a topmost strip drawn across a game is not
+    /// worth the time it would be telling you.
     /// </summary>
     private void UpdateFromPointer()
     {
@@ -619,19 +612,18 @@ public partial class IslandWindow : Window
 
         // The pointer alone is enough to expand now: the scratchpad and the tab strip live in this
         // panel too, and those have to be reachable even with nothing playing.
-        // The clock and a waiting count both count as something to show. Anyone who has turned
-        // either on has most likely auto-hidden their taskbar, and a notice that waited to be
-        // hovered would be exactly the notice they hid the taskbar and then missed.
-        // Spelled out rather than passed as one string, because which of the four is keeping the
+        // The clock counts as something to show. Anyone who has turned it on has most likely
+        // auto-hidden their taskbar, and a clock that waited to be hovered would be no more use
+        // than the one that went away with it.
+        //
+        // Spelled out rather than passed as one string, because which of the three is keeping the
         // island alive is exactly the question a flicker report has to answer.
         var keeping =
             _activities.HasActivity ? "activity" :
             _clock.IsEnabled ? "clock" :
-            _badges.HasCount ? "waiting" :
             hovering ? "pointer" : "nothing";
 
-        SetShown(_activities.HasActivity || _clock.IsEnabled || _badges.HasCount || hovering,
-            $"poll: {keeping}");
+        SetShown(_activities.HasActivity || _clock.IsEnabled || hovering, $"poll: {keeping}");
 
         // The coordinates go in the reason, because "the pointer was on it, then it was not" is
         // where the first round of this stopped being useful. A region that moves out from under a
