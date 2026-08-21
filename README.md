@@ -20,6 +20,23 @@ Collapsed, it shows whatever is playing. **Point at it** and it opens into the c
 and prev/play-pause/next — a glance, and nothing else. **Click it** and the rest appears: one text
 box, a strip of scopes, and whichever scope is open.
 
+### If you hide your taskbar
+
+Auto-hiding the taskbar costs you two things. The island gives both back, since it hangs off the
+same edge anyway:
+
+- **The time** sits on the collapsed island, in whatever format the rest of Windows uses, with the
+  date beside it when nothing is playing. With this on the island stays on screen rather than
+  waiting to be pointed at — a clock you have to go looking for is not a clock.
+- **The apps with something waiting** appear as icons just right of the clock, each with its count
+  beside it — Outlook's unread, a chat app's messages, the notification centre. Something
+  arriving with nothing playing brings the island out and holds it there, so a hidden taskbar costs
+  you nothing; reading it takes the icon away again. Three at a time, then a `+2` for the rest.
+  Apps that badge with a plain dot rather than a number show just the icon: Windows does not say
+  how many are behind it, and a made-up number would be worse than none.
+
+Both are toggles in *Settings*.
+
 ### The box
 
 Everything you type goes in one place, and what you type decides what it becomes:

@@ -2,137 +2,207 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MajikUtils Settings"
-        Width="360" SizeToContent="Height"
+        Width="720" SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Topmost="True"
         Background="#1E1E1E">
-    <StackPanel Margin="24">
+    <Window.Resources>
+        <!-- The two columns are one list read down and then down again, so what separates one
+             group from the next has to be visible: a heading, since an indent alone stops working
+             the moment a group starts at the top of a column rather than after something. -->
+        <Style x:Key="SectionHeading" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#CCFFFFFF"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="SettingNote" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#77FFFFFF"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="24,0,0,12"/>
+        </Style>
+
+        <Style x:Key="SettingToggle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
         <Grid Margin="0,0,0,8">
             <TextBlock Text="MajikUtils Settings" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
             <TextBlock x:Name="VersionText" Foreground="#66FFFFFF" FontSize="11"
                        HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
         </Grid>
 
-        <TextBlock Foreground="#99FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
+        <TextBlock Grid.Row="1" Foreground="#99FFFFFF" FontSize="11" TextWrapping="Wrap"
+                   Margin="0,0,0,20"
                    Text="MajikUtils lives in the island at the top of your screen: point at it for the shelf, clipboard, app search, recent files, notes and todo. Folder stacks keep their own taskbar buttons -- right-click one and choose Pin to taskbar to keep it there."/>
 
-        <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start MajikUtils automatically when Windows starts"
-                  Foreground="White" Margin="0,0,0,16"
-                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
-
-        <CheckBox x:Name="MediaIslandCheckBox" Content="Show what's playing in the island"
-                  Foreground="White" Margin="0,0,0,4"
-                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
-
-        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
-                   Text="Shows the current track on the collapsed island and playback controls when you point at it. Turning this off leaves the island with everything else -- it stays hidden until you touch the top edge of the screen."/>
-
-        <CheckBox x:Name="PrivacyIndicatorCheckBox" Content="Show when an app is using the camera"
-                  Foreground="White" Margin="0,0,0,4"
-                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
-
-        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
-                   Text="Puts a green dot on the island naming whichever app has the camera on. The microphone is deliberately left out: apps hold it open the whole time they are running, so that light would never go off. Windows reports this itself, so an app reaching the camera another way may not appear."/>
-
-        <CheckBox x:Name="AnnouncementsCheckBox" Content="Show copies, downloads and other events"
-                  Foreground="White" Margin="0,0,0,4"
-                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
-
-        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
-                   Text="A copy, a download, a screenshot, a drive or the network changing -- each gets a couple of seconds on the island as it happens. Turning this off leaves clipboard history itself running; only the on-screen announcement stops."/>
-
-        <CheckBox x:Name="ConditionsCheckBox" Content="Show do-not-disturb, restarts and low battery"
-                  Foreground="White" Margin="0,0,0,4"
-                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
-
-        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
-                   Text="A dot beside whatever is playing while any of these hold: Focus is on, a restart is waiting, a drive is nearly full, or the battery is low."/>
-
-        <CheckBox x:Name="VolumeMixerCheckBox" Content="Let an app making sound claim the island"
-                  Foreground="White" Margin="0,0,0,4"
-                  Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
-
-        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="24,0,0,10"
-                   Text="The Mixer tab always works. This only governs whether the island itself notices something making sound and shows a dot for it -- turn it off and the mixer is still one click away, it just never interrupts on its own."/>
-
-        <Grid Margin="24,0,0,16">
+        <!-- Two columns, and which group goes where is not arbitrary: the left is everything the
+             island can be asked to say, the right is where it sits and how it is reached. The left
+             column is the longer of the two and the one most likely to grow. -->
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="32"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
 
-            <Grid.Resources>
-                <Style TargetType="TextBlock">
-                    <Setter Property="Foreground" Value="#99FFFFFF"/>
-                    <Setter Property="FontSize" Value="11"/>
-                    <Setter Property="VerticalAlignment" Value="Center"/>
-                    <Setter Property="Margin" Value="0,0,10,0"/>
-                </Style>
-                <Style TargetType="ComboBox">
-                    <Setter Property="Margin" Value="0,0,0,6"/>
-                </Style>
-            </Grid.Resources>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="What the island shows" Style="{StaticResource SectionHeading}"/>
 
-            <TextBlock Text="Shape"/>
-            <ComboBox x:Name="IslandShapeCombo" Grid.Column="1" SelectionChanged="OnComboChanged">
-                <ComboBoxItem Content="Notch (joined to the screen edge)"/>
-                <ComboBoxItem Content="Pill (floating below the edge)"/>
-            </ComboBox>
+                <CheckBox x:Name="MediaIslandCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Show what's playing in the island"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
 
-            <TextBlock Grid.Row="1" Text="Position"/>
-            <ComboBox x:Name="IslandAlignmentCombo" Grid.Row="1" Grid.Column="1"
-                      SelectionChanged="OnComboChanged">
-                <ComboBoxItem Content="Top left"/>
-                <ComboBoxItem Content="Top centre"/>
-                <ComboBoxItem Content="Top right"/>
-            </ComboBox>
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="Shows the current track on the collapsed island and playback controls when you point at it. Turning this off leaves the island with everything else -- it stays hidden until you touch the top edge of the screen."/>
 
-            <TextBlock Grid.Row="2" Text="Monitor"/>
-            <ComboBox x:Name="IslandMonitorCombo" Grid.Row="2" Grid.Column="1"
-                      DisplayMemberPath="Label" SelectionChanged="OnComboChanged"/>
+                <CheckBox x:Name="ClockCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Show the time on the island"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="Puts the time on the collapsed island, in whatever format the rest of Windows uses, with the date beside it when nothing is playing. This is for anyone who auto-hides the taskbar: with it on, the island stays on screen instead of waiting to be pointed at, so the time is always there to read."/>
+
+                <CheckBox x:Name="TaskbarBadgeCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Show which apps have notifications"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="Puts the apps with something waiting just right of the clock, each as its own icon with a count beside it -- Outlook's unread, a chat app's messages, the notification centre. Something arriving with nothing playing brings the island out and keeps it there, and reading it takes the icon away again. Three at a time, then a plus for the rest. Apps that badge with a plain dot rather than a count, as most chat apps do, show just the icon: Windows does not say how many are behind it."/>
+
+                <CheckBox x:Name="PrivacyIndicatorCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Show when an app is using the camera"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="Puts a green dot on the island naming whichever app has the camera on. The microphone is deliberately left out: apps hold it open the whole time they are running, so that light would never go off. Windows reports this itself, so an app reaching the camera another way may not appear."/>
+
+                <CheckBox x:Name="AnnouncementsCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Show copies, downloads and other events"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="A copy, a download, a screenshot, a drive or the network changing -- each gets a couple of seconds on the island as it happens. Turning this off leaves clipboard history itself running; only the on-screen announcement stops."/>
+
+                <CheckBox x:Name="ConditionsCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Show do-not-disturb, restarts and low battery"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="A dot beside whatever is playing while any of these hold: Focus is on, a restart is waiting, a drive is nearly full, or the battery is low."/>
+
+                <CheckBox x:Name="VolumeMixerCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Let an app making sound claim the island"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="The Mixer tab always works. This only governs whether the island itself notices something making sound and shows a dot for it -- turn it off and the mixer is still one click away, it just never interrupts on its own."/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="Where the island sits" Style="{StaticResource SectionHeading}"/>
+
+                <Grid Margin="0,0,0,20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid.Resources>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#99FFFFFF"/>
+                            <Setter Property="FontSize" Value="11"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="Margin" Value="0,0,10,6"/>
+                        </Style>
+                        <Style TargetType="ComboBox">
+                            <Setter Property="Margin" Value="0,0,0,6"/>
+                        </Style>
+                    </Grid.Resources>
+
+                    <TextBlock Text="Shape"/>
+                    <ComboBox x:Name="IslandShapeCombo" Grid.Column="1" SelectionChanged="OnComboChanged">
+                        <ComboBoxItem Content="Notch (joined to the screen edge)"/>
+                        <ComboBoxItem Content="Pill (floating below the edge)"/>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="1" Text="Position"/>
+                    <ComboBox x:Name="IslandAlignmentCombo" Grid.Row="1" Grid.Column="1"
+                              SelectionChanged="OnComboChanged">
+                        <ComboBoxItem Content="Top left"/>
+                        <ComboBoxItem Content="Top centre"/>
+                        <ComboBoxItem Content="Top right"/>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="2" Text="Monitor"/>
+                    <ComboBox x:Name="IslandMonitorCombo" Grid.Row="2" Grid.Column="1"
+                              DisplayMemberPath="Label" SelectionChanged="OnComboChanged"/>
+                </Grid>
+
+                <TextBlock Text="Shortcuts" Style="{StaticResource SectionHeading}"/>
+
+                <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
+                           Text="Clipboard history is captured in the background regardless. Click a shortcut below, then press the keys you want -- it takes effect immediately."/>
+
+                <Grid Margin="0,0,0,20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid.Resources>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#99FFFFFF"/>
+                            <Setter Property="FontSize" Value="11"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="Margin" Value="0,0,10,8"/>
+                        </Style>
+                        <Style TargetType="Button">
+                            <Setter Property="HorizontalAlignment" Value="Left"/>
+                            <Setter Property="Padding" Value="10,3"/>
+                            <Setter Property="Margin" Value="0,0,0,8"/>
+                            <Setter Property="MinWidth" Value="160"/>
+                        </Style>
+                    </Grid.Resources>
+
+                    <TextBlock Text="Open Clipboard"/>
+                    <Button x:Name="ClipboardHotkeyButton" Grid.Column="1" Click="OnRecordHotkeyClick"/>
+
+                    <TextBlock Grid.Row="1" Text="Command palette"/>
+                    <Button x:Name="PaletteHotkeyButton" Grid.Row="1" Grid.Column="1" Click="OnRecordHotkeyClick"/>
+                </Grid>
+
+                <TextBlock Text="Startup" Style="{StaticResource SectionHeading}"/>
+
+                <CheckBox x:Name="StartWithWindowsCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Start MajikUtils automatically when Windows starts"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+            </StackPanel>
         </Grid>
 
-        <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
-                   Text="Clipboard history is captured in the background regardless. Click a shortcut below, then press the keys you want -- it takes effect immediately."/>
-
-        <Grid Margin="0,0,0,16">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <Grid.Resources>
-                <Style TargetType="TextBlock">
-                    <Setter Property="Foreground" Value="#99FFFFFF"/>
-                    <Setter Property="FontSize" Value="11"/>
-                    <Setter Property="VerticalAlignment" Value="Center"/>
-                    <Setter Property="Margin" Value="0,0,10,8"/>
-                </Style>
-                <Style TargetType="Button">
-                    <Setter Property="HorizontalAlignment" Value="Left"/>
-                    <Setter Property="Padding" Value="10,3"/>
-                    <Setter Property="Margin" Value="0,0,0,8"/>
-                    <Setter Property="MinWidth" Value="160"/>
-                </Style>
-            </Grid.Resources>
-
-            <TextBlock Text="Open Clipboard"/>
-            <Button x:Name="ClipboardHotkeyButton" Grid.Column="1" Click="OnRecordHotkeyClick"/>
-
-            <TextBlock Grid.Row="1" Text="Command palette"/>
-            <Button x:Name="PaletteHotkeyButton" Grid.Row="1" Grid.Column="1" Click="OnRecordHotkeyClick"/>
-        </Grid>
-
-        <Button Content="Close" Width="80" HorizontalAlignment="Right" Padding="0,4" Click="OnCloseClick"/>
-    </StackPanel>
+        <Button Grid.Row="3" Content="Close" Width="80" Margin="0,20,0,0"
+                HorizontalAlignment="Right" Padding="0,4" Click="OnCloseClick"/>
+    </Grid>
 </Window>

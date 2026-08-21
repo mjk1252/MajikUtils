@@ -42,6 +42,68 @@ public sealed class ShellIconProvider : IIconProvider
         }
     }
 
+    /// <summary>
+    /// Resolves an AppUserModelID through the shell's Applications folder.
+    ///
+    /// <c>shell:AppsFolder\&lt;id&gt;</c> is the one name that reaches every kind of app the taskbar
+    /// can show a button for -- packaged, unpackaged, and the Squirrel-installed ones in between --
+    /// and parsing it gives a PIDL that <c>SHGetFileInfo</c> will answer about exactly as it would
+    /// a path.
+    ///
+    /// Some taskbar buttons carry a real executable path as their id rather than an AppUserModelID,
+    /// so that is tried first: it is cheaper, and it gets the extra-large image lists that the
+    /// AppsFolder route does not.
+    /// </summary>
+    public byte[]? GetAppIconPng(string appUserModelId, int size)
+    {
+        if (string.IsNullOrWhiteSpace(appUserModelId))
+            return null;
+
+        if (Path.IsPathRooted(appUserModelId) && File.Exists(appUserModelId))
+            return GetIconPng(appUserModelId, size);
+
+        var pidl = IntPtr.Zero;
+
+        try
+        {
+            var parsed = NativeMethods.SHParseDisplayName(
+                $@"shell:AppsFolder\{appUserModelId}", IntPtr.Zero, out pidl, 0, out _);
+
+            if (parsed != 0 || pidl == IntPtr.Zero)
+                return null;
+
+            var info = new NativeMethods.SHFILEINFO();
+            var flags = NativeMethods.SHGFI_PIDL | NativeMethods.SHGFI_ICON |
+                        (size <= 16 ? NativeMethods.SHGFI_SMALLICON : NativeMethods.SHGFI_LARGEICON);
+
+            var result = NativeMethods.SHGetFileInfoPidl(
+                pidl, 0, ref info, (uint)Marshal.SizeOf<NativeMethods.SHFILEINFO>(), flags);
+
+            if (result == IntPtr.Zero || info.hIcon == IntPtr.Zero)
+                return null;
+
+            try
+            {
+                using var icon = Icon.FromHandle(info.hIcon);
+                using var bitmap = icon.ToBitmap();
+                return ToPng(bitmap);
+            }
+            finally
+            {
+                NativeMethods.DestroyIcon(info.hIcon);
+            }
+        }
+        catch (Exception ex) when (ex is COMException or ArgumentException or ExternalException)
+        {
+            return null;
+        }
+        finally
+        {
+            if (pidl != IntPtr.Zero)
+                Marshal.FreeCoTaskMem(pidl);
+        }
+    }
+
     private static byte[]? TryGetImageListIconPng(string path, int size)
     {
         var info = new NativeMethods.SHFILEINFO();

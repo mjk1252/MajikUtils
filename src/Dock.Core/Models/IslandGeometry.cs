@@ -44,7 +44,12 @@ public readonly record struct IslandScreen(double Left, double Top, double Width
 /// </summary>
 public static class IslandGeometry
 {
-    public const double CollapsedWidth = 260;
+    /// <summary>
+    /// Widened from 260 when the badge chips arrived. They sit left of the album art and the clock
+    /// sits right of the title, so the strip now has four things on it rather than two, and the
+    /// track name was the one being squeezed out.
+    /// </summary>
+    public const double CollapsedWidth = 330;
     public const double CollapsedHeight = 34;
 
     /// <summary>

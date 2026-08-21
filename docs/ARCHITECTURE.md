@@ -177,6 +177,108 @@ ranks `Background`, below music, because "the camera is on" is a dot's worth of 
 [`ISLAND-ACTIVITIES.md`](ISLAND-ACTIVITIES.md) for the geometry, which the hit region and the
 silhouette have to agree on exactly.
 
+**Standing in for a hidden taskbar.** Auto-hiding the taskbar costs you two things you cannot get
+back any other way: the time, and the badges telling you something is waiting. The island already
+hangs off the same edge, so it is where both go.
+
+The clock is `ClockViewModel`, and it is deliberately *not* an `IIslandActivity`. Activities take
+turns holding the pill; a clock that could lose its turn would be missing at exactly the moment it
+is wanted. So it is chrome -- a second column in the collapsed layer, beside whatever holds the
+pill -- and it is the one thing besides an activity that can keep the island on screen, which is
+what `SetShown` reads it for. It rides the same 250ms tick as everything else and rebuilds its text
+only when the minute turns, and it formats through `CultureInfo.CurrentCulture.ShortTimePattern`
+rather than a setting of its own, since Windows has already asked that question.
+
+The badges are the harder half, because there is no API for them. `ITaskbarList3::SetOverlayIcon`
+is a setter, and nothing reads an overlay icon back out of another process. What the shell *does*
+publish is what each taskbar button tells an accessibility client about itself. So
+`TaskbarBadgeSource` walks explorer's UI Automation tree -- `Shell_TrayWnd` and every
+`Shell_SecondaryTrayWnd` -- and reads the badges off those strings.
+
+A dot-style badge has no cardinality, and that is a hard limit rather than a shortcoming here.
+Discord announces "Attention requested" whether one message is waiting or twenty, so an app that
+badges with a dot can only ever contribute one to the count. Windows does not expose more, and
+inventing a number would be worse than admitting to one.
+
+The badge is in the button's **help text**, not its name, and that cost a release to find out. The
+name is the obvious place to look and it never mentions the badge: Discord's button reads
+`Discord - 1 running window pinned` whether or not anything is waiting, and says `Unread messages`
+in the help text instead. Three shapes come back and all three matter -- a count, `0 notifications`
+for a button reporting it has nothing, and a wordless `Unread messages` for a badge that is a dot
+rather than a number. Telling the second from the third is the whole of the parser: conflate them
+and you either lose every dot-style badge or invent one for every app on the bar.
+
+The count also has to be bound to the notification wording rather than merely present in the same
+string. `File Pilot - 1 running window pinned` contains a digit, and the first version of the
+pattern took any digit it found -- which would have reported every ordinary running app as carrying
+a badge of one.
+
+Three things about that walk are load-bearing. It runs on a pool thread, because a UI Automation
+call blocks on another process answering and the island's own thread is the one that must never
+wait on explorer. It fetches every property it needs in a single `CacheRequest` round trip, which
+is the difference between a walk worth doing every two seconds and one that is not. And it re-finds
+the tray from the root each pass rather than holding the element, because explorer restarts and a
+retained `AutomationElement` pointing at the taskbar that used to exist throws from then on with no
+way back.
+
+The parsing is in `Dock.Core` as `TaskbarButtonName`, away from anything that needs a running
+explorer, so every shape the string comes in is asserted directly. It fails quiet rather than
+clever: these are localised strings from a component nobody promised would keep saying the same
+thing, so a name that matches nothing is a button with no badge -- never an exception, and never a
+guess. `Read` returning null for a *failed* walk, as distinct from an empty snapshot for a
+successful one that found nothing, is the same distinction the media source draws, and for the same
+reason: an explorer restart must not blink every badge off the island.
+
+`BadgeCountViewModel` turns all of that into a single number, and is chrome rather than an
+activity for the same reason the clock is: it stands next to the clock in the collapsed layer, and
+something you hid your taskbar to keep cannot afford to lose its turn on the pill.
+
+What it shows is the **live total** -- everything the taskbar says is waiting, summed. It counted
+arrivals against a baseline for two releases, and that was wrong. The idea was to spare anyone
+permanently sitting on three unread mails a permanent three on the island. What it bought instead
+was a number that could read zero while things were genuinely waiting, because badge semantics are
+not consistent enough to difference: a dot floors to one waiting thing, a real count of one is also
+one, and a genuine arrival between those two states produced no change at all. Counting `9+` as
+nine has the same shape of problem one level up.
+
+A count that is occasionally wrong in the direction of *missing something* is the one failure this
+must not have, so it reports the standing total and lets the clutter fall where it may. The taskbar
+showed exactly that; this stands in for the taskbar.
+
+The bug that took three releases to find was in none of that. `Sync` reconciled the badge list with
+`ObservableCollection.Move`, and the walk was returning the same pinned app twice -- so it computed
+a `Move` past the end of a collection with one item in it, threw, and the exception landed on the
+UI thread inside `OnUi`, which swallows them. `Apply` died before assigning the count, on every
+poll, in silence, while three rounds of parser fixes went looking for a parsing problem. The walk
+now deduplicates by AppUserModelID, and `Sync` is a positional reconcile that cannot throw whatever
+it is handed. The second of those is the one that matters: a display path that fails silently is
+worse than one that fails loudly, and this one had no way to notice.
+
+What it draws is a chip per badged app -- the app's own icon, and the number beside it -- at the far
+right of the pill past the clock, loudest first, capped at three with a `+N` for the rest. Beside
+the clock rather than at the other end, because the right-hand group is everything the island shows
+regardless of whose turn it is to hold the pill, and there is one place to look for both. The icon rather than a
+colour swatch, which was the other idea and the worse one: Discord and Outlook are both blue, and
+at the eight pixels a chip can spare there is no telling a blurple dot from a blue one. An icon is
+unambiguous at that size because it is what the eye already learned to read off the taskbar. The
+chips are why `CollapsedWidth` went from 260 to 330.
+
+Resolving an icon from a taskbar button means resolving it from an AppUserModelID, which
+`SHGetFileInfo` cannot do directly -- most of them are not paths, and a packaged app has no path at
+all. `ShellIconProvider.GetAppIconPng` parses `shell:AppsFolder\<id>` into a PIDL and asks about
+that instead, which reaches every kind of app the taskbar shows a button for. Not quite every id
+resolves (Steam's does not), so a chip without an icon falls back to a glyph. Icons are cached for
+the life of the app, misses included: an id the Applications folder cannot resolve this minute will
+not resolve next minute either.
+
+A wordless badge draws no number at all. The icon has already said the app has something, and
+printing a "1" beside it would claim a precision Windows never gave -- it could be thirty.
+
+Because the count keeps the pill on screen through `SetShown`, a notification arriving with nothing
+playing brings the island out and holds it there. The full-screen check still runs first and still
+wins: the count exists so a notification is not missed, but a topmost strip drawn across a game is
+not the way to say so, and it will still be waiting afterwards.
+
 `ForegroundWindow.IsFullScreenOn` takes the island off screen when a game or a full-screen
 video owns that monitor. It compares rectangles rather than window styles: exclusive full-screen,
 borderless windows and full-screen browser tabs all get there differently and only agree on the

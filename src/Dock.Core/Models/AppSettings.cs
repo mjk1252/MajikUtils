@@ -55,6 +55,25 @@ public sealed class AppSettings
     /// </summary>
     public bool ShowVolumeMixer { get; set; } = true;
 
+    /// <summary>
+    /// Whether the time shows on the collapsed island. Defaults on, and stays on for settings
+    /// files written before it existed.
+    ///
+    /// On, the island stays on screen whenever the clock is the only thing it has to say -- which
+    /// is the point of it. A clock that hid until you went looking would be no better than the
+    /// auto-hidden taskbar it is standing in for.
+    /// </summary>
+    public bool ShowClock { get; set; } = true;
+
+    /// <summary>
+    /// Whether the island shows what the taskbar's own buttons are badged with. Defaults on, and
+    /// stays on for settings files written before it existed.
+    ///
+    /// The other half of standing in for a hidden taskbar: the clock covers what it told you at a
+    /// glance, this covers what it was trying to get your attention about.
+    /// </summary>
+    public bool ShowTaskbarBadges { get; set; } = true;
+
     /// <summary>Opens the island on its Clipboard tab. Ctrl+Alt+Shift+V by default.</summary>
     public HotkeyBinding ClipboardHotkey { get; set; } = new(modifiers: 0x2 | 0x1 | 0x4, key: 0x56);
 

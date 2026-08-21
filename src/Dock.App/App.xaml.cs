@@ -87,6 +87,13 @@ public partial class App : System.Windows.Application
     /// the work per tick is a walk of a list with two things in it.
     /// </summary>
     private readonly DispatcherTimer _activityTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+
+    /// <summary>The time on the collapsed pill. Chrome rather than an activity -- see the type.</summary>
+    private ClockViewModel _clock = new();
+
+    /// <summary>What the taskbar's buttons are badged with, and the poll that reads them.</summary>
+    private BadgeCountViewModel _badges = new();
+    private TaskbarBadgeSource? _badgeSource;
     private NotesViewModel? _notesViewModel;
     private TodosViewModel? _todosViewModel;
     private AudioLoopbackSource? _audioSource;
@@ -336,6 +343,16 @@ public partial class App : System.Windows.Application
         _volumeMixerSource.Changed += (_, sessions) => OnUi(() => _volumeMixer.Apply(sessions));
         _volumeMixerSource.Start();
 
+        // Read off a poll of explorer's accessibility tree, which happens on a pool thread and so
+        // arrives here the same way the media and stats readings do.
+        _badges = new BadgeCountViewModel(_iconProvider) { IsEnabled = startupSettings.ShowTaskbarBadges };
+        _badgeSource = new TaskbarBadgeSource();
+        _badgeSource.Changed += (_, snapshot) =>
+            OnUi(() => _badges.Apply(snapshot, DateTimeOffset.UtcNow));
+
+        if (startupSettings.ShowTaskbarBadges)
+            _badgeSource.Start();
+
         _activities = new IslandActivityHost();
         _activities.Tick(DateTimeOffset.UtcNow);
         _activities.Register(_mediaViewModel);
@@ -349,8 +366,13 @@ public partial class App : System.Windows.Application
         _activities.Register(_lowDisk);
         _activities.Register(_volumeMixer);
 
+        _clock = new ClockViewModel { IsEnabled = startupSettings.ShowClock };
+        _clock.Tick(DateTime.Now);
+
         // One clock for everything that measures time on the island: the host's linger windows, an
-        // announcement's two and a half seconds, and the timer's countdown.
+        // announcement's two and a half seconds, and the timer's countdown -- and now the one that
+        // shows the time, which rides the same tick rather than owning a timer of its own and
+        // rebuilds its text only when the minute actually turns.
         _activityTimer.Tick += (_, _) =>
         {
             var now = DateTimeOffset.UtcNow;
@@ -358,7 +380,9 @@ public partial class App : System.Windows.Application
             _timer.Tick(now);
             _progress!.Tick(now);
             _pomodoro!.Tick(now);
+            _badges.Tick(now);
             _activities.Tick(now);
+            _clock.Tick(DateTime.Now);
         };
 
         _activityTimer.Start();
@@ -381,7 +405,7 @@ public partial class App : System.Windows.Application
 
         _islandWindow = new IslandWindow(
             _mediaViewModel, _activities, _privacyViewModel, _timer, capture, CreatePalette(),
-            _viewModel!, wingetService, _audioSource, _volumeMixer, startupSettings);
+            _viewModel!, wingetService, _audioSource, _volumeMixer, _clock, _badges, startupSettings);
 
         _islandWindow.SettingsRequested += ShowSettingsWindow;
         _islandWindow.ExitRequested += Shutdown;
@@ -1038,6 +1062,26 @@ public partial class App : System.Windows.Application
             }
         };
 
+        _settingsWindow.TaskbarBadgesToggled += show =>
+        {
+            if (_badgeSource is null)
+                return;
+
+            if (show)
+            {
+                _badges.IsEnabled = true;
+                _badgeSource.Start();
+                return;
+            }
+
+            // Stopping the poll on its own would leave the last reading lit with nothing coming to
+            // correct it, the same trap the conditions toggle has -- so the activity is cleared by
+            // hand rather than waited on.
+            _badgeSource.Stop();
+            _badges.Clear();
+            _badges.IsEnabled = false;
+        };
+
         _settingsWindow.VolumeMixerToggled += show =>
         {
             if (_volumeMixer is not null)
@@ -1073,6 +1117,7 @@ public partial class App : System.Windows.Application
         _battery?.Dispose();
         _audioDevices?.Dispose();
         _volumeMixerSource?.Dispose();
+        _badgeSource?.Dispose();
 
         _activityTimer.Stop();
         _debugTimer?.Stop();

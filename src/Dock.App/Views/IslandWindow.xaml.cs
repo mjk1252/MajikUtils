@@ -99,6 +99,8 @@ public partial class IslandWindow : Window
 
     private readonly MediaViewModel _media;
     private readonly IslandActivityHost _activities;
+    private readonly ClockViewModel _clock;
+    private readonly BadgeCountViewModel _badges;
     private readonly TimerActivity _timer;
     private readonly CaptureViewModel _capture;
     private readonly CommandPaletteViewModel _palette;
@@ -200,10 +202,14 @@ public partial class IslandWindow : Window
         IWingetService wingetService,
         IAudioLevelSource audio,
         VolumeMixerActivity mixer,
+        ClockViewModel clock,
+        BadgeCountViewModel badges,
         AppSettings settings)
     {
         _media = media;
         _activities = activities;
+        _clock = clock;
+        _badges = badges;
         _timer = timer;
         _capture = capture;
         _palette = palette;
@@ -215,6 +221,12 @@ public partial class IslandWindow : Window
         // the collapsed pill is shared ground, and it asks the host whose turn it is.
         DataContext = media;
         CollapsedLayer.DataContext = activities;
+
+        // The two parts of the collapsed layer that do not speak to the host. Both are chrome
+        // rather than activities, so each has its own source, and the layer's two clock-aware
+        // bindings reach across to the clock by element name.
+        ClockBlock.DataContext = clock;
+        BadgeBlock.DataContext = badges;
         Bubble.DataContext = activities;
         ActivityRows.DataContext = activities;
         QuickView.DataContext = capture;
@@ -347,6 +359,12 @@ public partial class IslandWindow : Window
         _shape = settings.IslandShape;
         _alignment = settings.IslandAlignment;
         _monitor = settings.IslandMonitor ?? "";
+
+        // Not an event of its own like the activity toggles, because the clock has nothing to start
+        // or stop -- it is a flag two bindings and SetShown read. Settings already calls this on
+        // every change, and the pointer poll picks the pill up or puts it away on the next tick.
+        _clock.IsEnabled = settings.ShowClock;
+        _badges.IsEnabled = settings.ShowTaskbarBadges;
 
         var detached = _shape == IslandShape.Pill;
 
@@ -492,7 +510,12 @@ public partial class IslandWindow : Window
     /// <summary>
     /// The whole behaviour, decided once per poll: something playing keeps the pill on screen,
     /// the pointer reaching it opens the controls, and with nothing playing only the top-edge
-    /// strip brings it out at all.
+    /// strip brings it out at all -- unless the clock or a waiting count is on it, either of which
+    /// holds it there on its own.
+    ///
+    /// A full-screen app still wins over all of that, and deliberately: the count is there so a
+    /// notification is not missed, but a topmost strip drawn across a game is not the way to say
+    /// so, and it will still be waiting when the game is not.
     /// </summary>
     private void UpdateFromPointer()
     {
@@ -515,7 +538,10 @@ public partial class IslandWindow : Window
 
         // The pointer alone is enough to expand now: the scratchpad and the tab strip live in this
         // panel too, and those have to be reachable even with nothing playing.
-        SetShown(_activities.HasActivity || hovering);
+        // The clock and a waiting count both count as something to show. Anyone who has turned
+        // either on has most likely auto-hidden their taskbar, and a notice that waited to be
+        // hovered would be exactly the notice they hid the taskbar and then missed.
+        SetShown(_activities.HasActivity || _clock.IsEnabled || _badges.HasCount || hovering);
         SetExpanded(hovering);
     }
 

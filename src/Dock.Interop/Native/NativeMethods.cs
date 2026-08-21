@@ -104,6 +104,30 @@ internal static class NativeMethods
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     internal static extern IntPtr SHGetFileInfo(string path, uint fileAttributes, ref SHFILEINFO fileInfo, uint size, uint flags);
 
+    /// <summary>
+    /// Says the first argument is an item id list rather than a path, which is the only way to ask
+    /// about something that has no path -- a packaged app, or anything else that exists only as an
+    /// entry in the shell's Applications folder.
+    /// </summary>
+    internal const uint SHGFI_PIDL = 0x8;
+
+    /// <summary>
+    /// The same call again, taking a PIDL. Two declarations rather than one taking IntPtr, because
+    /// the string overload has to marshal as Unicode and the PIDL one must not be marshalled at
+    /// all.
+    /// </summary>
+    [DllImport("shell32.dll", EntryPoint = "SHGetFileInfoW")]
+    internal static extern IntPtr SHGetFileInfoPidl(IntPtr pidl, uint fileAttributes, ref SHFILEINFO fileInfo, uint size, uint flags);
+
+    /// <summary>
+    /// Turns a shell path into a PIDL. <c>shell:AppsFolder\&lt;AppUserModelID&gt;</c> is the form
+    /// that matters here: it is how anything holding only an AppUserModelID -- a taskbar button,
+    /// say -- reaches the item the shell knows under that id.
+    /// </summary>
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    internal static extern int SHParseDisplayName(
+        string name, IntPtr bindContext, out IntPtr pidl, uint attributesIn, out uint attributesOut);
+
     [DllImport("user32.dll")]
     internal static extern bool DestroyIcon(IntPtr handle);
 
