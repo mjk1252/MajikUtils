@@ -111,6 +111,13 @@ public partial class IslandWindow : Window
     /// three in each watch, under the threshold in both. What a person sees is all of them at once.
     /// </summary>
     private static readonly FlickerWatch Flicker = new();
+
+    /// <summary>
+    /// Tells a hover from a pointer passing through. See the type -- a three-pixel strip at the top
+    /// of a screen is directly in the path of anything travelling along that edge, and reacting to
+    /// every crossing is what the island's unprompted flickering turned out to be.
+    /// </summary>
+    private readonly HoverGate _hover = new();
     private readonly TimerActivity _timer;
     private readonly CaptureViewModel _capture;
     private readonly CommandPaletteViewModel _palette;
@@ -577,6 +584,10 @@ public partial class IslandWindow : Window
     /// </summary>
     public void ShowSection(IslandSection section)
     {
+        // A hotkey or a pinned shortcut is not a hover and has nothing to prove to the gate; left
+        // closed, it would decide the pointer is elsewhere and put the island away again.
+        _hover.ForceOpen(DateTimeOffset.UtcNow);
+
         SetShown(true);
         SelectSection(section);
         SetPinned(true);
@@ -608,7 +619,11 @@ public partial class IslandWindow : Window
 
         var (x, y) = CursorInfo.GetPosition();
         var region = ActiveHitRect();
-        var hovering = region.Contains(x, y);
+
+        // Not the bare answer. Somebody crossing the top edge of the screen passes through the
+        // strip that summons the island, and treating that as a hover is what made it flicker.
+        var inside = region.Contains(x, y);
+        var hovering = _hover.Update(DateTimeOffset.UtcNow, inside);
 
         // The pointer alone is enough to expand now: the scratchpad and the tab strip live in this
         // panel too, and those have to be reachable even with nothing playing.

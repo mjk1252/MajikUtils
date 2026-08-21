@@ -233,6 +233,34 @@ completely.
 
 The clock stayed, because the clock always knows what time it is.
 
+**Why it flickered, in the end.** Not an activity, and not the geometry -- the reported island was
+crossing its own peek strip. The log said it outright once the coordinates were in it:
+
+```
+22:58:05.622  expanded (pointer on it @1084,0 in [894,0 260x11])
+22:58:05.902  hidden (poll: nothing)
+22:58:06.417  expanded (pointer on it @991,0 in [894,0 260x11])
+```
+
+`y=0` both times, `x` moving, and the region 260 wide by 11 tall with no slack: that is the strip
+that summons a hidden island, and it sits directly in the path of a pointer travelling along the
+top edge of the screen. On that machine the island was on the left monitor of two, so moving the
+mouse between screens went straight through it. Every crossing brought the island out and put it
+away again, which from the user's chair is the island flickering unprompted -- they were not going
+near it on purpose, which is exactly why it read that way.
+
+`HoverGate` is the answer: a hover is somebody stopping, a transit is somebody passing through, and
+the difference between them is time. The gate only changes its mind once the pointer has held to
+it for `Dwell`, which costs a deliberate hover a fraction of a second and costs a transit nothing,
+because a transit never lasts that long. It applies in both directions, so a single stray reading
+neither opens nor closes the island. Requests from outside -- a hotkey, a pinned shortcut -- force
+it open, since those are not hovers and have nothing to prove.
+
+It took seven wrong theories to get here, every one of them derived from reading the code rather
+than from measuring the machine. The one that turned out to be right was not proposed at all; it
+was read off a log entry. `FlickerWatch` and the coordinates in its reasons are the part of this
+worth keeping.
+
 **Why it flickered.** `VolumeMixerActivity` read Core Audio's session state literally, and Core
 Audio marks a session Inactive whenever the application stops *rendering* -- which the gaps between
 two sounds do. So the island tore itself down in every gap and rebuilt itself at the next sound: a
