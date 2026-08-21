@@ -52,7 +52,23 @@ public static class ForegroundWindow
             return false;
         }
 
-        return window.Left <= screen.Left && window.Top <= screen.Top &&
-               window.Right >= screen.Right && window.Bottom >= screen.Bottom;
+        var coversMonitor =
+            window.Left <= screen.Left && window.Top <= screen.Top &&
+            window.Right >= screen.Right && window.Bottom >= screen.Bottom;
+
+        if (!coversMonitor)
+            return false;
+
+        // Covering the monitor is not enough, and assuming it was is a bug that only shows up on a
+        // machine with the taskbar auto-hidden. Ordinarily a maximised window stops at the taskbar
+        // and so falls short of the monitor's bounds by its height; hide the taskbar and every
+        // maximised window covers the screen exactly, and the island went away behind all of them.
+        //
+        // A title bar is what tells the two apart. Going full-screen means dropping the caption --
+        // exclusive full-screen, borderless windows and full-screen video all do it -- while a
+        // maximised window keeps its caption however much of the screen it covers.
+        var style = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_STYLE);
+
+        return (style & NativeMethods.WS_CAPTION) != NativeMethods.WS_CAPTION;
     }
 }

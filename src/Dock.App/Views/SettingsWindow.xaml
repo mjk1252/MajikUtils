@@ -152,10 +152,33 @@
                         <ComboBoxItem Content="Top right"/>
                     </ComboBox>
 
-                    <TextBlock Grid.Row="2" Text="Monitor"/>
-                    <ComboBox x:Name="IslandMonitorCombo" Grid.Row="2" Grid.Column="1"
-                              DisplayMemberPath="Label" SelectionChanged="OnComboChanged"/>
                 </Grid>
+
+                <TextBlock Text="Monitors" Style="{StaticResource SectionHeading}"/>
+
+                <CheckBox x:Name="AllMonitorsCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Show the island on every monitor"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="One island per screen, including any you plug in later. They all show the same thing; pointing at one opens that one."/>
+
+                <!-- Filled in from the attached screens at construction, so a machine with one
+                     monitor shows one row rather than an empty box asking a question that has only
+                     one answer. Disabled while every monitor is ticked above, since the list would
+                     be describing a choice that is not being consulted. -->
+                <ItemsControl x:Name="MonitorList" Margin="24,0,0,4">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Content="{Binding Label}" Foreground="White" Margin="0,0,0,4"
+                                      IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                      Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock x:Name="MonitorFallbackNote" Style="{StaticResource SettingNote}"
+                           Text="With none ticked the island falls back to your primary monitor -- there is no way to turn it off entirely from here."/>
 
                 <TextBlock Text="Shortcuts" Style="{StaticResource SectionHeading}"/>
 

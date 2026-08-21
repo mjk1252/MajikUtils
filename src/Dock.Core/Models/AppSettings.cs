@@ -30,6 +30,52 @@ public sealed class AppSettings
     public string IslandMonitor { get; set; } = "";
 
     /// <summary>
+    /// Whether the island hangs from every attached screen, plugging and unplugging included.
+    /// Overrides <see cref="IslandMonitors"/> outright rather than expanding into it, so a monitor
+    /// arriving later is covered without anyone having to come back here and tick it.
+    /// </summary>
+    public bool IslandOnAllMonitors { get; set; }
+
+    /// <summary>
+    /// Adapter device names of every screen the island hangs from, when it is not on all of them.
+    ///
+    /// Empty falls back to <see cref="IslandMonitor"/> and then to the primary, which is what makes
+    /// a settings file written before this existed open with the island exactly where it was.
+    /// </summary>
+    public List<string> IslandMonitors { get; set; } = [];
+
+    /// <summary>
+    /// Which screens the island should actually be on, given all three settings above.
+    ///
+    /// One place to answer it, because the fallbacks are the whole subtlety and the alternative is
+    /// every caller reimplementing them slightly differently. An empty device name means "the
+    /// primary, whichever that is", and a result is never empty: there is no way to ask for no
+    /// island at all, and unticking the last monitor should leave it somewhere rather than lose it.
+    /// </summary>
+    /// <param name="attached">Device names of the screens currently plugged in, in any order.</param>
+    public IReadOnlyList<string> EffectiveMonitors(IReadOnlyList<string> attached)
+    {
+        ArgumentNullException.ThrowIfNull(attached);
+
+        if (IslandOnAllMonitors)
+            return attached.Count > 0 ? attached : [""];
+
+        // Only the ones still plugged in. A saved screen that has since been unplugged is not an
+        // error and not a reason to fall back -- the others are still perfectly good answers.
+        var chosen = IslandMonitors
+            .Where(m => attached.Contains(m, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (chosen.Count > 0)
+            return chosen;
+
+        // Nothing chosen, or nothing chosen is still plugged in. The single-monitor setting is the
+        // older way of saying the same thing, and an empty string is "follow the primary".
+        return [IslandMonitor ?? ""];
+    }
+
+    /// <summary>
     /// How large each panel was last left, keyed by its AppUserModelID. Size only, not position:
     /// panels place themselves against the taskbar button that opened them, on whichever monitor
     /// that button is on, so there is no position worth carrying across sessions.

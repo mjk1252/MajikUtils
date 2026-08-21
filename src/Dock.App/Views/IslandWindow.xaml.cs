@@ -174,6 +174,39 @@ public partial class IslandWindow : Window
     private IslandAlignment _alignment = IslandAlignment.Center;
     private string _monitor = "";
 
+    /// <summary>
+    /// Which screen this island hangs from, by adapter device name. Empty follows the primary.
+    ///
+    /// Assigned by the App rather than read from settings, because the island can be on several
+    /// screens at once and each window is one of them -- a setting shared between them cannot say
+    /// which is which. Setting it re-places the window.
+    /// </summary>
+    public string MonitorDeviceName
+    {
+        get => _monitor;
+        set
+        {
+            if (string.Equals(_monitor, value, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _monitor = value ?? "";
+            Reposition();
+        }
+    }
+
+    /// <summary>Whether the pointer is inside this island's own region, on its own screen.</summary>
+    public bool IsPointerOver
+    {
+        get
+        {
+            var (x, y) = CursorInfo.GetPosition();
+            return ActiveHitRect().Contains(x, y);
+        }
+    }
+
+    /// <summary>The work area this island is placed against, for deciding which one is "here".</summary>
+    public WorkArea Work => _work;
+
     /// <summary>Raised by the gear. The settings window is the application's to own, not ours.</summary>
     public event Action? SettingsRequested;
 
@@ -358,7 +391,10 @@ public partial class IslandWindow : Window
     {
         _shape = settings.IslandShape;
         _alignment = settings.IslandAlignment;
-        _monitor = settings.IslandMonitor ?? "";
+        // Not settings.IslandMonitor: with the island on several screens at once, which screen this
+        // particular window is on is the App's to decide and not something it can read out of a
+        // setting shared by all of them. See MonitorDeviceName.
+
 
         // Not an event of its own like the activity toggles, because the clock has nothing to start
         // or stop -- it is a flag two bindings and SetShown read. Settings already calls this on

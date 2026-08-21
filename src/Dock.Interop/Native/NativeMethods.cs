@@ -305,6 +305,16 @@ internal static class NativeMethods
 
     internal const int GWL_EXSTYLE = -20;
 
+    /// <summary>The ordinary window styles, as opposed to the extended ones.</summary>
+    internal const int GWL_STYLE = -16;
+
+    /// <summary>
+    /// A title bar. The one thing that reliably tells a merely maximised window from a genuinely
+    /// full-screen one: a window that has gone full-screen drops its caption, and a maximised one
+    /// keeps it however much of the monitor it happens to cover.
+    /// </summary>
+    internal const long WS_CAPTION = 0x00C00000;
+
     /// <summary>Clicks fall through to whatever is underneath.</summary>
     internal const int WS_EX_TRANSPARENT = 0x00000020;
 

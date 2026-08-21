@@ -9,6 +9,7 @@ using Dock.Core.ViewModels;
 using Dock.Interop.Audio;
 using Dock.Interop.Shell;
 using Dock.Interop.Windowing;
+using Microsoft.Win32;
 
 namespace Dock.App;
 
@@ -97,7 +98,17 @@ public partial class App : System.Windows.Application
     private NotesViewModel? _notesViewModel;
     private TodosViewModel? _todosViewModel;
     private AudioLoopbackSource? _audioSource;
-    private IslandWindow? _islandWindow;
+    /// <summary>
+    /// One island per screen it is showing on, keyed by adapter device name. Several rather than
+    /// one because the island can be asked for on every monitor, and a window belongs to exactly
+    /// one screen -- they all share the same view models, so the several are one island as far as
+    /// anything they display is concerned.
+    /// </summary>
+    private readonly Dictionary<string, IslandWindow> _islandWindows =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Everything an island needs that is settled once, at startup, and passed to each.</summary>
+    private IslandDependencies? _islandParts;
     private IIconProvider? _iconProvider;
     private IAppLauncher? _launcher;
     private readonly Dictionary<StackItemViewModel, StackFolderWatcher> _stackWatchers = [];
@@ -403,16 +414,95 @@ public partial class App : System.Windows.Application
         var capture = new CaptureViewModel(
             _todosViewModel!, _notesViewModel!, new ClipboardWriter(), _pomodoro);
 
-        _islandWindow = new IslandWindow(
-            _mediaViewModel, _activities, _privacyViewModel, _timer, capture, CreatePalette(),
-            _viewModel!, wingetService, _audioSource, _volumeMixer, _clock, _badges, startupSettings);
+        _islandParts = new IslandDependencies(capture, wingetService);
 
-        _islandWindow.SettingsRequested += ShowSettingsWindow;
-        _islandWindow.ExitRequested += Shutdown;
-        _islandWindow.RestartForUpdateRequested += _updates.ApplyAndRestart;
-        _islandWindow.CheckForUpdatesRequested += () => _ = CheckForUpdatesManuallyAsync();
-        _islandWindow.Show();
+        SyncIslands(startupSettings);
+
+        // A monitor arriving or leaving changes which islands should exist, not just where the ones
+        // that do sit. Each window repositions itself on the same event; this decides the set.
+        SystemEvents.DisplaySettingsChanged += (_, _) =>
+            OnUi(() => SyncIslands(_settingsStore!.Load()));
     }
+
+    /// <summary>
+    /// Brings the set of islands in line with the settings and with what is actually plugged in.
+    ///
+    /// Idempotent, and called from three places for that reason: startup, a settings change, and a
+    /// monitor being plugged in or unplugged. Windows that should still exist are left alone rather
+    /// than torn down and rebuilt, so changing the shape does not blink an island on a screen the
+    /// change had nothing to do with.
+    /// </summary>
+    private void SyncIslands(AppSettings settings)
+    {
+        if (_islandParts is not { } parts)
+            return;
+
+        var attached = MonitorPlacement.Enumerate().Select(m => m.DeviceName).ToList();
+        var wanted = settings.EffectiveMonitors(attached);
+
+        foreach (var gone in _islandWindows.Keys.Where(k => !wanted.Contains(k, StringComparer.OrdinalIgnoreCase)).ToList())
+        {
+            _islandWindows[gone].CloseForExit();
+            _islandWindows.Remove(gone);
+        }
+
+        foreach (var device in wanted)
+        {
+            if (_islandWindows.TryGetValue(device, out var existing))
+            {
+                existing.ApplyAppearance(settings);
+                continue;
+            }
+
+            var island = new IslandWindow(
+                _mediaViewModel!, _activities!, _privacyViewModel!, _timer!, parts.Capture,
+                CreatePalette(), _viewModel!, parts.Winget, _audioSource!, _volumeMixer!,
+                _clock, _badges, settings);
+
+            island.SettingsRequested += ShowSettingsWindow;
+            island.ExitRequested += Shutdown;
+            island.RestartForUpdateRequested += _updates.ApplyAndRestart;
+            island.CheckForUpdatesRequested += () => _ = CheckForUpdatesManuallyAsync();
+
+            island.MonitorDeviceName = device;
+            island.Show();
+
+            _islandWindows[device] = island;
+        }
+    }
+
+    /// <summary>
+    /// The island a request from outside should open: the one on the screen the pointer is on, and
+    /// otherwise any of them.
+    ///
+    /// A hotkey has no monitor of its own, and opening every island at once would be four search
+    /// boxes wanting the same keystrokes. Where the pointer is, is the closest thing to where the
+    /// user is.
+    /// </summary>
+    private IslandWindow? ActiveIsland()
+    {
+        if (_islandWindows.Count == 0)
+            return null;
+
+        var (x, y) = CursorInfo.GetPosition();
+
+        foreach (var island in _islandWindows.Values)
+        {
+            var work = island.Work;
+
+            if (x >= work.Left && x < work.Right && y >= work.Top && y < work.Bottom)
+                return island;
+        }
+
+        return _islandWindows.Values.First();
+    }
+
+    /// <summary>
+    /// The two things an island needs that are neither view models nor settings, kept together so
+    /// that creating one on a monitor plugged in an hour after startup does not need the startup
+    /// locals still to be in scope.
+    /// </summary>
+    private sealed record IslandDependencies(CaptureViewModel Capture, IWingetService Winget);
 
     /// <summary>
     /// Stacks are the one thing still on the taskbar: a stack is a folder the user pinned there on
@@ -492,7 +582,7 @@ public partial class App : System.Windows.Application
         await _updates.CheckAndDownloadAsync();
 
         if (_updates.UpdateReady)
-            _islandWindow?.SetUpdateAvailable(true);
+            foreach (var island in _islandWindows.Values) island.SetUpdateAvailable(true);
     }
 
     /// <summary>
@@ -517,7 +607,7 @@ public partial class App : System.Windows.Application
         _announcements?.Announce(DateTimeOffset.UtcNow, label, glyph);
 
         if (result == UpdateCheckResult.UpdateReady)
-            _islandWindow?.SetUpdateAvailable(true);
+            foreach (var island in _islandWindows.Values) island.SetUpdateAvailable(true);
     }
 
     private void ShowPanel(string panel)
@@ -547,15 +637,15 @@ public partial class App : System.Windows.Application
             // otherwise means opening the island and typing.
             case "pomodoro":
                 _pomodoro?.Start(DateTimeOffset.UtcNow);
-                _islandWindow?.ShowSection(IslandSection.Quick);
+                ActiveIsland()?.ShowSection(IslandSection.Quick);
                 break;
 
             case "launch":
-                _islandWindow?.ShowSection(IslandSection.Launcher);
+                ActiveIsland()?.ShowSection(IslandSection.Launcher);
                 break;
 
             case "clipboard":
-                _islandWindow?.ShowSection(IslandSection.Clipboard);
+                ActiveIsland()?.ShowSection(IslandSection.Clipboard);
                 break;
 
             case "settings":
@@ -563,11 +653,11 @@ public partial class App : System.Windows.Application
                 break;
 
             case "shelf":
-                _islandWindow?.ShowSection(IslandSection.Shelf);
+                ActiveIsland()?.ShowSection(IslandSection.Shelf);
                 break;
 
             default:
-                _islandWindow?.ShowSection(IslandSection.Quick);
+                ActiveIsland()?.ShowSection(IslandSection.Quick);
                 break;
         }
     }
@@ -593,9 +683,9 @@ public partial class App : System.Windows.Application
         _hotkeys.HotkeyPressed += id => OnUi(() =>
         {
             if (id == ClipboardHotkeyId)
-                _islandWindow?.ShowSection(IslandSection.Clipboard);
+                ActiveIsland()?.ShowSection(IslandSection.Clipboard);
             else if (id == PaletteHotkeyId)
-                _islandWindow?.ShowSearch();
+                ActiveIsland()?.ShowSearch();
         });
     }
 
@@ -724,7 +814,7 @@ public partial class App : System.Windows.Application
         _systemStatsSource.Updated += (_, stats) => OnUi(() =>
         {
             _viewModel!.UpdateSystemStats(stats.CpuPercent, stats.GpuPercent);
-            _islandWindow?.UpdateStats(stats.CpuPercent, stats.GpuPercent);
+            foreach (var island in _islandWindows.Values) island.UpdateStats(stats.CpuPercent, stats.GpuPercent);
         });
         _systemStatsSource.Start();
     }
@@ -1095,7 +1185,7 @@ public partial class App : System.Windows.Application
             _hotkeys?.Register(PaletteHotkeyId, binding.Modifiers, binding.Key);
 
         _settingsWindow.MediaIslandAppearanceChanged += settings =>
-            _islandWindow?.ApplyAppearance(settings);
+            SyncIslands(settings);
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
@@ -1122,7 +1212,8 @@ public partial class App : System.Windows.Application
         _activityTimer.Stop();
         _debugTimer?.Stop();
         _updateTimer.Stop();
-        _islandWindow?.CloseForExit();
+        foreach (var island in _islandWindows.Values) island.CloseForExit();
+        _islandWindows.Clear();
         _mediaSource?.Dispose();
         _audioSource?.Dispose();
 

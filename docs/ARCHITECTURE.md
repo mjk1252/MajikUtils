@@ -148,11 +148,36 @@ makes overlays like this stutter. The pill's silhouette is a `NotchShape` rather
 `Border`, because its top corners have to curve back *outwards* into the screen edge -- a rounded
 rectangle stuck to the top of a screen reads as a window that was pushed off it.
 
-Placement is on the monitor named in settings (the primary by default) rather than the cursor's --
-the one thing in MajikUtils that does not follow the pointer -- but goes through the same
-physical-pixel `MonitorPlacement` path as the stack windows, for the same DPI reasons. The monitor
-is stored by adapter device name, the only identifier stable across sessions, and an unplugged
-screen falls back to the primary.
+Placement is on the monitors named in settings rather than the cursor's -- the one thing in
+MajikUtils that does not follow the pointer -- but goes through the same physical-pixel
+`MonitorPlacement` path as the stack windows, for the same DPI reasons. Monitors are stored by
+adapter device name, the only identifier stable across sessions.
+
+**Several islands.** The island can hang from every screen at once, or from a chosen few, so `App`
+holds a window per device name rather than one window. They share every view model, which is what
+makes them one island as far as anything displayed is concerned: the same track, the same clock,
+the same badge chips. `SyncIslands` reconciles the set against `AppSettings.EffectiveMonitors` and
+is idempotent, because it is called from three places -- startup, a settings change, and a monitor
+being plugged in or unplugged -- and a change to the shape must not blink an island on a screen the
+change had nothing to do with.
+
+`EffectiveMonitors` is where the three settings that can disagree are resolved, and it lives in
+`Dock.Core` with the fallbacks asserted. The rule worth knowing: the answer is never empty. There
+is no way to ask for no island at all, so unticking the last monitor leaves it on the primary
+rather than losing it with no way back, and unplugging every chosen screen falls back rather than
+showing nothing.
+
+Requests from outside -- a hotkey, a relaunch from a pinned shortcut -- go to one island, not all
+of them, since four search boxes wanting the same keystrokes is not a feature. `ActiveIsland` picks
+the one on the screen the pointer is on, which is the closest thing available to where the user is.
+
+**Telling full-screen from maximised.** `ForegroundWindow.IsFullScreenOn` takes the island off
+screen when a game or a full-screen video owns that monitor. It compared the foreground window's
+rectangle against the monitor's bounds, which was right until somebody auto-hid their taskbar:
+ordinarily a maximised window stops at the taskbar and falls short of the monitor by its height,
+but with the taskbar hidden every maximised window covers the screen exactly, and the island
+disappeared behind all of them. The caption bar is what tells the two apart -- going full-screen
+means dropping it, and a maximised window keeps it however much of the screen it covers.
 
 **Island activities.** The collapsed pill is a `ContentControl` over whichever activity currently
 holds it, not a fixed now-playing row. `IslandActivityHost` (in `Dock.Core`, and the one piece of
@@ -279,11 +304,6 @@ playing brings the island out and holds it there. The full-screen check still ru
 wins: the count exists so a notification is not missed, but a topmost strip drawn across a game is
 not the way to say so, and it will still be waiting afterwards.
 
-`ForegroundWindow.IsFullScreenOn` takes the island off screen when a game or a full-screen
-video owns that monitor. It compares rectangles rather than window styles: exclusive full-screen,
-borderless windows and full-screen browser tabs all get there differently and only agree on the
-result.
-
 ## Jump lists
 
 `JumpListBuilder` drives `ICustomDestinationList` directly rather than using WPF's
@@ -299,15 +319,32 @@ button whose window is long gone.
 
 ## State
 
-- `%LOCALAPPDATA%\MajikUtils\settings.json` — start-with-Windows, whether now-playing shows in the
-  island, whether the camera indicator does, its shape/alignment/monitor, per-panel window
-  placement.
-- `%LOCALAPPDATA%\MajikUtils\shelf.json`, `stacks.json` — shelf items and stack folders.
-- `%LOCALAPPDATA%\MajikUtils\notes.json`, `todos.json` — the island's scratchpad.
-- `%LOCALAPPDATA%\MajikUtils\icons\*.ico` — generated artwork for the pinned taskbar buttons.
-- `%LOCALAPPDATA%\MajikUtils\crash.log` — every exception the app caught instead of dying to.
-  Appended to, halved past 256 KB, and safe to delete. See *Failure* below.
-- `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations\*.customDestinations-ms` — the shell's
+Everything lives under `%LOCALAPPDATA%\Majik\MajikUtils`, and the vendor folder in the middle is
+load-bearing rather than tidiness. **The data directory must never be one an installer believes it
+owns.**
+
+State used to live in `%LOCALAPPDATA%\MajikUtils`, which is the exact directory Velopack installs
+the application into. A delta update leaves the contents alone, so it worked for months. A full
+update cleans the directory before writing, and took every note, todo, stack, shelf entry, pinned
+clipboard item and setting with it -- unrecycled, because an installer tidying its own install
+directory has no reason to think it is deleting user data. It is a sibling of the install directory
+now, not the same folder, and `AppPathsTests` asserts that it stays one.
+
+`AppPaths.AdoptDataFrom` migrates from both older layouts on first run, newest first, copying only
+the files the app owns -- a list, not the folder's contents, because one of the folders it reads
+*is* the install directory and copying everything would drag the runtime along with the settings.
+It copies and never moves: the source is a directory an updater may delete without warning, so
+leaving the original costs nothing and taking it costs everything.
+
+- `settings.json` -- start-with-Windows, whether now-playing shows in the island, whether the
+  camera indicator does, its shape/alignment/monitors, per-panel window placement.
+- `shelf.json`, `stacks.json` -- shelf items and stack folders.
+- `notes.json`, `todos.json` -- the island's scratchpad.
+- `clipboard-pinned.json` -- pinned clipboard entries, the only part of clipboard history on disk.
+- `icons\*.ico` -- generated artwork for the pinned taskbar buttons.
+- `crash.log` -- every exception the app caught instead of dying to. Appended to, halved past
+  256 KB, and safe to delete. See *Failure* below.
+- `%APPDATA%\Microsoft\Windows\Recent\CustomDestinations\*.customDestinations-ms` -- the shell's
   own copy of each button's jump list. Written by the shell, not by us; listed here because it
   outlives the process and is where to look when a jump list seems stale.
 

@@ -14,7 +14,7 @@ A set of Windows 11 utilities that live in an island at the top of the screen, b
 
 **The island** is the whole app. It hangs from the top edge of a monitor as a notch fused to the
 screen edge or, if you prefer, a pill floating just below it — at either end of that edge or in the
-middle, on whichever monitor you pick (*Settings*).
+middle, on whichever monitors you pick, or on all of them at once (*Settings*).
 
 Collapsed, it shows whatever is playing. **Point at it** and it opens into the cover, a progress bar
 and prev/play-pause/next — a glance, and nothing else. **Click it** and the rest appears: one text

@@ -83,7 +83,8 @@ public partial class SettingsWindow : Window
 
         IslandShapeCombo.SelectedIndex = (int)settings.IslandShape;
         IslandAlignmentCombo.SelectedIndex = (int)settings.IslandAlignment;
-        PopulateMonitors(settings.IslandMonitor);
+        AllMonitorsCheckBox.IsChecked = settings.IslandOnAllMonitors;
+        PopulateMonitors(settings);
 
         ClipboardHotkeyButton.Content = FormatHotkey(settings.ClipboardHotkey);
         PaletteHotkeyButton.Content = FormatHotkey(settings.PaletteHotkey);
@@ -94,33 +95,50 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// Lists the attached screens, ahead of a "follow the primary" entry that stores no name at all
-    /// -- the right answer for anyone who just wants it wherever their main screen is, and the
-    /// fallback for a saved screen that has since been unplugged.
+    /// Lists the attached screens as a row apiece, ticked where the island is currently shown.
+    ///
+    /// A list rather than the dropdown this replaced, because the island can now be on several at
+    /// once and a dropdown can only ask which one. There is no "primary monitor" row any more
+    /// either: it existed to mean "follow whichever screen is primary", and it is now what an empty
+    /// selection falls back to rather than something to pick.
     /// </summary>
-    private void PopulateMonitors(string selectedDeviceName)
+    private void PopulateMonitors(AppSettings settings)
     {
-        IslandMonitorCombo.Items.Add(new MonitorInfo("", "Primary monitor", true));
+        var attached = MonitorPlacement.Enumerate().Select(m => m.DeviceName).ToList();
+        var showing = settings.EffectiveMonitors(attached);
 
         foreach (var monitor in MonitorPlacement.Enumerate())
         {
-            IslandMonitorCombo.Items.Add(monitor with
+            MonitorList.Items.Add(new MonitorChoice
             {
-                Label = monitor.IsPrimary ? $"{monitor.Label} — primary" : monitor.Label
+                DeviceName = monitor.DeviceName,
+                Label = monitor.IsPrimary ? $"{monitor.Label} — primary" : monitor.Label,
+                IsSelected = showing.Contains(monitor.DeviceName, StringComparer.OrdinalIgnoreCase)
             });
         }
 
-        for (var i = 0; i < IslandMonitorCombo.Items.Count; i++)
-        {
-            if (IslandMonitorCombo.Items[i] is MonitorInfo m &&
-                string.Equals(m.DeviceName, selectedDeviceName, StringComparison.OrdinalIgnoreCase))
-            {
-                IslandMonitorCombo.SelectedIndex = i;
-                return;
-            }
-        }
+        UpdateMonitorListState();
+    }
 
-        IslandMonitorCombo.SelectedIndex = 0;
+    /// <summary>
+    /// Greys the per-monitor list out while every monitor is ticked, since the list is then
+    /// describing a choice nothing is consulting.
+    /// </summary>
+    private void UpdateMonitorListState()
+    {
+        var all = AllMonitorsCheckBox.IsChecked == true;
+
+        MonitorList.IsEnabled = !all;
+        MonitorList.Opacity = all ? 0.4 : 1;
+        MonitorFallbackNote.Visibility = all ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>One screen in the list, and whether the island is on it.</summary>
+    private sealed class MonitorChoice
+    {
+        public required string DeviceName { get; init; }
+        public required string Label { get; init; }
+        public bool IsSelected { get; set; }
     }
 
     /// <summary>ComboBox hands out its own event args, which the shared handler has no use for.</summary>
@@ -167,9 +185,19 @@ public partial class SettingsWindow : Window
 
         settings.IslandShape = (IslandShape)Math.Max(0, IslandShapeCombo.SelectedIndex);
         settings.IslandAlignment = (IslandAlignment)Math.Max(0, IslandAlignmentCombo.SelectedIndex);
-        settings.IslandMonitor = IslandMonitorCombo.SelectedItem is MonitorInfo monitor
-            ? monitor.DeviceName
-            : "";
+        settings.IslandOnAllMonitors = AllMonitorsCheckBox.IsChecked == true;
+
+        settings.IslandMonitors = MonitorList.Items
+            .OfType<MonitorChoice>()
+            .Where(m => m.IsSelected)
+            .Select(m => m.DeviceName)
+            .ToList();
+
+        // Still written, so that a downgrade to a build that only knows about one monitor opens on
+        // one of the screens the island was actually on rather than defaulting back to the primary.
+        settings.IslandMonitor = settings.IslandMonitors.Count > 0 ? settings.IslandMonitors[0] : "";
+
+        UpdateMonitorListState();
 
         _settingsStore.Save(settings);
 
