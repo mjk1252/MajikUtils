@@ -34,10 +34,15 @@ public sealed class FlickerWatch
 
     /// <summary>
     /// How long to stay quiet after reporting. A flicker does not stop because it was written
-    /// down, and a log filling at ten lines a second helps nobody -- the first report already has
-    /// everything the later ones would say.
+    /// down, and a log filling at ten lines a second helps nobody.
+    ///
+    /// A minute rather than the five it started at. Five is the right number for a log nobody is
+    /// watching, and the wrong one for the case this exists to serve: somebody triggering the
+    /// fault on purpose, checking the file, finding one entry from before they started, and
+    /// reporting that nothing was written. A minute still keeps the file small and no longer
+    /// swallows the reproduction anyone is deliberately performing.
     /// </summary>
-    public static readonly TimeSpan Cooldown = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan Cooldown = TimeSpan.FromMinutes(1);
 
     private readonly List<(DateTimeOffset At, string Reason)> _recent = [];
 

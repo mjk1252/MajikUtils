@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using Dock.Core.Services;
@@ -30,6 +31,16 @@ public static class CrashLog
     public static string Path => AppPaths.FilePath("crash.log");
 
     /// <summary>
+    /// The running version, stamped on every entry.
+    ///
+    /// Because "no log was written" and "a log was written by a build without the logging in it"
+    /// are the same observation from the outside, and telling them apart by asking someone to
+    /// check their version is a round trip that the file can simply answer itself.
+    /// </summary>
+    private static readonly string Version =
+        Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
+
+    /// <summary>
     /// Records one exception. <paramref name="origin"/> is where it came from rather than what it
     /// was -- "dispatcher", "background thread", the name of the source that raised it -- because
     /// the exception already says what it was, and which thread it arrived on is the part that is
@@ -46,7 +57,9 @@ public static class CrashLog
                 .Append(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"))
                 .Append("  [")
                 .Append(fatal ? "fatal" : "handled")
-                .Append("]  ")
+                .Append("]  v")
+                .Append(Version)
+                .Append("  ")
                 .AppendLine(origin)
                 .AppendLine(exception?.ToString() ?? "(no exception object)")
                 .AppendLine()
@@ -78,7 +91,9 @@ public static class CrashLog
             var entry = new StringBuilder()
                 .Append("===== ")
                 .Append(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"))
-                .Append("  [note]  ")
+                .Append("  [note]  v")
+                .Append(Version)
+                .Append("  ")
                 .AppendLine(origin)
                 .AppendLine(detail)
                 .AppendLine()
