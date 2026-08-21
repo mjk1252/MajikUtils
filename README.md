@@ -29,12 +29,12 @@ same edge anyway:
   date beside it when nothing is playing. With this on the island stays on screen rather than
   waiting to be pointed at — a clock you have to go looking for is not a clock.
 - **The apps with something waiting** appear as icons just right of the clock, each with its count
-  beside it. It reads three things at once — Windows' notification centre, the badges on your
-  taskbar buttons, and any app flashing for attention — so an app that only does one of the three
-  still shows up, whether or not the taskbar is on screen. Something arriving with nothing playing
-  brings the island out and holds it there; reading it takes the icon away again. Three at a time,
-  then a `+2` for the rest. An app that flashes without saying how many shows just its icon:
-  Windows does not know the number either, and a made-up one would be worse than none.
+  beside it. It reads Windows itself — the notification centre, plus any app flashing for
+  attention — so it works the same whether your taskbar is on screen or hidden. Something arriving
+  with nothing playing brings the island out and holds it there; reading it takes the icon away
+  again. Three at a time, then a `+2` for the rest. An app that flashes without saying how many
+  shows just its icon: Windows does not know the number either, and a made-up one would be worse
+  than none.
 
 Both are toggles in *Settings*.
 

@@ -214,80 +214,39 @@ what `SetShown` reads it for. It rides the same 250ms tick as everything else an
 only when the minute turns, and it formats through `CultureInfo.CurrentCulture.ShortTimePattern`
 rather than a setting of its own, since Windows has already asked that question.
 
-The badges come from **three sources**, and the number of them is the story. Reading the taskbar's
-buttons was the obvious route and the wrong one twice over: the shell virtualizes those buttons
-away while the taskbar is auto-hidden -- which is precisely the case the feature exists for, so it
-answered correctly only when it was not needed -- and even on screen a badge is whatever the app
-felt like putting there rather than a count of anything. Four separate string formats were parsed
-wrong on the way to learning that; text written for screen readers is not an interface.
-
-So the taskbar reader is now the least of the three:
+What is waiting comes from **two sources**, and the number of them used to be three. Reading the
+taskbar's own badges was the original design and is now deleted, because it was wrong twice over:
+the shell virtualizes those buttons out of the accessibility tree the moment the taskbar
+auto-hides -- so it answered correctly only when it was not needed, which is exactly backwards for
+a feature whose premise is a hidden taskbar -- and even on screen, a badge is whatever an app felt
+like putting there rather than a count of anything. Four separate string formats were parsed wrong
+before that was clear. Text written for screen readers is not an interface.
 
 `NotificationCentreSource` asks Windows through `UserNotificationListener`. Real notifications,
 real app identity, real counts, no string parsing, and indifferent to whether the taskbar is drawn.
 Documented as requiring package identity and the `userNotificationListener` capability, which this
 application has neither of, and it returns `Allowed` regardless -- measured rather than assumed,
-and re-measured at runtime, so a machine that says no leaves the source quiet. It is polled;
-`NotificationChanged` is the obvious thing to use and genuinely does need package identity, and an
-event that silently never fires is worse than a poll that plainly works. It sees only what raises
-a Windows toast, which is not everything -- an app drawing its own notifications is invisible here,
-and correctly so, since Windows does not know about it either.
+and re-measured at runtime, so a machine that says no leaves the source quiet instead of broken.
+It is polled; `NotificationChanged` is the obvious thing to use and genuinely does need package
+identity, and an event that silently never fires is worse than a poll that plainly works. It sees
+only what raises a Windows toast, which is not everything.
 
-`WindowAttentionSource` catches exactly that gap. Most chat applications raise no toast and badge
-nothing, but they *flash* -- and a flash is `FlashWindowEx`, a window-manager event, so
-`RegisterShellHookWindow` hears about it with the taskbar hidden and with no string parsed. It is
-the only pushed source of the three. It answers a narrower question, that an app wants you rather
-than how many things wait, because a flash carries no number and Windows knows none either. A
-flash has a beginning and no end: the shell never says one stopped, so the window being activated
-is what clears it, that being what actually stops it mattering.
+`WindowAttentionSource` covers exactly that gap. Most chat applications raise no toast, but they
+*flash* -- and a flash is `FlashWindowEx`, a window-manager event, so `RegisterShellHookWindow`
+hears about it with the taskbar hidden and with nothing parsed. The only pushed source of the two.
+It answers a narrower question, that an app wants you rather than how many things wait, because a
+flash carries no number and Windows knows none either. A flash has a beginning and no end -- the
+shell never says one stopped -- so the window being activated is what clears it, that being what
+actually stops it mattering.
 
-The three merge in `BadgeCountViewModel` by AppUserModelID. Counted sources take the higher rather
-than the sum, since an app with three in the centre usually also badges its button with a three and
-adding would say six; attention goes last and only where nothing else knows the app, since letting
-a numberless flash in beside "Outlook 3" would replace the three and lose the part worth reading.
-
-The taskbar reader is kept because it is the one that works for an app badging numerically while
-the taskbar is up, and because it was already written and costs a poll.
-
-The badges were the harder half, because there is no API for them. `ITaskbarList3::SetOverlayIcon`
-is a setter, and nothing reads an overlay icon back out of another process. What the shell *does*
-publish is what each taskbar button tells an accessibility client about itself. So
-`TaskbarBadgeSource` walks explorer's UI Automation tree -- `Shell_TrayWnd` and every
-`Shell_SecondaryTrayWnd` -- and reads the badges off those strings.
-
-A dot-style badge has no cardinality, and that is a hard limit rather than a shortcoming here.
-Discord announces "Attention requested" whether one message is waiting or twenty, so an app that
-badges with a dot can only ever contribute one to the count. Windows does not expose more, and
-inventing a number would be worse than admitting to one.
-
-The badge is in the button's **help text**, not its name, and that cost a release to find out. The
-name is the obvious place to look and it never mentions the badge: Discord's button reads
-`Discord - 1 running window pinned` whether or not anything is waiting, and says `Unread messages`
-in the help text instead. Three shapes come back and all three matter -- a count, `0 notifications`
-for a button reporting it has nothing, and a wordless `Unread messages` for a badge that is a dot
-rather than a number. Telling the second from the third is the whole of the parser: conflate them
-and you either lose every dot-style badge or invent one for every app on the bar.
-
-The count also has to be bound to the notification wording rather than merely present in the same
-string. `File Pilot - 1 running window pinned` contains a digit, and the first version of the
-pattern took any digit it found -- which would have reported every ordinary running app as carrying
-a badge of one.
-
-Three things about that walk are load-bearing. It runs on a pool thread, because a UI Automation
-call blocks on another process answering and the island's own thread is the one that must never
-wait on explorer. It fetches every property it needs in a single `CacheRequest` round trip, which
-is the difference between a walk worth doing every two seconds and one that is not. And it re-finds
-the tray from the root each pass rather than holding the element, because explorer restarts and a
-retained `AutomationElement` pointing at the taskbar that used to exist throws from then on with no
-way back.
-
-The parsing is in `Dock.Core` as `TaskbarButtonName`, away from anything that needs a running
-explorer, so every shape the string comes in is asserted directly. It fails quiet rather than
-clever: these are localised strings from a component nobody promised would keep saying the same
-thing, so a name that matches nothing is a button with no badge -- never an exception, and never a
-guess. `Read` returning null for a *failed* walk, as distinct from an empty snapshot for a
-successful one that found nothing, is the same distinction the media source draws, and for the same
-reason: an explorer restart must not blink every badge off the island.
+The two merge in `BadgeCountViewModel` by AppUserModelID, **falling back to display name**, and
+that fallback is not a nicety: the sources disagree about what identifies an application. The
+notification centre carries an AppUserModelID (`com.squirrel.Discord.Discord`); a flashing window
+carries only the executable behind it, because that is all a window has. Keyed on the identifier
+alone, one Discord arrived as two and drew two chips on screen. Counted readings take the higher
+rather than the sum; attention goes last and only where the centre does not already know the app,
+since letting a numberless flash in beside "Outlook 3" would replace the three and lose the part
+worth reading.
 
 `BadgeCountViewModel` turns all of that into a single number, and is chrome rather than an
 activity for the same reason the clock is: it stands next to the clock in the collapsed layer, and

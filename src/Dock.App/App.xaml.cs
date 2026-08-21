@@ -94,7 +94,6 @@ public partial class App : System.Windows.Application
 
     /// <summary>What the taskbar's buttons are badged with, and the poll that reads them.</summary>
     private BadgeCountViewModel _badges = new();
-    private TaskbarBadgeSource? _badgeSource;
 
     /// <summary>
     /// Windows' own notification centre, which is the source the taskbar's badges should have been
@@ -366,13 +365,8 @@ public partial class App : System.Windows.Application
         _volumeMixerSource.Changed += (_, sessions) => OnUi(() => _volumeMixer.Apply(sessions));
         _volumeMixerSource.Start();
 
-        // Read off a poll of explorer's accessibility tree, which happens on a pool thread and so
-        // arrives here the same way the media and stats readings do.
-        _badges = new BadgeCountViewModel(_iconProvider) { IsEnabled = startupSettings.ShowTaskbarBadges };
-        _badgeSource = new TaskbarBadgeSource();
-        _badgeSource.Changed += (_, snapshot) =>
-            OnUi(() => _badges.Apply(snapshot, DateTimeOffset.UtcNow));
-
+        // Two sources for what is waiting, and neither is the taskbar: its buttons vanish from the
+        // accessibility tree the moment it auto-hides, which is the case this exists for.
         _notificationSource = new NotificationCentreSource();
         _notificationSource.Changed += (_, apps) =>
             OnUi(() => _badges.Apply(apps, DateTimeOffset.UtcNow));
@@ -386,7 +380,6 @@ public partial class App : System.Windows.Application
 
         if (startupSettings.ShowTaskbarBadges)
         {
-            _badgeSource.Start();
             _notificationSource.Start();
             _attentionSource.Start();
         }
@@ -1181,22 +1174,17 @@ public partial class App : System.Windows.Application
 
         _settingsWindow.TaskbarBadgesToggled += show =>
         {
-            if (_badgeSource is null)
-                return;
-
             if (show)
             {
                 _badges.IsEnabled = true;
-                _badgeSource.Start();
                 _notificationSource?.Start();
                 _attentionSource?.Start();
                 return;
             }
 
-            // Stopping the poll on its own would leave the last reading lit with nothing coming to
-            // correct it, the same trap the conditions toggle has -- so the activity is cleared by
-            // hand rather than waited on.
-            _badgeSource.Stop();
+            // Stopping the sources on their own would leave the last reading lit with nothing
+            // coming to correct it, the same trap the conditions toggle has -- so the chips are
+            // cleared by hand rather than waited on.
             _notificationSource?.Stop();
             _attentionSource?.Stop();
             _badges.Clear();
@@ -1238,7 +1226,6 @@ public partial class App : System.Windows.Application
         _battery?.Dispose();
         _audioDevices?.Dispose();
         _volumeMixerSource?.Dispose();
-        _badgeSource?.Dispose();
         _notificationSource?.Dispose();
         _attentionSource?.Dispose();
 

@@ -112,11 +112,16 @@ public sealed class AppSettings
     public bool ShowClock { get; set; } = true;
 
     /// <summary>
-    /// Whether the island shows what the taskbar's own buttons are badged with. Defaults on, and
-    /// stays on for settings files written before it existed.
+    /// Whether the island shows which applications have something waiting. Defaults on, and stays
+    /// on for settings files written before it existed.
     ///
     /// The other half of standing in for a hidden taskbar: the clock covers what it told you at a
     /// glance, this covers what it was trying to get your attention about.
+    ///
+    /// Still named for the taskbar, which is no longer where any of it is read from -- the reading
+    /// now comes from Windows' notification centre and from windows flashing. The name is kept so
+    /// that a settings file written by an earlier build keeps the choice it recorded; renaming it
+    /// would silently switch the feature back on for everyone who had turned it off.
     /// </summary>
     public bool ShowTaskbarBadges { get; set; } = true;
 

@@ -81,7 +81,7 @@
                           Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
 
                 <TextBlock Style="{StaticResource SettingNote}"
-                           Text="Puts the apps with something waiting just right of the clock, each as its own icon with a count beside it. Read from three places at once: Windows' notification centre, the badges on your taskbar buttons, and any app flashing for attention -- so an app that only does one of the three still shows up, with the taskbar hidden or not. Something arriving with nothing playing brings the island out and keeps it there. Three at a time, then a plus for the rest. An app that flashes without saying how many shows just its icon: Windows does not know the number either."/>
+                           Text="Puts the apps with something waiting just right of the clock, each as its own icon with a count beside it. Read from Windows itself -- its notification centre, plus any app flashing for attention -- so it works exactly the same whether your taskbar is on screen or hidden. Something arriving with nothing playing brings the island out and keeps it there. Three at a time, then a plus for the rest. An app that flashes without saying how many shows just its icon: Windows does not know the number either, and a made-up one would be worse than none."/>
 
                 <CheckBox x:Name="PrivacyIndicatorCheckBox" Style="{StaticResource SettingToggle}"
                           Content="Show when an app is using the camera"
