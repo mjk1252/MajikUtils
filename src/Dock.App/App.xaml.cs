@@ -362,7 +362,8 @@ public partial class App : System.Windows.Application
         {
             AllowPillClaim = startupSettings.ShowVolumeMixer
         };
-        _volumeMixerSource.Changed += (_, sessions) => OnUi(() => _volumeMixer.Apply(sessions));
+        _volumeMixerSource.Changed += (_, sessions) =>
+            OnUi(() => _volumeMixer.Apply(sessions, DateTimeOffset.UtcNow));
         _volumeMixerSource.Start();
 
         // Two sources for what is waiting, and neither is the taskbar: its buttons vanish from the

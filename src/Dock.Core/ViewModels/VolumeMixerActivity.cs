@@ -19,11 +19,33 @@ public sealed partial class VolumeMixerActivity : ObservableObject, IIslandActiv
 {
     private static readonly TimeSpan ActivityLinger = TimeSpan.FromSeconds(1.5);
 
+    /// <summary>
+    /// How long an application counts as making sound after it stops.
+    ///
+    /// Core Audio marks a session Inactive whenever the application stops *rendering*, which is not
+    /// the same as it having finished: the gaps between sounds do it, and Firefox in particular
+    /// cycles its per-content-process sessions constantly with nothing obviously playing. Read
+    /// literally, the island tore itself down in every one of those gaps and rebuilt itself at the
+    /// next sound -- a flicker every few seconds, with the pointer nowhere near it, on any machine
+    /// with a browser open.
+    ///
+    /// So a session that was audible recently is still an application making sound. Eight seconds
+    /// covers the gap between two sounds without holding the island up long after real silence,
+    /// and it is the same lesson the media source already learned about the gap between two tracks.
+    /// </summary>
+    private static readonly TimeSpan LoudGrace = TimeSpan.FromSeconds(8);
+
     /// <summary>Below this a session reads as silent even if Windows still calls it Active.</summary>
     private const double SilentVolume = 0.02;
 
     private readonly IIconProvider _icons;
     private readonly IVolumeMixerSource _source;
+
+    /// <summary>
+    /// When each process was last genuinely audible. What turns an instantaneous reading into
+    /// "recently", and the whole of the flicker fix.
+    /// </summary>
+    private readonly Dictionary<int, DateTimeOffset> _lastLoud = [];
 
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private string _summary = string.Empty;
@@ -59,11 +81,33 @@ public sealed partial class VolumeMixerActivity : ObservableObject, IIslandActiv
     /// Takes a fresh reading. Called every poll regardless of whether anything is audible, which is
     /// what keeps the Mixer tab live even while this activity holds neither slot.
     /// </summary>
-    public void Apply(IReadOnlyList<AudioSessionInfo> sessions)
+    public void Apply(IReadOnlyList<AudioSessionInfo> sessions, DateTimeOffset now)
     {
         RefreshSessions(sessions);
 
-        var loud = sessions.Where(s => s.IsActive && s.Volume > SilentVolume && !s.IsMuted).ToList();
+        // Audible at this instant. Not the same question as whether the app is making sound.
+        foreach (var session in sessions)
+        {
+            if (session.IsActive && session.Volume > SilentVolume && !session.IsMuted)
+                _lastLoud[session.ProcessId] = now;
+        }
+
+        // Processes that have gone away entirely, and stamps old enough to have stopped counting.
+        // Pruned here rather than left to grow, since a long-running app sees a great many.
+        var present = sessions.Select(s => s.ProcessId).ToHashSet();
+
+        foreach (var processId in _lastLoud.Keys.ToList())
+        {
+            if (!present.Contains(processId) || now - _lastLoud[processId] > LoudGrace)
+                _lastLoud.Remove(processId);
+        }
+
+        // Audible now first, so the name and icon on the pill belong to whatever is actually making
+        // sound rather than to whichever app happened to be loudest eight seconds ago.
+        var loud = sessions
+            .Where(s => _lastLoud.ContainsKey(s.ProcessId))
+            .OrderByDescending(s => s.IsActive && s.Volume > SilentVolume && !s.IsMuted)
+            .ToList();
 
         IsActive = AllowPillClaim && loud.Count > 0;
 

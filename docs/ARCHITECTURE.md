@@ -367,6 +367,20 @@ anything not on it is assumed survivable. An `AccessViolationException` out of t
 on it, and is not really catchable anyway: .NET fails fast on those, so the honest outcome is a
 crash that has at least been written down.
 
+**Why it flickered.** `VolumeMixerActivity` read Core Audio's session state literally, and Core
+Audio marks a session Inactive whenever the application stops *rendering* -- which the gaps between
+two sounds do. So the island tore itself down in every gap and rebuilt itself at the next sound: a
+flicker every few seconds, with the pointer nowhere near it, on any machine with a browser open.
+Firefox is the worst of them, cycling its per-content-process sessions constantly with nothing
+obviously playing. The 1.5s linger was shorter than the 1.2s poll plus Core Audio's own inactivity
+timeout, so it covered none of it.
+
+An application that was audible eight seconds ago is still an application making sound.
+`VolumeMixerActivity` now stamps each process when it is genuinely loud and treats anything inside
+that window as loud, which is the same lesson `MediaSessionSource` already learned about the gap
+between two tracks. The setting that switches the mixer off the pill was the only workaround, and
+turning it off is what kept this invisible on the machine it was developed on.
+
 **When it flickers.** The island was reported flickering open and closed on a machine nobody
 debugging it could reach, with the pointer nowhere near it. Reading the code produced four
 plausible causes and no way to tell which was real, which is how an afternoon goes into fixing
