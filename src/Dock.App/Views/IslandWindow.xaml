@@ -35,7 +35,7 @@
             <Setter Property="Margin" Value="0,0,2,0"/>
             <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
@@ -58,7 +58,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Plate" Property="Background" Value="#18FFFFFF"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Plate" Property="Background"
@@ -66,7 +66,7 @@
                                 <Setter TargetName="Plate" Property="BorderBrush"
                                         Value="{DynamicResource IslandAccentBrush}"/>
                                 <Setter TargetName="Label" Property="Visibility" Value="Visible"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -81,7 +81,7 @@
             <Setter Property="Height" Value="28"/>
             <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
@@ -93,7 +93,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Plate" Property="Background" Value="#18FFFFFF"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -172,7 +172,7 @@
         <DataTemplate DataType="{x:Type vm:AnnouncementActivity}">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
-                           FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                            Margin="0,0,8,0"/>
                 <TextBlock Text="{Binding Label}" Style="{StaticResource IslandBodyText}"
                            VerticalAlignment="Center"/>
@@ -185,7 +185,7 @@
         <DataTemplate DataType="{x:Type vm:ConditionActivity}">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
-                           FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
                            Margin="0,0,8,0"/>
                 <TextBlock Text="{Binding Label}" Style="{StaticResource IslandBodyText}"
                            VerticalAlignment="Center"/>
@@ -195,7 +195,7 @@
         <DataTemplate DataType="{x:Type vm:TimerActivity}">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock Text="&#xE916;" FontFamily="{StaticResource GlyphFont}"
-                           FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                            Margin="0,0,8,0"/>
                 <TextBlock Text="{Binding RemainingText}" Style="{StaticResource IslandBodyText}"
                            VerticalAlignment="Center"/>
@@ -443,20 +443,87 @@
 
         <DataTemplate x:Key="Compact.AnnouncementActivity">
             <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
-                       FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"
+                       FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </DataTemplate>
 
         <DataTemplate x:Key="Compact.ConditionActivity">
             <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
-                       FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        ToolTip="{Binding Label}"/>
         </DataTemplate>
 
+        <!-- The cake, and nothing else. The one compact form here that is not a Segoe glyph: the
+             icon font has no cake in it, and the emoji is the whole point of the feature: a
+             birthday said with a monochrome outline is a calendar entry. -->
+        <DataTemplate x:Key="Compact.BirthdayActivity">
+            <TextBlock Text="&#x1F382;" FontSize="15"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       ToolTip="{Binding Headline}"/>
+        </DataTemplate>
+
+        <!-- In the pill, which is where this activity spends its day: the cake and the sentence.
+             An implicit DataType template rather than a keyed one, the same as media's, because
+             this is the form it takes when it *holds* the pill. -->
+        <DataTemplate DataType="{x:Type vm:BirthdayActivity}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <TextBlock Text="&#x1F382;" FontSize="14" VerticalAlignment="Center"
+                           Margin="0,0,9,0"/>
+                <TextBlock Text="{Binding Headline}" Style="{StaticResource IslandTitleText}"
+                           FontSize="12.5" VerticalAlignment="Center" MaxWidth="190"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- The expanded row, and the only place the dismiss button can live: the collapsed pill
+             has no room for a control, and this activity is the one thing on the island with no
+             clock behind it: without a button here it would never go. -->
+        <DataTemplate x:Key="Expanded.BirthdayActivity">
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="&#x1F382;" FontSize="17" VerticalAlignment="Center"
+                           Margin="4,0,12,0"/>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Headline}"
+                               Style="{StaticResource IslandTitleText}"/>
+
+                    <!-- Named individually below the headline once there is more than one of them,
+                         since "3 birthdays today" is a count and not an answer. One birthday needs
+                         no list: the headline already said the name. -->
+                    <ItemsControl ItemsSource="{Binding Today}" Margin="0,4,0,0"
+                                  Visibility="{Binding HasSeveral,
+                                      Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="{Binding Name}"
+                                               Style="{StaticResource IslandBodyText}"/>
+                                    <TextBlock Text="{Binding AgeText}" Margin="8,0,0,0"
+                                               Style="{StaticResource IslandFaintText}"
+                                               FontSize="10" VerticalAlignment="Center"
+                                               Visibility="{Binding HasAge,
+                                                   Converter={StaticResource BoolToVisibility}}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <Button Grid.Column="2" Content="Dismiss" Style="{StaticResource ChipButton}"
+                        Command="{Binding DismissCommand}" VerticalAlignment="Center"/>
+            </Grid>
+        </DataTemplate>
+
         <DataTemplate x:Key="CompactActivityFallback">
             <Ellipse Width="8" Height="8" VerticalAlignment="Center"
-                    Fill="{StaticResource TextSecondaryBrush}"/>
+                    Fill="{DynamicResource TextSecondaryBrush}"/>
         </DataTemplate>
 
         <views:CompactActivityTemplateSelector x:Key="CompactActivity"
@@ -490,7 +557,7 @@
         <DataTemplate x:Key="Expanded.ConditionActivity">
             <StackPanel Orientation="Horizontal" Margin="4,0,0,8" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource GlyphFont}"
-                           FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                            VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <TextBlock Text="{Binding Label}" Style="{StaticResource IslandBodyText}"
                            VerticalAlignment="Center"/>
@@ -607,7 +674,7 @@
             <views:NotchShape x:Name="Notch"
                               PillWidth="260" PillHeight="34" BottomRadius="17" Fillet="14"
                               HorizontalAlignment="Center" VerticalAlignment="Top"
-                              Fill="#F2101010"
+                              Fill="{DynamicResource IslandSurfaceBrush}"
                               Stroke="{StaticResource PanelBorderBrush}" StrokeThickness="1">
                 <views:NotchShape.Effect>
                     <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.55" Color="Black"/>
@@ -638,7 +705,7 @@
                 <views:NotchShape x:Name="BubbleShape"
                                   PillWidth="34" PillHeight="34" BottomRadius="17" Fillet="8"
                                   HorizontalAlignment="Center" VerticalAlignment="Top"
-                                  Fill="#F2101010"
+                                  Fill="{DynamicResource IslandSurfaceBrush}"
                                   Stroke="{StaticResource PanelBorderBrush}" StrokeThickness="1">
                     <views:NotchShape.Effect>
                         <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.55" Color="Black"/>
@@ -661,6 +728,13 @@
                     ClipToBounds="True"
                     MouseLeftButtonDown="OnPillClick">
                 <Grid>
+                    <!-- Behind everything else in the pill, and clipped by it: the confetti falls
+                         through the island's own background rather than over the top of the text,
+                         which is what lets it run while the pill is still perfectly readable.
+                         Never hit-testable, so it can never come between the pointer and a
+                         control. See ConfettiCanvas for why it comes in bursts. -->
+                    <views:ConfettiCanvas x:Name="Confetti"/>
+
                     <!-- Collapsed: whichever activity currently holds the pill, at a glance. Its
                          DataContext is the activity host, set in the constructor; the form each
                          activity takes here is a DataTemplate up in Window.Resources. -->
@@ -825,6 +899,12 @@
                                 <ToggleButton x:Name="MixerTab" Style="{StaticResource IslandScope}"
                                               Content="&#xE767;" Tag="Mixer"
                                               Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
+                                <!-- The gift box rather than a cake: the strip is a row of Segoe
+                                     glyphs at one weight, and an emoji dropped into the middle of
+                                     it reads as a sticker. The cake belongs to the day itself. -->
+                                <ToggleButton x:Name="BirthdaysTab" Style="{StaticResource IslandScope}"
+                                              Content="&#xEB4E;" Tag="Birthdays"
+                                              Checked="OnTabChecked" Unchecked="OnTabUnchecked"/>
                             </StackPanel>
 
                             <TextBlock x:Name="StatsText" Grid.Column="1"
@@ -875,7 +955,7 @@
                                          currently doing without a word. -->
                                     <TextBlock x:Name="CaptureGlyph" Text="&#xE70F;"
                                                FontFamily="{StaticResource GlyphFont}" FontSize="12"
-                                               Foreground="{StaticResource TextTertiaryBrush}"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"
                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
 
                                     <Grid Grid.Column="1">
@@ -948,7 +1028,7 @@
                                                      it rather than nothing, so the two kinds of row
                                                      share a text baseline instead of stepping. -->
                                                 <Ellipse Width="4" Height="4"
-                                                         Fill="{StaticResource TextTertiaryBrush}"
+                                                         Fill="{DynamicResource TextTertiaryBrush}"
                                                          VerticalAlignment="Center"
                                                          HorizontalAlignment="Left" Margin="5,0,0,0"
                                                          Visibility="{Binding IsNote,
@@ -962,7 +1042,7 @@
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding Todo.IsDone}" Value="True">
                                                                     <Setter Property="Foreground"
-                                                                            Value="{StaticResource TextTertiaryBrush}"/>
+                                                                            Value="{DynamicResource TextTertiaryBrush}"/>
                                                                     <Setter Property="TextDecorations" Value="Strikethrough"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
@@ -986,7 +1066,7 @@
                                                     <TextBlock Text="&#xE711;" Style="{StaticResource InlineAction}"
                                                                FontFamily="{StaticResource GlyphFont}"
                                                                FontSize="10"
-                                                               Foreground="{StaticResource TextTertiaryBrush}"/>
+                                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
                                                 </Border>
                                             </Grid>
                                         </DataTemplate>
@@ -1015,6 +1095,7 @@
                             <panels:RecentPanel x:Name="RecentView" Visibility="Collapsed"/>
                             <panels:StacksPanel x:Name="StacksView" Visibility="Collapsed"/>
                             <panels:MixerPanel x:Name="MixerView" Visibility="Collapsed"/>
+                            <panels:BirthdaysPanel x:Name="BirthdaysView" Visibility="Collapsed"/>
                         </Grid>
                     </Grid>
                 </Grid>

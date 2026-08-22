@@ -103,6 +103,17 @@
 
                 <TextBlock Style="{StaticResource SettingNote}"
                            Text="The Mixer tab always works. This only governs whether the island itself notices something making sound and shows a dot for it -- turn it off and the mixer is still one click away, it just never interrupts on its own."/>
+
+                <CheckBox x:Name="BirthdaysCheckBox" Style="{StaticResource SettingToggle}"
+                          Content="Announce birthdays with a cake and confetti"
+                          Checked="OnSettingChanged" Unchecked="OnSettingChanged"/>
+
+                <TextBlock Style="{StaticResource SettingNote}"
+                           Text="On the day, the island says whose birthday it is and stays there until you dismiss it. The list is a CSV you keep yourself -- click Edit list below, or use the Birthdays tab on the island, which counts down to everybody's. Turning this off leaves that tab working; it only stops the day interrupting you."/>
+
+                <Button x:Name="EditBirthdaysButton" Content="Edit list..."
+                        HorizontalAlignment="Left" Padding="10,3" Margin="24,0,0,16"
+                        Click="OnEditBirthdaysClick"/>
             </StackPanel>
 
             <StackPanel Grid.Column="2">
@@ -209,6 +220,82 @@
                     <TextBlock Grid.Row="1" Text="Command palette"/>
                     <Button x:Name="PaletteHotkeyButton" Grid.Row="1" Grid.Column="1" Click="OnRecordHotkeyClick"/>
                 </Grid>
+
+                <TextBlock Text="Colours" Style="{StaticResource SectionHeading}"/>
+
+                <TextBlock Foreground="#77FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
+                           Text="Two colours for the island's background gradient, and one for its text. Type a hex colour like #1E1E2E -- the preview below updates as you type, and the island follows it straight away. Leave a box empty for the default."/>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid.Resources>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#99FFFFFF"/>
+                            <Setter Property="FontSize" Value="11"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="Margin" Value="0,0,10,6"/>
+                        </Style>
+                        <Style TargetType="TextBox">
+                            <Setter Property="Margin" Value="0,0,8,6"/>
+                            <Setter Property="Padding" Value="4,3"/>
+                            <Setter Property="FontFamily" Value="Consolas, Courier New"/>
+                        </Style>
+                        <!-- The swatch beside each box. A hex code is not a colour until you have
+                             read it, and three of them stacked is a puzzle rather than a choice. -->
+                        <Style TargetType="Border">
+                            <Setter Property="Width" Value="26"/>
+                            <Setter Property="Height" Value="22"/>
+                            <Setter Property="CornerRadius" Value="4"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="BorderBrush" Value="#44FFFFFF"/>
+                            <Setter Property="Margin" Value="0,0,0,6"/>
+                        </Style>
+                    </Grid.Resources>
+
+                    <TextBlock Text="Gradient from"/>
+                    <TextBox x:Name="GradientFromBox" Grid.Column="1" TextChanged="OnThemeTextChanged"/>
+                    <Border x:Name="GradientFromSwatch" Grid.Column="2"/>
+
+                    <TextBlock Grid.Row="1" Text="Gradient to"/>
+                    <TextBox x:Name="GradientToBox" Grid.Row="1" Grid.Column="1"
+                             TextChanged="OnThemeTextChanged"/>
+                    <Border x:Name="GradientToSwatch" Grid.Row="1" Grid.Column="2"/>
+
+                    <TextBlock Grid.Row="2" Text="Text"/>
+                    <TextBox x:Name="FontColorBox" Grid.Row="2" Grid.Column="1"
+                             TextChanged="OnThemeTextChanged"/>
+                    <Border x:Name="FontColorSwatch" Grid.Row="2" Grid.Column="2"/>
+                </Grid>
+
+                <!-- The preview is the point of the whole group: three hex codes describe a
+                     combination nobody can picture, and the one thing worth knowing about a text
+                     colour is whether it survives on the gradient behind it. So the sample shows
+                     all three steps of the ramp on the actual gradient rather than a swatch each. -->
+                <Border x:Name="ThemePreview" CornerRadius="8" Height="72" Margin="0,0,0,8"
+                        BorderThickness="1" BorderBrush="#26FFFFFF">
+                    <StackPanel VerticalAlignment="Center" Margin="14,0">
+                        <TextBlock x:Name="PreviewTitle" Text="Preview" FontSize="14"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock x:Name="PreviewBody" Text="What the island's text looks like"
+                                   FontSize="11.5" Margin="0,3,0,0"/>
+                        <TextBlock x:Name="PreviewMeta" Text="And the quietest step of it"
+                                   FontSize="10" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Button x:Name="ResetThemeButton" Content="Reset to default"
+                        HorizontalAlignment="Left" Padding="10,3" Margin="0,0,0,20"
+                        Click="OnResetThemeClick"/>
 
                 <TextBlock Text="Startup" Style="{StaticResource SectionHeading}"/>
 

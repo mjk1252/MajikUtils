@@ -112,6 +112,40 @@ public sealed class AppSettings
     public bool ShowClock { get; set; } = true;
 
 
+    /// <summary>
+    /// Whether a birthday from the list claims the island for the day. Defaults on, and stays on
+    /// for settings files written before it existed.
+    ///
+    /// Off does not stop the Birthdays scope working -- the countdown list is a place you go to,
+    /// and this only governs whether one is allowed to interrupt you.
+    /// </summary>
+    public bool ShowBirthdays { get; set; } = true;
+
+    /// <summary>
+    /// The date today's birthdays were last dismissed on, as <c>yyyy-MM-dd</c>, or empty.
+    ///
+    /// One date rather than a list of acknowledgements: a dismissal only ever covers the day it was
+    /// made on, so anything older than today is already meaningless and there is nothing to prune.
+    /// A string rather than a DateOnly because this file is meant to survive being read by hand.
+    /// </summary>
+    public string BirthdaysDismissedOn { get; set; } = "";
+
+    /// <summary>
+    /// The two ends of the island's background gradient, as <c>#RRGGBB</c>. Empty means the
+    /// near-black it has always been -- so a settings file written before these existed opens
+    /// looking exactly as it did.
+    /// </summary>
+    public string ThemeGradientFrom { get; set; } = "";
+
+    public string ThemeGradientTo { get; set; } = "";
+
+    /// <summary>
+    /// The island's text colour, as <c>#RRGGBB</c>. Empty means white. The two dimmer steps of the
+    /// ramp are this colour at reduced alpha rather than separate settings -- see
+    /// <see cref="ThemeColors"/> for why that is one choice and not three.
+    /// </summary>
+    public string ThemeFontColor { get; set; } = "";
+
     /// <summary>Opens the island on its Clipboard tab. Ctrl+Alt+Shift+V by default.</summary>
     public HotkeyBinding ClipboardHotkey { get; set; } = new(modifiers: 0x2 | 0x1 | 0x4, key: 0x56);
 

@@ -19,10 +19,22 @@
 
         <!-- The text ramp, and the whole of it. Three levels, not the six the island had grown:
              hierarchy on a dark HUD is carried by *few* clearly separated steps, and a ramp with
-             #77, #88 and #99 in it is three ways of saying the same thing that read as one. -->
+             #77, #88 and #99 in it is three ways of saying the same thing that read as one.
+
+             These three and IslandSurfaceBrush below are what the theme in Settings writes, and
+             what is declared here is only the seed: Theme.Apply replaces each entry outright at
+             startup and again whenever the colours change. That is why every reference to these
+             four keys is a DynamicResource. A StaticResource resolves once when the BAML loads and
+             would spend the rest of the session holding the white one it started with, which is
+             exactly the bug the accent brushes were built around, and the same fix. -->
         <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFFFF"/>
         <SolidColorBrush x:Key="TextSecondaryBrush" Color="#99FFFFFF"/>
         <SolidColorBrush x:Key="TextTertiaryBrush" Color="#61FFFFFF"/>
+
+        <!-- The island's own background, and the one thing the two chosen gradient colours paint.
+             Seeded flat here at the near-black the island has always been, so an install that has
+             never opened the theme settings looks exactly as it did. -->
+        <SolidColorBrush x:Key="IslandSurfaceBrush" Color="#F2101010"/>
 
         <!-- Taken from the artwork of whatever is playing and pushed here by the island, so a
              brush declared once is the single place every accented thing reads from: the progress
@@ -41,26 +53,26 @@
         <!-- Three text roles. Everything in the island is one of these or it is a mistake:
              a title, a line of content, or a label about the content. -->
         <Style x:Key="IslandTitleText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
 
         <Style x:Key="IslandBodyText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
 
         <Style x:Key="IslandMetaText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
 
         <Style x:Key="IslandFaintText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
@@ -71,8 +83,8 @@
         <!-- Caret and selection are the only chrome a stock TextBox brings that still belongs here;
              everything else reads as a form field dropped onto a HUD. -->
         <Style x:Key="CaptureText" TargetType="TextBox">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize" Value="11.5"/>
@@ -81,14 +93,14 @@
         </Style>
 
         <Style x:Key="SectionHeaderText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="4,0,0,8"/>
         </Style>
 
         <Style x:Key="EmptyStateText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="4,0,4,4"/>
@@ -188,7 +200,7 @@
         </Style>
 
         <Style x:Key="InlineAction" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="VerticalAlignment" Value="Center"/>

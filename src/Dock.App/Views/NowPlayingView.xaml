@@ -7,7 +7,7 @@
              control on the island anybody presses twice a day and the old row gave all three the
              same 30px circle and the same weight. -->
         <Style x:Key="SkipButton" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -93,7 +93,7 @@
             <Setter Property="Height" Value="22"/>
             <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
@@ -104,7 +104,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Plate" Property="Background"
@@ -230,11 +230,11 @@
                     <Grid x:Name="LyricStage" Visibility="Collapsed">
                         <StackPanel VerticalAlignment="Center" Margin="32,0,32,0">
                             <TextBlock Text="{Binding CurrentLyricText}" FontSize="14"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
                                        FontWeight="SemiBold" TextWrapping="Wrap"
                                        TextAlignment="Center" MaxHeight="46"/>
                             <TextBlock Text="{Binding NextLyricText}" Margin="0,6,0,0"
-                                       FontSize="12.5" Foreground="{StaticResource TextTertiaryBrush}"
+                                       FontSize="12.5" Foreground="{DynamicResource TextTertiaryBrush}"
                                        TextWrapping="Wrap" TextAlignment="Center" MaxHeight="34"/>
                         </StackPanel>
                     </Grid>

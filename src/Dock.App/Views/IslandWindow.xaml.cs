@@ -37,7 +37,10 @@ public enum IslandSection
     Launcher,
     Recent,
     Stacks,
-    Mixer
+    Mixer,
+
+    /// <summary>Everyone in the birthday list, soonest first, with how long until each.</summary>
+    Birthdays
 }
 
 /// <summary>
@@ -121,6 +124,7 @@ public partial class IslandWindow : Window
     private readonly TimerActivity _timer;
     private readonly CaptureViewModel _capture;
     private readonly CommandPaletteViewModel _palette;
+    private readonly BirthdayActivity _birthdays;
 
     /// <summary>
     /// Hover is polled rather than taken from MouseEnter/MouseLeave. The pill is click-through
@@ -236,6 +240,12 @@ public partial class IslandWindow : Window
     /// <summary>Raised by the gear's "Check for updates" entry.</summary>
     public event Action? CheckForUpdatesRequested;
 
+    /// <summary>
+    /// Raised by the gear's "Edit birthdays..." entry and by the Birthdays panel's own link. Both
+    /// go to the App, which owns the store that knows the path.
+    /// </summary>
+    public event Action? EditBirthdaysRequested;
+
     private bool _updateAvailable;
 
     /// <summary>Whether the gear menu should offer to restart into a downloaded update.</summary>
@@ -253,6 +263,8 @@ public partial class IslandWindow : Window
         IAudioLevelSource audio,
         VolumeMixerActivity mixer,
         ClockViewModel clock,
+        BirthdayActivity birthdays,
+        BirthdaysViewModel birthdayList,
         AppSettings settings)
     {
         _media = media;
@@ -261,6 +273,7 @@ public partial class IslandWindow : Window
         _timer = timer;
         _capture = capture;
         _palette = palette;
+        _birthdays = birthdays;
         AudioSource = audio;
 
         InitializeComponent();
@@ -292,6 +305,21 @@ public partial class IslandWindow : Window
             section.DataContext = dock;
 
         MixerView.DataContext = mixer;
+        BirthdaysView.DataContext = birthdayList;
+
+        // Opening the file is a shell call, which is the App's to make -- the panel raises, this
+        // forwards, and the panel stays a plain UserControl with no idea where the list lives.
+        BirthdaysView.EditRequested += () => EditBirthdaysRequested?.Invoke();
+
+        // The confetti follows the birthday: it starts on the day's first one and stops the moment
+        // it is dismissed. Celebrated and IsActive both route to the same idempotent update rather
+        // than doing different things, since either one arriving first is a legitimate order.
+        _birthdays.Celebrated += () => Dispatcher.Invoke(UpdateConfetti);
+        _birthdays.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is null or nameof(BirthdayActivity.IsActive))
+                Dispatcher.Invoke(UpdateConfetti);
+        };
 
         LauncherView.WingetService = wingetService;
 
@@ -332,7 +360,12 @@ public partial class IslandWindow : Window
 
                      dock.ShelfItems, dock.RecentFiles, dock.ClipboardHistory,
                      dock.LauncherResults, dock.WingetResults, dock.Stacks,
-                     privacy.Apps, mixer.Sessions
+                     privacy.Apps, mixer.Sessions,
+
+                     // The birthday list is rebuilt wholesale when the file is saved, and the file
+                     // can be saved while the scope is open -- which is exactly what somebody who
+                     // has just clicked "Edit list..." is about to do.
+                     birthdayList.Upcoming
                  })
         {
             collection.CollectionChanged += (_, _) => ResizeForContentChange();
@@ -380,7 +413,7 @@ public partial class IslandWindow : Window
     private FrameworkElement[] SectionViews => [ShelfView, ClipboardView, LauncherView, RecentView, StacksView];
 
     private ToggleButton[] Tabs =>
-        [QuickTab, ShelfTab, ClipboardTab, LauncherTab, RecentTab, StacksTab, MixerTab];
+        [QuickTab, ShelfTab, ClipboardTab, LauncherTab, RecentTab, StacksTab, MixerTab, BirthdaysTab];
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -681,6 +714,10 @@ public partial class IslandWindow : Window
         Animate(Pill, OpacityProperty, shown ? 1 : 0, ShowDuration);
         Animate(PillSlide, TranslateTransform.YProperty, shown ? 0 : -HiddenOffset, ShowDuration);
 
+        // Arriving on screen with a birthday on it starts the confetti; leaving stops it, since an
+        // animation running behind a full-screen game is pure cost.
+        UpdateConfetti();
+
         UpdateCollapsedShowing();
     }
 
@@ -691,6 +728,7 @@ public partial class IslandWindow : Window
 
         _expanded = expanded;
         NoteTransition(expanded ? $"expanded ({reason})" : $"collapsed ({reason})");
+
 
         // A hover that ends takes the island back to the scratchpad: a section is something the
         // user opened deliberately, and leaving it showing behind a collapsed pill means the next
@@ -802,6 +840,7 @@ public partial class IslandWindow : Window
         RecentView.Visibility = VisibilityFor(section, IslandSection.Recent);
         StacksView.Visibility = VisibilityFor(section, IslandSection.Stacks);
         MixerView.Visibility = VisibilityFor(section, IslandSection.Mixer);
+        BirthdaysView.Visibility = VisibilityFor(section, IslandSection.Birthdays);
 
         // Sections size to their contents and scroll past a ceiling, rather than always opening at
         // full height: a shelf holding three files should not leave the island mostly empty, and a
@@ -905,6 +944,30 @@ public partial class IslandWindow : Window
         SyncTabs(_section);
     }
 
+    /// <summary>
+    /// Starts or stops the confetti to match whether there is a birthday to celebrate.
+    ///
+    /// It falls for as long as the pill is up, which is until Dismiss -- the confetti and the
+    /// birthday are the same statement, so they begin and end together. Stopping is immediate for
+    /// that reason: pieces still drifting down after the button was pressed would read as the
+    /// button not having worked.
+    ///
+    /// The island being on screen is the other half of the condition. One hidden behind a
+    /// full-screen game would otherwise spend the day animating something nobody can see, and the
+    /// canvas detaches its rendering hook entirely when it stops, so this is a real saving rather
+    /// than a tidy-up.
+    ///
+    /// Idempotent at both ends, which is what lets every edge that might have changed the answer
+    /// call it without any of them tracking what the previous state was.
+    /// </summary>
+    private void UpdateConfetti()
+    {
+        if (_shown && _birthdays.IsActive)
+            Confetti.Start();
+        else
+            Confetti.Stop();
+    }
+
     /// <summary>Whether a section brings a search field of its own.</summary>
     private static bool OwnsItsSearch(IslandSection section) =>
         section is IslandSection.Launcher or IslandSection.Clipboard;
@@ -963,6 +1026,7 @@ public partial class IslandWindow : Window
             IslandSection.Recent => RecentTab,
             IslandSection.Stacks => StacksTab,
             IslandSection.Mixer => MixerTab,
+            IslandSection.Birthdays => BirthdaysTab,
 
             // Search included: it is a mode of the box, and the box belongs to Capture.
             _ => _pinned ? QuickTab : null
@@ -1021,6 +1085,7 @@ public partial class IslandWindow : Window
             ReferenceEquals(tab, RecentTab) ? IslandSection.Recent :
             ReferenceEquals(tab, StacksTab) ? IslandSection.Stacks :
             ReferenceEquals(tab, MixerTab) ? IslandSection.Mixer :
+            ReferenceEquals(tab, BirthdaysTab) ? IslandSection.Birthdays :
             IslandSection.Quick);
     }
 
@@ -1044,6 +1109,13 @@ public partial class IslandWindow : Window
         var settings = new MenuItem { Header = "Settings..." };
         settings.Click += (_, _) => SettingsRequested?.Invoke();
         menu.Items.Add(settings);
+
+        // The list is a file, and a file with no visible way in is a file nobody edits. It is also
+        // on the Birthdays panel itself; both are here because the two of them answer the question
+        // from different places -- this one without having to find the scope first.
+        var birthdays = new MenuItem { Header = "Edit birthdays..." };
+        birthdays.Click += (_, _) => EditBirthdaysRequested?.Invoke();
+        menu.Items.Add(birthdays);
 
         if (_updateAvailable)
         {

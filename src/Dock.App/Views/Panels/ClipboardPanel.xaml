@@ -10,7 +10,7 @@
             <Setter Property="Height" Value="24"/>
             <Setter Property="FontFamily" Value="{StaticResource GlyphFont}"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Opacity" Value="0"/>

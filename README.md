@@ -65,7 +65,36 @@ without your hands leaving the keyboard. `Ctrl+Alt+Space` opens the island strai
   progress on the island rather than in a console window.
 - **Recent files** and **Stacks** (which folders are stacks).
 - **Mixer** — per-application volume.
-- **The gear** — *Settings...* and *Exit MajikUtils*.
+- **Birthdays** — everybody in your list, soonest first, with how long until each.
+- **The gear** — *Settings...*, *Edit birthdays...* and *Exit MajikUtils*.
+
+### Birthdays
+
+On the day, the island says whose birthday it is, rains confetti through the back of the pill for as
+long as it is up, and **stays there until you dismiss it** — it is the one thing in MajikUtils that outranks whatever is
+playing, because it is right for one day a year and wrong the moment it is missed. *Dismiss* is in
+the expanded panel, and a dismissal lasts the day: tomorrow's birthday is a different birthday.
+
+The list is a CSV you keep yourself, at `%LocalAppData%\Majik\MajikUtils\birthdays.csv`. *Edit
+birthdays...* on the gear (or *Edit list...* on the Birthdays scope) opens it in whatever you open
+CSVs with, and saving it takes effect immediately — no restart. One person per line:
+
+```
+Ada Lovelace,1815-12-10
+Mum,03-14
+```
+
+The year is optional and decides only whether an age is shown. Dates are `YYYY-MM-DD` or `MM-DD`;
+day-first is deliberately not read, since `03-04` means two different things to two different people
+and guessing would put a birthday a month out without saying so. Blank lines and lines starting with
+`#` are ignored, and a line that makes no sense costs that line rather than the file.
+
+### Colours
+
+*Settings* takes two colours for the island's background gradient and one for its text, as hex
+(`#1E1E2E`). A preview under the boxes shows the gradient with all three steps of the text ramp on
+it, and the island follows as you type. An empty box means the default, so *Reset to default* simply
+empties all three.
 
 Pointing at the island opens it; clicking holds it open until you click away or press Esc. It never
 takes focus until you ask it to, lets clicks through whenever its controls aren't showing, and gets

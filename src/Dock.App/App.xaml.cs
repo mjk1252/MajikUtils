@@ -47,6 +47,23 @@ public partial class App : System.Windows.Application
     private VolumeMixerSource? _volumeMixerSource;
 
     /// <summary>
+    /// The birthday list, the activity that puts today's on the island, and the scope that counts
+    /// down to the rest. The store is the only one here that watches its own file, because it is
+    /// the only one whose file is edited by something other than MajikUtils.
+    /// </summary>
+    private BirthdayStore? _birthdayStore;
+    private BirthdayActivity? _birthdays;
+    private BirthdaysViewModel? _birthdayList;
+
+    /// <summary>
+    /// The list as last read. Held rather than re-read, because the activity clock runs four times
+    /// a second and the only thing it asks of the list is whether the date has rolled over -- going
+    /// to disk for that would be a file read every 250ms for a file that changes twice a year.
+    /// The watcher is what makes holding it safe.
+    /// </summary>
+    private List<Birthday> _allBirthdays = [];
+
+    /// <summary>
     /// The island's one slot for long-running work. Shared rather than one per job: the pill has
     /// room for a single ring, and two installs at once is a rarer thing than the complexity of
     /// deciding which of them gets to be drawn.
@@ -78,6 +95,9 @@ public partial class App : System.Windows.Application
     // needing SystemConditionSource and BatterySource restarted around it. Announcements take the
     // same approach but the gate lives on AnnouncementActivity itself; see its Enabled property.
     private bool _showConditions = true;
+
+    /// <summary>Segoe Fluent Icons' error glyph, for the announcements that report a failure.</summary>
+    private const string ErrorGlyph = "\uE783";
 
     private const int ClipboardHotkeyId = 1;
     private const int PaletteHotkeyId = 2;
@@ -238,6 +258,10 @@ public partial class App : System.Windows.Application
         var startupSettings = _settingsStore.Load();
         _showConditions = startupSettings.ShowConditions;
 
+        // Before the first island exists, so it is built in the chosen colours rather than built
+        // white and repainted a frame later.
+        Theme.Apply(startupSettings);
+
         CreateIsland(wingetService, startupSettings);
         _announcements!.Enabled = startupSettings.ShowAnnouncements;
         CreateStackWindows();
@@ -355,6 +379,8 @@ public partial class App : System.Windows.Application
         _volumeMixerSource.Start();
 
 
+        CreateBirthdays(startupSettings);
+
         _activities = new IslandActivityHost();
         _activities.Tick(DateTimeOffset.UtcNow);
         _activities.Register(_mediaViewModel);
@@ -367,6 +393,7 @@ public partial class App : System.Windows.Application
         _activities.Register(_restartPending);
         _activities.Register(_lowDisk);
         _activities.Register(_volumeMixer);
+        _activities.Register(_birthdays!);
 
         _clock = new ClockViewModel { IsEnabled = startupSettings.ShowClock };
         _clock.Tick(DateTime.Now);
@@ -384,6 +411,15 @@ public partial class App : System.Windows.Application
             _pomodoro!.Tick(now);
             _activities.Tick(now);
             _clock.Tick(DateTime.Now);
+
+            // The one thing on this tick that is measured in days rather than seconds. Both calls
+            // are a date comparison and return immediately when nothing has turned over -- what
+            // they buy is that a machine left running overnight finds the morning's birthday
+            // instead of waiting for the next restart, which for a feature that is right for
+            // exactly one day is the difference between working and not.
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            _birthdays!.Tick(today);
+            _birthdayList!.Tick(_allBirthdays, today);
         };
 
         _activityTimer.Start();
@@ -412,6 +448,95 @@ public partial class App : System.Windows.Application
         // that do sit. Each window repositions itself on the same event; this decides the set.
         SystemEvents.DisplaySettingsChanged += (_, _) =>
             OnUi(() => SyncIslands(_settingsStore!.Load()));
+    }
+
+    /// <summary>
+    /// Sets up the birthday list: the file, the activity that claims the island on the day, and the
+    /// scope that counts down to the rest.
+    ///
+    /// The file is created up front rather than on first use. "Edit birthdays..." opening an
+    /// editor's "no such file" box is a worse first impression than a commented example, and
+    /// creating it here means the watcher below has a directory entry to watch from the start.
+    /// </summary>
+    private void CreateBirthdays(AppSettings settings)
+    {
+        _birthdayStore = new BirthdayStore();
+        _birthdayStore.EnsureExists();
+
+        _birthdays = new BirthdayActivity();
+        _birthdayList = new BirthdaysViewModel();
+
+        // A dismissal survives a restart, or the button would read as decoration: dismiss, restart
+        // for any reason, and the same birthday is back on the island claiming the pill.
+        // Exact and invariant. The date was written as yyyy-MM-dd, and a culture-sensitive parse of
+        // it is a coin toss on any machine whose short date format disagrees -- which would silently
+        // drop the dismissal and put the birthday straight back on the island after a restart.
+        if (DateOnly.TryParseExact(settings.BirthdaysDismissedOn, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var dismissed))
+        {
+            _birthdays.RestoreDismissal(dismissed);
+        }
+
+        _birthdays.Enabled = settings.ShowBirthdays;
+
+        _birthdays.Dismissed += date => OnUi(() =>
+        {
+            var current = _settingsStore!.Load();
+            current.BirthdaysDismissedOn = date.ToString("yyyy-MM-dd");
+            _settingsStore.Save(current);
+        });
+
+        ReloadBirthdays();
+
+        // The file is meant to be edited by something else, so a save has to reach the island now
+        // rather than at the next start -- the first thing anybody does after adding today's
+        // birthday is look up to see whether it worked. Raised off the UI thread by the watcher.
+        _birthdayStore.Changed += () => OnUi(ReloadBirthdays);
+        _birthdayStore.StartWatching();
+    }
+
+    /// <summary>Re-reads the file and pushes it at both things that draw from it.</summary>
+    private void ReloadBirthdays()
+    {
+        if (_birthdayStore is not { } store)
+            return;
+
+        _allBirthdays = store.Load();
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        _birthdays!.Apply(_allBirthdays, today);
+        _birthdayList!.Apply(_allBirthdays, today);
+    }
+
+    /// <summary>
+    /// Opens the birthday list in whatever handles CSV files.
+    ///
+    /// <c>UseShellExecute</c> rather than naming an editor: the point of choosing a CSV was that it
+    /// opens in the thing the user already keeps lists in, and hard-coding Notepad would take that
+    /// straight back off them.
+    /// </summary>
+    private void EditBirthdays()
+    {
+        if (_birthdayStore is not { } store)
+            return;
+
+        store.EnsureExists();
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(store.Path)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // No handler registered for .csv is a machine problem, not a crash. The announcement is
+            // the whole of the report, since there is no window here to put a dialog on.
+            _announcements?.Announce(DateTimeOffset.UtcNow, "Could not open birthdays.csv",
+                ErrorGlyph, store.Path);
+        }
     }
 
     /// <summary>
@@ -447,9 +572,10 @@ public partial class App : System.Windows.Application
             var island = new IslandWindow(
                 _mediaViewModel!, _activities!, _privacyViewModel!, _timer!, parts.Capture,
                 CreatePalette(), _viewModel!, parts.Winget, _audioSource!, _volumeMixer!,
-                _clock, settings);
+                _clock, _birthdays!, _birthdayList!, settings);
 
             island.SettingsRequested += ShowSettingsWindow;
+            island.EditBirthdaysRequested += EditBirthdays;
             island.ExitRequested += Shutdown;
             island.RestartForUpdateRequested += _updates.ApplyAndRestart;
             island.CheckForUpdatesRequested += () => _ = CheckForUpdatesManuallyAsync();
@@ -1148,6 +1274,19 @@ public partial class App : System.Windows.Application
             if (_volumeMixer is not null)
                 _volumeMixer.AllowPillClaim = show;
         };
+
+        _settingsWindow.BirthdaysToggled += show =>
+        {
+            if (_birthdays is { } birthdays)
+                birthdays.Enabled = show;
+        };
+
+        _settingsWindow.EditBirthdaysRequested += EditBirthdays;
+
+        // Live, on every keystroke. Theme.Apply replaces the four brushes the whole app reads
+        // from, and every reference to them is a DynamicResource -- so this repaints the islands
+        // and every open panel without any of them being told.
+        _settingsWindow.ThemeChanged += Theme.Apply;
 
         _settingsWindow.ClipboardHotkeyChanged += binding =>
             _hotkeys?.Register(ClipboardHotkeyId, binding.Modifiers, binding.Key);

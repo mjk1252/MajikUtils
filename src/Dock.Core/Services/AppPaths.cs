@@ -41,6 +41,7 @@ public static class AppPaths
         "settings.json",
         "notes.json",
         "todos.json",
+        "birthdays.csv",
         "shelf.json",
         "stacks.json",
         "clipboard-pinned.json",

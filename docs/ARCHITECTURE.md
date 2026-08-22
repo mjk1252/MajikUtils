@@ -202,6 +202,53 @@ ranks `Background`, below music, because "the camera is on" is a dot's worth of 
 [`ISLAND-ACTIVITIES.md`](ISLAND-ACTIVITIES.md) for the geometry, which the hit region and the
 silhouette have to agree on exactly.
 
+**The one Alert.** `BirthdayActivity` is the only thing in the app at `IslandPriority.Alert`, and
+the only one that outranks a playing track. Everything else here was built to stay out of the
+music's way -- a timer draws a ring rather than take the pill, a condition is a dot on principle --
+so the top rung needed something with a genuine claim on it: a fact about today that is right once
+a year, and wrong the moment it is missed.
+
+It is also the only activity with no clock behind it. An announcement expires, a condition is
+re-polled, a track ends; this one is dismissed by hand, which is what the button in its expanded
+template exists for and why `Linger` is zero. Dismissal is stored as a *single date* in settings
+rather than a list of acknowledgements: a dismissal only ever covers the day it was made on, so
+anything older is already meaningless and there is nothing to prune. `Enabled` (the Settings
+toggle) is deliberately separate from it, because a toggle folded into the dismissal date would
+switch itself back on at midnight.
+
+The confetti is `ConfettiCanvas`, drawn in a single `OnRender` behind everything in the pill and
+clipped by it -- a hundred rotating rectangles as a hundred WPF elements would be a hundred measure
+passes a frame on a window that is already animating its own size, so the pieces are structs in an
+array that never reallocates. It falls for exactly as long as the pill is up: the confetti and the
+birthday are the same statement, so they start and stop together, and *Dismiss* stops it dead
+rather than letting the last pieces land.
+
+What keeps that affordable is that the class attaches its `CompositionTarget.Rendering` hook only
+while it is running and drops it the frame the last piece leaves the pill. No birthday means no
+frame handler at all, rather than one returning early sixty times a second forever. The island
+gates it on being on screen too, so an island hidden behind a full-screen game is not animating
+something nobody can see.
+
+`BirthdayStore` is the only store here that watches its own file, because it is the only one whose
+file is edited by something that is not MajikUtils. It watches the *directory* rather than the file:
+most editors save by writing a temporary file and renaming it over the original, which destroys the
+handle a file-scoped watch is holding. Events are coalesced over 400ms, since one save raises
+several. The list itself is held in memory by `App` -- the activity clock runs four times a second
+and all it asks is whether the date has rolled over, which is not worth a file read every 250ms.
+
+**Theming.** `Theme.Apply` writes four brushes -- the island's surface and the three steps of the
+text ramp -- from three colours in settings. It is a small class because the work was done when the
+ramp was cut to three named levels; the ramp's two dimmer steps are the chosen colour at reduced
+*alpha* rather than three separate settings, since a secondary that is a different hue from the
+primary reads as an error rather than as a step down.
+
+The same freezing rule as the accent brushes applies, for the same reason: a `ResourceDictionary`
+seals every `Freezable` put into it, so each entry is replaced outright and every reference to those
+four keys in the XAML is a `DynamicResource`. A `StaticResource` resolves once when the BAML loads
+and would hold the white it started with for the rest of the session. That is the whole reason
+applying a theme live works at all. Parsing and the blank-means-default rule live in
+`ThemeColors` in `Dock.Core`, where they can be asserted without a window.
+
 **Standing in for a hidden taskbar.** Auto-hiding the taskbar costs you two things you cannot get
 back any other way: the time, and the badges telling you something is waiting. The island already
 hangs off the same edge, so it is where both go.

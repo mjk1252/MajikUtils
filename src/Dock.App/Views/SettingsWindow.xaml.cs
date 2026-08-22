@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Dock.Core.Models;
 using Dock.Core.Services;
 using Dock.Interop.Shell;
@@ -51,6 +52,21 @@ public partial class SettingsWindow : Window
     /// <summary>Raised when the volume mixer's right to claim the island changes.</summary>
     public event Action<bool>? VolumeMixerToggled;
 
+    /// <summary>Raised when birthdays are allowed to claim the island, or stopped from doing so.</summary>
+    public event Action<bool>? BirthdaysToggled;
+
+    /// <summary>Raised by "Edit list...", which the App answers by opening birthdays.csv.</summary>
+    public event Action? EditBirthdaysRequested;
+
+    /// <summary>
+    /// Raised on every keystroke in the three colour boxes that leaves a usable set of colours.
+    ///
+    /// Per keystroke rather than on losing focus, because picking a colour is a thing you do by
+    /// looking at it: a box that only applied once you clicked elsewhere would make choosing a
+    /// gradient a sequence of guesses.
+    /// </summary>
+    public event Action<AppSettings>? ThemeChanged;
+
     /// <summary>Raised the instant a new clipboard-history shortcut is recorded.</summary>
     public event Action<HotkeyBinding>? ClipboardHotkeyChanged;
 
@@ -73,6 +89,12 @@ public partial class SettingsWindow : Window
         AnnouncementsCheckBox.IsChecked = settings.ShowAnnouncements;
         ConditionsCheckBox.IsChecked = settings.ShowConditions;
         VolumeMixerCheckBox.IsChecked = settings.ShowVolumeMixer;
+        BirthdaysCheckBox.IsChecked = settings.ShowBirthdays;
+
+        GradientFromBox.Text = settings.ThemeGradientFrom;
+        GradientToBox.Text = settings.ThemeGradientTo;
+        FontColorBox.Text = settings.ThemeFontColor;
+        UpdateThemePreview();
 
         IslandShapeCombo.SelectedIndex = (int)settings.IslandShape;
         IslandAlignmentCombo.SelectedIndex = (int)settings.IslandAlignment;
@@ -168,6 +190,10 @@ public partial class SettingsWindow : Window
         var volumeMixerChanged = settings.ShowVolumeMixer != showVolumeMixer;
         settings.ShowVolumeMixer = showVolumeMixer;
 
+        var showBirthdays = BirthdaysCheckBox.IsChecked == true;
+        var birthdaysChanged = settings.ShowBirthdays != showBirthdays;
+        settings.ShowBirthdays = showBirthdays;
+
 
         // No event of its own: the clock is a flag the island reads out of the settings object,
         // and MediaIslandAppearanceChanged below already hands it the whole thing.
@@ -208,9 +234,86 @@ public partial class SettingsWindow : Window
         if (volumeMixerChanged)
             VolumeMixerToggled?.Invoke(showVolumeMixer);
 
+        if (birthdaysChanged)
+            BirthdaysToggled?.Invoke(showBirthdays);
+
 
         MediaIslandAppearanceChanged?.Invoke(settings);
     }
+
+    private void OnEditBirthdaysClick(object sender, RoutedEventArgs e) =>
+        EditBirthdaysRequested?.Invoke();
+
+    /// <summary>
+    /// Saves and applies the colours on every keystroke.
+    ///
+    /// Half-typed text is not an error here and is not reported as one. "#1e" is a colour someone
+    /// is part way through entering, and what <see cref="ThemeColors.Resolve"/> does with it -- fall
+    /// back to the default -- is exactly right for a preview: the box shows the default until the
+    /// sixth digit lands, and then it shows the colour. Nothing flashes red at anybody mid-word.
+    /// </summary>
+    private void OnThemeTextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateThemePreview();
+
+        if (!_loaded)
+            return;
+
+        var settings = _settingsStore.Load();
+        settings.ThemeGradientFrom = GradientFromBox.Text.Trim();
+        settings.ThemeGradientTo = GradientToBox.Text.Trim();
+        settings.ThemeFontColor = FontColorBox.Text.Trim();
+        _settingsStore.Save(settings);
+
+        ThemeChanged?.Invoke(settings);
+    }
+
+    /// <summary>
+    /// Empties all three boxes, which is what "default" means here -- see
+    /// <see cref="AppSettings.ThemeGradientFrom"/>. Writing the default hex codes in instead would
+    /// look identical and behave differently: the boxes would then be pinning the current defaults
+    /// rather than following them.
+    /// </summary>
+    private void OnResetThemeClick(object sender, RoutedEventArgs e)
+    {
+        GradientFromBox.Text = "";
+        GradientToBox.Text = "";
+        FontColorBox.Text = "";
+    }
+
+    /// <summary>
+    /// Redraws the sample: the gradient behind, the three steps of the text ramp on it, and a
+    /// swatch beside each box.
+    ///
+    /// Built here rather than by binding to <c>Theme</c>'s own brushes, because the preview has to
+    /// show what the colours in the boxes <em>would</em> do -- including while they are being typed,
+    /// and including when the boxes have not been saved. A preview reading the applied theme would
+    /// only ever tell you what you already changed.
+    /// </summary>
+    private void UpdateThemePreview()
+    {
+        var from = ThemeColors.Resolve(GradientFromBox.Text, ThemeColors.DefaultSurface);
+        var to = ThemeColors.Resolve(GradientToBox.Text, ThemeColors.DefaultSurface);
+        var text = ThemeColors.Resolve(FontColorBox.Text, ThemeColors.DefaultText);
+
+        // Opaque here, unlike the island itself: the preview sits on a solid settings window, and
+        // showing the surface at its real 95% would blend it with a grey that is not part of it.
+        ThemePreview.Background = new LinearGradientBrush(
+            Solid(from), Solid(to), new Point(0, 0), new Point(1, 1));
+
+        PreviewTitle.Foreground = new SolidColorBrush(Solid(text));
+        PreviewBody.Foreground = new SolidColorBrush(Faded(text, ThemeColors.SecondaryAlpha));
+        PreviewMeta.Foreground = new SolidColorBrush(Faded(text, ThemeColors.TertiaryAlpha));
+
+        GradientFromSwatch.Background = new SolidColorBrush(Solid(from));
+        GradientToSwatch.Background = new SolidColorBrush(Solid(to));
+        FontColorSwatch.Background = new SolidColorBrush(Solid(text));
+    }
+
+    private static Color Solid(uint rgb) => Faded(rgb, 0xFF);
+
+    private static Color Faded(uint rgb, byte alpha) =>
+        Color.FromArgb(alpha, (byte)((rgb >> 16) & 0xFF), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF));
 
     /// <summary>
     /// Arms one of the two hotkey buttons. The button's own content becomes the prompt, so there is
