@@ -59,6 +59,13 @@ public partial class SettingsWindow : Window
     public event Action? EditBirthdaysRequested;
 
     /// <summary>
+    /// Raised when the subscribed calendar URL changes, so the App can re-fetch rather than wait
+    /// hours for the next scheduled check -- somebody who has just pasted a URL is watching the
+    /// island to see whether it took.
+    /// </summary>
+    public event Action? BirthdayCalendarChanged;
+
+    /// <summary>
     /// Raised on every keystroke in the three colour boxes that leaves a usable set of colours.
     ///
     /// Per keystroke rather than on losing focus, because picking a colour is a thing you do by
@@ -90,6 +97,12 @@ public partial class SettingsWindow : Window
         ConditionsCheckBox.IsChecked = settings.ShowConditions;
         VolumeMixerCheckBox.IsChecked = settings.ShowVolumeMixer;
         BirthdaysCheckBox.IsChecked = settings.ShowBirthdays;
+
+        // Assigning Text raises TextChanged, but only when the value actually differs -- an empty
+        // setting into an empty box raises nothing at all, so the note is set explicitly rather
+        // than left to the handler that usually maintains it.
+        BirthdayCalendarBox.Text = settings.BirthdayCalendarUrl;
+        UpdateCalendarNote();
 
         GradientFromBox.Text = settings.ThemeGradientFrom;
         GradientToBox.Text = settings.ThemeGradientTo;
@@ -243,6 +256,47 @@ public partial class SettingsWindow : Window
 
     private void OnEditBirthdaysClick(object sender, RoutedEventArgs e) =>
         EditBirthdaysRequested?.Invoke();
+
+    /// <summary>
+    /// Saves the calendar URL and asks for a refresh.
+    ///
+    /// Says back what it makes of what is in the box, because everything about this setting is
+    /// invisible: the URL is opaque, the fetch is silent, and a mistyped one would otherwise look
+    /// exactly like a calendar with no birthdays on it. HTTPS is called out specifically since the
+    /// URL is a bearer credential and an http:// one is refused rather than downgraded to.
+    /// </summary>
+    private void OnBirthdayCalendarChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateCalendarNote();
+
+        if (!_loaded)
+            return;
+
+        var settings = _settingsStore.Load();
+        settings.BirthdayCalendarUrl = BirthdayCalendarBox.Text.Trim();
+        _settingsStore.Save(settings);
+
+        BirthdayCalendarChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Says back what the app makes of what is in the box.
+    ///
+    /// Everything about this setting is otherwise invisible: the URL is opaque, the fetch is
+    /// silent, and a mistyped one looks exactly like a calendar with no birthdays on it. HTTPS is
+    /// called out by name because the URL is a bearer credential -- anyone holding it can read the
+    /// calendar -- so an http:// one is refused rather than quietly downgraded to.
+    /// </summary>
+    private void UpdateCalendarNote()
+    {
+        var url = BirthdayCalendarBox.Text.Trim();
+
+        BirthdayCalendarNote.Text = url.Length == 0
+            ? "No calendar linked -- birthdays come from the CSV alone."
+            : IcsCalendarSource.IsUsable(url)
+                ? "Linked. Read at startup and every few hours after. Google's own Birthdays calendar has no iCal address and cannot be read this way; birthday events on your own calendars can."
+                : "That does not look like an https:// address. The URL is a key to the calendar, so it is only ever fetched over HTTPS.";
+    }
 
     /// <summary>
     /// Saves and applies the colours on every keystroke.

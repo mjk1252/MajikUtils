@@ -56,12 +56,28 @@ public partial class App : System.Windows.Application
     private BirthdaysViewModel? _birthdayList;
 
     /// <summary>
-    /// The list as last read. Held rather than re-read, because the activity clock runs four times
-    /// a second and the only thing it asks of the list is whether the date has rolled over -- going
-    /// to disk for that would be a file read every 250ms for a file that changes twice a year.
-    /// The watcher is what makes holding it safe.
+    /// The merged list as last read. Held rather than re-read, because the activity clock runs four
+    /// times a second and the only thing it asks of the list is whether the date has rolled over --
+    /// going to disk for that would be a file read every 250ms for a file that changes twice a
+    /// year. The watcher is what makes holding it safe.
     /// </summary>
     private List<Birthday> _allBirthdays = [];
+
+    /// <summary>
+    /// What the subscribed calendar last gave up, kept separately so that a file edit can be merged
+    /// against it without going back to the network -- and so that a refresh that fails leaves the
+    /// previous answer standing rather than blanking the calendar half of the list.
+    /// </summary>
+    private List<Birthday> _calendarBirthdays = [];
+
+    private readonly IcsCalendarSource _birthdayCalendar = new();
+
+    /// <summary>
+    /// How often the subscribed calendar is re-read. Birthdays move on the order of never, so this
+    /// is about picking up an event added today rather than about staying in sync; anything more
+    /// frequent is traffic spent on a file that has not changed.
+    /// </summary>
+    private readonly DispatcherTimer _birthdayCalendarTimer = new() { Interval = TimeSpan.FromHours(6) };
 
     /// <summary>
     /// The island's one slot for long-running work. Shared rather than one per job: the pill has
@@ -494,19 +510,62 @@ public partial class App : System.Windows.Application
         // birthday is look up to see whether it worked. Raised off the UI thread by the watcher.
         _birthdayStore.Changed += () => OnUi(ReloadBirthdays);
         _birthdayStore.StartWatching();
+
+        // The calendar, if one is subscribed. Checked once at startup and then rarely -- see the
+        // timer's interval for why.
+        _birthdayCalendarTimer.Tick += (_, _) => _ = RefreshBirthdayCalendarAsync();
+        _birthdayCalendarTimer.Start();
+        _ = RefreshBirthdayCalendarAsync();
     }
 
-    /// <summary>Re-reads the file and pushes it at both things that draw from it.</summary>
+    /// <summary>
+    /// Re-reads the file, merges the calendar's last answer into it, and pushes the result at both
+    /// things that draw from it.
+    /// </summary>
     private void ReloadBirthdays()
     {
         if (_birthdayStore is not { } store)
             return;
 
-        _allBirthdays = store.Load();
+        _allBirthdays = BirthdayMerge.Combine(store.Load(), _calendarBirthdays);
 
         var today = DateOnly.FromDateTime(DateTime.Now);
         _birthdays!.Apply(_allBirthdays, today);
         _birthdayList!.Apply(_allBirthdays, today);
+    }
+
+    /// <summary>
+    /// Fetches the subscribed calendar and folds what it finds into the list.
+    ///
+    /// A failed or empty fetch deliberately leaves <see cref="_calendarBirthdays"/> alone rather
+    /// than clearing it: going offline for an afternoon should not take half the birthday list off
+    /// the island. The one thing that does clear it is the URL being removed in Settings, which is
+    /// somebody saying so on purpose.
+    /// </summary>
+    private async Task RefreshBirthdayCalendarAsync()
+    {
+        var url = _settingsStore?.Load().BirthdayCalendarUrl ?? "";
+
+        if (!IcsCalendarSource.IsUsable(url))
+        {
+            if (_calendarBirthdays.Count > 0)
+            {
+                _calendarBirthdays = [];
+                OnUi(ReloadBirthdays);
+            }
+
+            return;
+        }
+
+        var found = await _birthdayCalendar
+            .GetBirthdaysAsync(url, CancellationToken.None)
+            .ConfigureAwait(false);
+
+        if (found.Count == 0)
+            return;
+
+        _calendarBirthdays = [.. found];
+        OnUi(ReloadBirthdays);
     }
 
     /// <summary>
@@ -1282,6 +1341,8 @@ public partial class App : System.Windows.Application
         };
 
         _settingsWindow.EditBirthdaysRequested += EditBirthdays;
+
+        _settingsWindow.BirthdayCalendarChanged += () => _ = RefreshBirthdayCalendarAsync();
 
         // Live, on every keystroke. Theme.Apply replaces the four brushes the whole app reads
         // from, and every reference to them is a DynamicResource -- so this repaints the islands

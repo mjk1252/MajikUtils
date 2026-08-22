@@ -112,8 +112,19 @@
                            Text="On the day, the island says whose birthday it is and stays there until you dismiss it. The list is a CSV you keep yourself -- click Edit list below, or use the Birthdays tab on the island, which counts down to everybody's. Turning this off leaves that tab working; it only stops the day interrupting you."/>
 
                 <Button x:Name="EditBirthdaysButton" Content="Edit list..."
-                        HorizontalAlignment="Left" Padding="10,3" Margin="24,0,0,16"
+                        HorizontalAlignment="Left" Padding="10,3" Margin="24,0,0,12"
                         Click="OnEditBirthdaysClick"/>
+
+                <TextBlock Foreground="#99FFFFFF" FontSize="11" TextWrapping="Wrap"
+                           Margin="24,0,0,6"
+                           Text="You can also read birthdays off a calendar. In Google Calendar, open a calendar's settings, scroll to Integrate calendar, and paste its Secret address in iCal format below. Events whose title reads like a birthday -- Tom's birthday, Bday - Sarah -- join the list."/>
+
+                <TextBox x:Name="BirthdayCalendarBox" Margin="24,0,0,4" Padding="4,3"
+                         FontFamily="Consolas, Courier New" FontSize="10.5"
+                         TextChanged="OnBirthdayCalendarChanged"/>
+
+                <TextBlock x:Name="BirthdayCalendarNote" Style="{StaticResource SettingNote}"
+                           Margin="24,0,0,16"/>
             </StackPanel>
 
             <StackPanel Grid.Column="2">

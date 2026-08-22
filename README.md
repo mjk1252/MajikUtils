@@ -84,6 +84,21 @@ Ada Lovelace,1815-12-10
 Mum,03-14
 ```
 
+You can also **read birthdays off a calendar**. In *Settings*, paste a calendar's *Secret address in
+iCal format* (Google Calendar → that calendar's settings → *Integrate calendar*). Events whose title
+reads like a birthday — `Tom's birthday`, `Bday - Sarah`, `Sarah's Birthday Party` — join the list,
+merged with the CSV so nobody appears twice.
+
+The matching is deliberately narrow: the birthday word has to be possessive, or at the start or end
+of the title, so `buy birthday present` and `birthday card shopping trip` are left alone. A calendar
+entry never shows an age — the event's year is the year of the event, not the year of the birth —
+so anyone you want an age for belongs in the CSV.
+
+Two things worth knowing. Google's automatic **Birthdays** calendar, the one built from Contacts,
+has no iCal address and cannot be subscribed to this way; only birthday events on your own calendars
+can. And the secret URL is a key to that calendar, so it is only ever fetched over HTTPS, and it
+sits in `settings.json` in plain text like everything else there.
+
 The year is optional and decides only whether an age is shown. Dates are `YYYY-MM-DD` or `MM-DD`;
 day-first is deliberately not read, since `03-04` means two different things to two different people
 and guessing would put a birthday a month out without saying so. Blank lines and lines starting with

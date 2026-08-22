@@ -236,6 +236,33 @@ handle a file-scoped watch is holding. Events are coalesced over 400ms, since on
 several. The list itself is held in memory by `App` -- the activity clock runs four times a second
 and all it asks is whether the date has rolled over, which is not worth a file read every 250ms.
 
+**Two sources, one list.** Birthdays come from the CSV and, optionally, from a subscribed
+iCalendar feed. `BirthdayMerge.Combine` folds them into the one list both the activity and the scope
+read, deduplicating on name *and* date -- two people called Tom are two birthdays, the same Tom in
+both sources is one -- and preferring whichever entry carries a birth year. That preference is the
+reason the two are merged rather than one replacing the other: a calendar event's `DTSTART` year is
+the year of the *event*, not of the birth, so it is dropped on the way in and only the CSV can ever
+produce an age.
+
+`IcsCalendar` reads the feed and is deliberately not a general iCalendar implementation -- no
+timezones, no recurrence arithmetic, no alarms. Two details of RFC 5545 are handled properly because
+getting either wrong drops events silently rather than failing: **folding** (a long line continues
+on the next one beginning with a space) and **parameters** (`DTSTART;VALUE=DATE:20260822`, so the
+property name ends at the first `;` or `:`, whichever comes first -- and all-day events are written
+that way, which is to say all the birthdays).
+
+`BirthdayTitle` decides which events count, and it is deliberately conservative. The asymmetry is
+the whole design: a false negative is a birthday that does not appear, which the CSV covers, while a
+false positive clears the pill and throws confetti over somebody's shopping reminder and stays there
+until dismissed. So the birthday word must be possessive, or leading, or trailing -- never buried
+mid-sentence -- and a non-possessive name is capped at two or three words, which is what separates
+"Bday Tom" from "Birthday card shopping trip".
+
+What none of this reaches is Google's automatic *Birthdays* calendar, which has no secret iCal
+address. Getting at that needs the Calendar API's `eventTypes=birthday` and an OAuth flow, and
+`calendar.readonly` is a sensitive scope -- so a publicly distributed build would need Google's app
+verification. That trade was considered and declined; the ICS path costs a URL in a settings box.
+
 **Theming.** `Theme.Apply` writes four brushes -- the island's surface and the three steps of the
 text ramp -- from three colours in settings. It is a small class because the work was done when the
 ramp was cut to three named levels; the ramp's two dimmer steps are the chosen colour at reduced

@@ -131,6 +131,18 @@ public sealed class AppSettings
     public string BirthdaysDismissedOn { get; set; } = "";
 
     /// <summary>
+    /// An iCalendar feed to read birthdays out of, alongside the CSV. Empty means the CSV alone.
+    ///
+    /// In practice a Google Calendar "secret address in iCal format". It is a *bearer credential* --
+    /// anyone holding it can read that calendar -- which is why it is fetched over HTTPS only, and
+    /// worth knowing sits here in plain text like every other setting in this file.
+    ///
+    /// Google's automatic Birthdays calendar has no such address and cannot be subscribed to this
+    /// way; what this reads is birthday events on the user's own calendars.
+    /// </summary>
+    public string BirthdayCalendarUrl { get; set; } = "";
+
+    /// <summary>
     /// The two ends of the island's background gradient, as <c>#RRGGBB</c>. Empty means the
     /// near-black it has always been -- so a settings file written before these existed opens
     /// looking exactly as it did.
